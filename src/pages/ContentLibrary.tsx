@@ -29,11 +29,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Search, Plus, Edit, Trash2, Loader2 } from "lucide-react";
-import { mediaService } from "@/services/mediaService";
+import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
 import type { MediaContent } from "@/types/media";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
+import { Flag } from "@/types";
+
+// Type assertion to ensure Projects methods are available
+const projectsAPI = Projects as Required<typeof Projects>;
 
 export default function ContentLibrary() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,33 +54,118 @@ export default function ContentLibrary() {
   // Fetch unique statuses for filters
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["unique-statuses"],
-    queryFn: () => mediaService.fetchUniqueStatuses(),
+    queryFn: async () => {
+      const response = await projectsAPI.get({ eq: [] });
+      if (response.flag === Flag.Success && response.data) {
+        const statuses = (response.data as MediaContent[])
+          .map(item => item.status)
+          .filter(Boolean);
+        return [...new Set(statuses)].sort();
+      }
+      return [];
+    },
   });
 
   // Fetch unique types for filters
   const { data: availableTypes = [] } = useQuery({
     queryKey: ["unique-types"],
-    queryFn: () => mediaService.fetchUniqueContentTypes(),
+    queryFn: async () => {
+      const response = await projectsAPI.get({ eq: [] });
+      if (response.flag === Flag.Success && response.data) {
+        const types = (response.data as MediaContent[])
+          .map(item => item.content_type)
+          .filter(Boolean);
+        return [...new Set(types)].sort();
+      }
+      return [];
+    },
   });
 
   // Fetch projects with server-side filters
   const { data: projects = [], isLoading, error } = useQuery<MediaContent[]>({
-    queryKey: ["projects", searchQuery, statusFilter, contentTypeFilter],
-    queryFn: () => mediaService.fetchAll({ 
-      search: debouncedSearchQuery, 
-      status: statusFilter, 
-      contentType: contentTypeFilter 
-    }).then((data) => {
-      console.log("projects", data);
-      return data;
-    }),
+    queryKey: ["projects", debouncedSearchQuery, statusFilter, contentTypeFilter],
+    queryFn: async () => {
+      // Build eq filters for Projects.get()
+      const eqFilters = [];
+      if (statusFilter !== "all") {
+        eqFilters.push({ key: "status" as const, value: statusFilter });
+      }
+      if (contentTypeFilter !== "all") {
+        eqFilters.push({ key: "content_type" as const, value: contentTypeFilter });
+      }
+
+      // Fetch projects using Projects.get()
+      const response = await projectsAPI.get({
+        eq: eqFilters,
+        sort: "created_at",
+        sortBy: "dec",
+      });
+
+      // Handle error responses - check for both Success and UnknownOrSuccess flags
+      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+        // Extract error message from Supabase error object
+        const supabaseError = response.error?.output;
+        const errorMessage = 
+          supabaseError?.message || 
+          response.error?.message || 
+          "Failed to fetch projects";
+        console.error("Projects API Error:", {
+          flag: response.flag,
+          error: response.error,
+          supabaseError
+        });
+        throw new Error(errorMessage);
+      }
+
+      // Handle case where data might be null or undefined - return empty array
+      if (response.data === null || response.data === undefined) {
+        return [];
+      }
+
+      let filteredProjects = Array.isArray(response.data) 
+        ? (response.data as MediaContent[])
+        : [];
+
+      // Apply client-side search filter if search query exists
+      if (debouncedSearchQuery.trim()) {
+        const searchLower = debouncedSearchQuery.toLowerCase();
+        filteredProjects = filteredProjects.filter((project) => {
+          const title = project.title?.toLowerCase() || "";
+          const platform = project.platform?.toLowerCase() || "";
+          const genres = project.genres?.toLowerCase() || "";
+          const notes = project.notes?.toLowerCase() || "";
+          return (
+            title.includes(searchLower) ||
+            platform.includes(searchLower) ||
+            genres.includes(searchLower) ||
+            notes.includes(searchLower)
+          );
+        });
+      }
+
+      return filteredProjects;
+    },
   });
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: mediaService.create,
+    mutationFn: async (data: any) => {
+      const response = await projectsAPI.createOne(data);
+      if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
+        const supabaseError = response.error?.output;
+        const errorMessage = 
+          supabaseError?.message || 
+          response.error?.message || 
+          "Failed to create content";
+        console.error("Create Error:", response);
+        throw new Error(errorMessage);
+      }
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
       setIsMediaDialogOpen(false);
       toast.success("Content added successfully!");
     },
@@ -87,10 +176,25 @@ export default function ContentLibrary() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      mediaService.update(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      console.log("Update payload:", { id, data });
+      const response = await projectsAPI.updateOneByID(id, data);
+      console.log("Update response:", response);
+      if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
+        const supabaseError = response.error?.output;
+        const errorMessage = 
+          supabaseError?.message || 
+          response.error?.message || 
+          "Failed to update content";
+        console.error("Update Error:", response);
+        throw new Error(errorMessage);
+      }
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
       setIsMediaDialogOpen(false);
       setSelectedMedia(null);
       toast.success("Content updated successfully!");
@@ -102,9 +206,22 @@ export default function ContentLibrary() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: mediaService.deletePermanent,
+    mutationFn: async (id: string) => {
+      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+        const supabaseError = response.error?.output;
+        const errorMessage = 
+          supabaseError?.message || 
+          response.error?.message || 
+          "Failed to delete content";
+        console.error("Delete Error:", response);
+        throw new Error(errorMessage);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
       toast.success("Content deleted successfully!");

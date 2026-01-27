@@ -21,6 +21,7 @@ import type { MediaContent} from "@/types/media";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
+import { ContentTypeEnum, ProjectMetaData, ProjectStatusEnum } from "@/types";
 
 interface MediaDialogProps {
   open: boolean;
@@ -39,36 +40,63 @@ export default function MediaDialog({
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   // Base template for new content to ensure we have all standard fields
-  const defaultBase: Record<string, any> = {
-    title: "",
-    content_type: "Film",
-    status: "Released",
-    genres: "",
-    release_year: "",
-    runtime_minutes: "",
+  const defaultBase: ProjectMetaData = {
+    title: "testing1",
+    content_type: ContentTypeEnum.Film,
+    status: "",
+    genres: [],
     poster_url: "",
     preview_url: "",
-    platform: "",
-    platform_url: "",
+    platform: "Google",
+    platform_url: "https://www.google.com",
     notes: "",
     in_now_playing: false,
     in_coming_soon: false,
     in_latest_releases: false,
-    order_index: "",
   };
 
-  const [formData, setFormData] = useState<Record<string, any>>(defaultBase);
+  const [formData, setFormData] = useState<ProjectMetaData & Record<string, any>>(defaultBase);
 
   useEffect(() => {
     if (media) {
+      // Convert string literal types to enum values
+      const contentTypeMap: Record<string, ContentTypeEnum> = {
+        'film': ContentTypeEnum.Film,
+        'tvShow': ContentTypeEnum.TvShow,
+        'song': ContentTypeEnum.Song,
+        'audiobook': ContentTypeEnum.Audiobook,
+      };
+      
+      const statusMap: Record<string, ProjectStatusEnum> = {
+        'released': ProjectStatusEnum.Released,
+        'comingSoon': ProjectStatusEnum.ComingSoon,
+        'watched': ProjectStatusEnum.Watched,
+        'inProgress': ProjectStatusEnum.InProgress,
+        'inProduction': ProjectStatusEnum.InProduction,
+      };
+      
       // Merge media data with base to ensure any missing fields are initialized
       setFormData({
         ...defaultBase,
-        ...media,
-        // Convert numbers to strings for input compatibility
-        release_year: media.release_year?.toString() || "",
-        runtime_minutes: media.runtime_minutes?.toString() || "",
-        order_index: media.order_index?.toString() || "",
+        title: media.title,
+        content_type: contentTypeMap[media.content_type] ?? ContentTypeEnum.Film,
+        status: statusMap[media.status] ?? ProjectStatusEnum.ComingSoon,
+        poster_url: media.poster_url ?? undefined,
+        preview_url: media.preview_url ?? undefined,
+        release_year: media.release_year ?? undefined,
+        runtime_minutes: media.runtime_minutes ?? undefined,
+        notes: media.notes ?? undefined,
+        genres: Array.isArray(media.genres) 
+          ? media.genres 
+          : (media.genres && typeof media.genres === 'string' 
+              ? media.genres.split(",").map((g) => g.trim()).filter((g) => g.length > 0)
+              : []),
+        platform: media.platform ?? undefined,
+        platform_url: media.platform_url ?? undefined,
+        in_now_playing: media.in_now_playing,
+        in_coming_soon: media.in_coming_soon,
+        in_latest_releases: media.in_latest_releases,
+        order_index: media.order_index ?? undefined,
       });
     } else if (open) {
       setFormData(defaultBase);
@@ -91,9 +119,12 @@ export default function MediaDialog({
       }
     });
 
-    // Handle nulls for optional strings
+    // Handle nulls for optional strings (but keep genres as array)
     Object.keys(submitData).forEach(key => {
-      if (submitData[key] === "" && !["id", "created_at", "updated_at"].includes(key)) {
+      if (key === "genres") {
+        // Ensure genres is always an array (empty array if no genres)
+        submitData[key] = Array.isArray(submitData[key]) ? submitData[key] : [];
+      } else if (submitData[key] === "" && !["id", "created_at", "updated_at"].includes(key)) {
         submitData[key] = null;
       }
     });
@@ -171,9 +202,37 @@ export default function MediaDialog({
       );
     }
 
+    // Special: Genres (Array of strings - display as comma-separated)
+    if (key === "genres") {
+      const genresArray = Array.isArray(value) ? value : [];
+      const genresString = genresArray.join(", ");
+      
+      return (
+        <div key={key} className="col-span-2">
+          <Label htmlFor={key} className="font-medium">{label}</Label>
+          <Input
+            id={key}
+            type="text"
+            value={genresString}
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              // Convert comma-separated string to array, filter out empty strings
+              const genresArray = inputValue
+                .split(",")
+                .map((g) => g.trim())
+                .filter((g) => g.length > 0);
+              handleChange(key, genresArray);
+            }}
+            placeholder="Enter genres separated by commas (e.g., Action, Drama, Comedy)"
+            className="mt-1.5"
+          />
+        </div>
+      );
+    }
+
     // Default: Input (Numeric or Text)
     const isNumeric = ["release_year", "runtime_minutes", "order_index"].includes(key);
-    const isFullWidth = ["title", "genres", "notes", "poster_url", "preview_url", "platform_url"].includes(key);
+    const isFullWidth = ["title", "notes", "poster_url", "preview_url", "platform_url"].includes(key);
 
     return (
       <div key={key} className={isFullWidth ? "col-span-2" : ""}>
@@ -260,13 +319,13 @@ export default function MediaDialog({
         <form onSubmit={handleSubmit} className="p-6">
           <div className="grid grid-cols-2 gap-5">
             {Object.keys(formData)
-              .filter(k => !k.startsWith('in_') && typeof formData[k] !== 'boolean')
-              .map(key => renderField(key, formData[key]))}
+              .filter(k => !k.startsWith('in_') && typeof (formData as Record<string, any>)[k] !== 'boolean')
+              .map(key => renderField(key, (formData as Record<string, any>)[key]))}
             
             <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
               {Object.keys(formData)
-                .filter(k => k.startsWith('in_') || typeof formData[k] === 'boolean')
-                .map(key => renderField(key, formData[key]))}
+                .filter(k => k.startsWith('in_') || typeof (formData as Record<string, any>)[k] === 'boolean')
+                .map(key => renderField(key, (formData as Record<string, any>)[key]))}
             </div>
           </div>
 

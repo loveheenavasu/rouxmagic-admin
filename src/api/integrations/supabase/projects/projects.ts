@@ -19,6 +19,7 @@ export const Projects: ProjectCRUDWrapper = {
     cbs?: Callbacks
   ): Promise<Response<Project>> {
     cbs?.onLoadingStateChange?.(true);
+    console.log("createOne projectMetadata:", projectMetadata);
     try {
       if (projectMetadata.in_coming_soon && projectMetadata.in_now_playing) {
         return new APIResponse(null, Flag.ValidationError).build();
@@ -33,7 +34,10 @@ export const Projects: ProjectCRUDWrapper = {
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      const res = new APIResponse(data).build();
+      console.log("createOne response:", res);
+      return res;
+      // return new APIResponse(data).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -50,7 +54,8 @@ export const Projects: ProjectCRUDWrapper = {
   ): Promise<Response<Project>> {
     cbs?.onLoadingStateChange?.(true);
     try {
-      if (Object.entries(update).every((v) => v!!)) {
+      // Check if update object is empty or has no valid fields
+      if (!update || Object.keys(update).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {
           message: "No updates found.",
         }).build();

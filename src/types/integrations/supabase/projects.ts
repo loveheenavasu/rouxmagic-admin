@@ -25,12 +25,13 @@ export interface ProjectMetaData{
   release_year?: number;
   runtime_minutes?: number;
   notes?: string;
-  genres?: string;
+  genres?: string[];
   platform?: string;
   platform_url?: string;
   in_now_playing: boolean;
   in_coming_soon: boolean;
   in_latest_releases: boolean;
+  order_index?:number;
 }
 
 export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases"
