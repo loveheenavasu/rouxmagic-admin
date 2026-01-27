@@ -9,13 +9,14 @@ import {
   Flag,
   Response,
   Callbacks,
+  ProjectFormData
 } from "@/types";
 
 const TABLE_NAME = "projects";
 
 export const Projects: ProjectCRUDWrapper = {
   async createOne(
-    projectMetadata: ProjectMetaData,
+    projectMetadata: ProjectFormData,
     cbs?: Callbacks
   ): Promise<Response<Project>> {
     cbs?.onLoadingStateChange?.(true);
@@ -24,9 +25,10 @@ export const Projects: ProjectCRUDWrapper = {
       if (projectMetadata.in_coming_soon && projectMetadata.in_now_playing) {
         return new APIResponse(null, Flag.ValidationError).build();
       }
+      const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = projectMetadata;
       const { data, error } = await supabase
         .from(TABLE_NAME)
-        .insert(projectMetadata)
+        .insert({...projectMetadataWithoutGenres, genres:commaSeperatedGenres.split(",").map((g)=>g.trim())})
         .select("*")
         .maybeSingle();
       if (error) {
@@ -49,11 +51,12 @@ export const Projects: ProjectCRUDWrapper = {
 
   async updateOneByID(
     projectId: string,
-    update: Partial<ProjectMetaData>,
+    update: Partial<ProjectFormData>,
     cbs?: Callbacks
   ): Promise<Response<Project>> {
     cbs?.onLoadingStateChange?.(true);
     try {
+        const { commaSeperatedGenres, ...projectMetadataWithoutCommaGenres } = update;
       // Check if update object is empty or has no valid fields
       if (!update || Object.keys(update).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {
@@ -62,7 +65,7 @@ export const Projects: ProjectCRUDWrapper = {
       }
       const { data, error } = await supabase
         .from(TABLE_NAME)
-        .update(update)
+        .update({...projectMetadataWithoutCommaGenres, genres:commaSeperatedGenres?.split(",").map((g)=>g.trim()) })
         .eq("id", projectId)
         .select("*")
         .maybeSingle();

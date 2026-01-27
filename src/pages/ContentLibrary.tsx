@@ -31,10 +31,10 @@ import {
 import { Search, Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
-import type { MediaContent } from "@/types/media";
+// import type { MediaContent } from "@/types/media";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
-import { Flag } from "@/types";
+import { Flag, Project } from "@/types";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -44,9 +44,9 @@ export default function ContentLibrary() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<MediaContent | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [mediaToDelete, setMediaToDelete] = useState<MediaContent | null>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const debouncedSearchQuery = useDebounce(searchQuery)
 
   const queryClient = useQueryClient();
@@ -57,7 +57,7 @@ export default function ContentLibrary() {
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
       if (response.flag === Flag.Success && response.data) {
-        const statuses = (response.data as MediaContent[])
+        const statuses = (response.data as Project[])
           .map(item => item.status)
           .filter(Boolean);
         return [...new Set(statuses)].sort();
@@ -72,7 +72,7 @@ export default function ContentLibrary() {
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
       if (response.flag === Flag.Success && response.data) {
-        const types = (response.data as MediaContent[])
+        const types = (response.data as Project[])
           .map(item => item.content_type)
           .filter(Boolean);
         return [...new Set(types)].sort();
@@ -82,7 +82,7 @@ export default function ContentLibrary() {
   });
 
   // Fetch projects with server-side filters
-  const { data: projects = [], isLoading, error } = useQuery<MediaContent[]>({
+  const { data: projects = [], isLoading, error } = useQuery<Project[]>({
     queryKey: ["projects", debouncedSearchQuery, statusFilter, contentTypeFilter],
     queryFn: async () => {
       // Build eq filters for Projects.get()
@@ -123,7 +123,7 @@ export default function ContentLibrary() {
       }
 
       let filteredProjects = Array.isArray(response.data) 
-        ? (response.data as MediaContent[])
+        ? (response.data as Project[])
         : [];
 
       // Apply client-side search filter if search query exists
@@ -132,12 +132,12 @@ export default function ContentLibrary() {
         filteredProjects = filteredProjects.filter((project) => {
           const title = project.title?.toLowerCase() || "";
           const platform = project.platform?.toLowerCase() || "";
-          const genres = project.genres?.toLowerCase() || "";
+          const genres = project.genres;
           const notes = project.notes?.toLowerCase() || "";
           return (
             title.includes(searchLower) ||
             platform.includes(searchLower) ||
-            genres.includes(searchLower) ||
+            // genres.includes(searchLower) ||
             notes.includes(searchLower)
           );
         });
@@ -240,19 +240,19 @@ export default function ContentLibrary() {
     setIsMediaDialogOpen(true);
   };
 
-  const handleEdit = (media: MediaContent) => {
+  const handleEdit = (media: Project) => {
     setSelectedMedia(media);
     setIsMediaDialogOpen(true);
   };
 
-  const handleDelete = (media: MediaContent) => {
+  const handleDelete = (media: Project) => {
     setMediaToDelete(media);
     setDeleteDialogOpen(true);
   };
 
   const handleSubmit = async (data: any) => {
     if (selectedMedia) {
-      await updateMutation.mutateAsync({ id: selectedMedia.id, data });
+      await updateMutation.mutateAsync({ id: selectedMedia.id!, data });
     } else {
       await createMutation.mutateAsync(data);
     }
@@ -361,10 +361,10 @@ export default function ContentLibrary() {
                     </TableCell>
                   </TableRow>
                 ) : projects.length > 0 ? (
-                  projects.map((project: MediaContent) => (
+                  projects.map((project: Project) => (
                     <TableRow key={project.id} className="hover:bg-slate-50/50 transition-colors">
                       {displayFields.map((key) => {
-                        const value = project[key as keyof MediaContent];
+                        const value = project[key as keyof Project];
                         
                         return (
                           <TableCell key={key} className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
@@ -405,7 +405,7 @@ export default function ContentLibrary() {
       <MediaDialog
         open={isMediaDialogOpen}
         onOpenChange={setIsMediaDialogOpen}
-        media={selectedMedia}
+        media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />

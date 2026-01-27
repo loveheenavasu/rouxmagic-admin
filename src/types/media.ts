@@ -1,5 +1,5 @@
 export type ContentType = 'film' | 'tvShow' | 'song' | 'audiobook';
-export type ProjectStatus = 'released' | 'comingSoon' | 'watched' | 'inProgress' | 'inProduction';
+export type ProjectStatus = 'released' | 'coming_soon' | 'watched' | 'inProgress' | 'inProduction';
 
 export interface MediaContent {
   id: string;

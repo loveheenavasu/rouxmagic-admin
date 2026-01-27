@@ -3,17 +3,17 @@ import { CommonSchema } from "./common";
 
 export enum ProjectStatusEnum {
   Released = 'released',
-  ComingSoon = 'comingSoon',
-  Watched = 'watched',
-  InProgress = 'inProgress',
-  InProduction = 'inProduction',
+  ComingSoon = 'coming_soon',
+  // Watched = 'watched',
+  // InProgress = 'in_progress',
+  // InProduction = 'in_production',
 }
 
 export enum ContentTypeEnum {
-  Film = 'film',
-  TvShow = 'tvShow',
-  Song = 'song',
-  Audiobook = 'audiobook',
+  Film = 'Film',
+  TvShow = 'TV Show',
+  Song = 'Song',
+  Audiobook = 'Audiobook',
 }
 
 export interface ProjectMetaData{
@@ -32,6 +32,10 @@ export interface ProjectMetaData{
   in_coming_soon: boolean;
   in_latest_releases: boolean;
   order_index?:number;
+}
+
+export interface ProjectFormData extends Partial<Project>{
+  commaSeperatedGenres:string;
 }
 
 export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases"
