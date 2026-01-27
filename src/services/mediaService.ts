@@ -91,7 +91,7 @@ export const mediaService = {
   /**
    * Delete a media entry
    */
-  async delete(id: string): Promise<void> {
+  async deletePermanent(id: string): Promise<void> {
     const { error } = await supabase
       .from(TABLE_NAME)
       .delete()

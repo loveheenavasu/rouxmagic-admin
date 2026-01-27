@@ -33,6 +33,7 @@ import { mediaService } from "@/services/mediaService";
 import MediaDialog from "@/components/MediaDialog";
 import type { MediaContent } from "@/types/media";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks";
 
 export default function ContentLibrary() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,6 +43,7 @@ export default function ContentLibrary() {
   const [selectedMedia, setSelectedMedia] = useState<MediaContent | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<MediaContent | null>(null);
+  const debouncedSearchQuery = useDebounce(searchQuery)
 
   const queryClient = useQueryClient();
 
@@ -61,7 +63,7 @@ export default function ContentLibrary() {
   const { data: projects = [], isLoading, error } = useQuery<MediaContent[]>({
     queryKey: ["projects", searchQuery, statusFilter, contentTypeFilter],
     queryFn: () => mediaService.fetchAll({ 
-      search: searchQuery, 
+      search: debouncedSearchQuery, 
       status: statusFilter, 
       contentType: contentTypeFilter 
     }).then((data) => {
@@ -100,7 +102,7 @@ export default function ContentLibrary() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: mediaService.delete,
+    mutationFn: mediaService.deletePermanent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setDeleteDialogOpen(false);

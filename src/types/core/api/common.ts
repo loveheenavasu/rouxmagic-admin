@@ -1,0 +1,8 @@
+export enum Flag {
+    Success="SUCCESS",
+    InternalError="INTERNAL_ERROR",
+    APIError="API_ERROR",
+    ValidationError="VALIDATION_ERROR",
+    UnknownOrSuccess="UNKNOWN_OR_SUCCESS",
+    Unknown="UNKNOWN"
+}
