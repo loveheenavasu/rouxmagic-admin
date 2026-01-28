@@ -1,3 +1,5 @@
+import { Response } from "./response";
+
 export enum Flag {
     Success="SUCCESS",
     InternalError="INTERNAL_ERROR",
@@ -6,3 +8,8 @@ export enum Flag {
     UnknownOrSuccess="UNKNOWN_OR_SUCCESS",
     Unknown="UNKNOWN"
 }
+
+export type WrapperFunctionType<
+  T = unknown,
+  Args extends unknown[] = []
+> = (...args: Args) => Promise<Response<T>>;

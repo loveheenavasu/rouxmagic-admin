@@ -3,9 +3,7 @@ import { supabase } from "@/lib";
 import {
   ProjectCRUDWrapper,
   Project,
-  ProjectMetaData,
-  GetProjectsBy,
-  SortProjectsBy,
+  GetProjectsOpts,
   Flag,
   Response,
   Callbacks,
@@ -16,17 +14,17 @@ const TABLE_NAME = "projects";
 
 export const Projects: ProjectCRUDWrapper = {
   async createOne(
-    projectMetadata: ProjectFormData,
+    data: ProjectFormData,
     cbs?: Callbacks
   ): Promise<Response<Project>> {
     cbs?.onLoadingStateChange?.(true);
-    console.log("createOne projectMetadata:", projectMetadata);
+    console.log("createOne projectMetadata:", data);
     try {
-      if (projectMetadata.in_coming_soon && projectMetadata.in_now_playing) {
+      if (data.in_coming_soon && data.in_now_playing) {
         return new APIResponse(null, Flag.ValidationError).build();
       }
-      const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = projectMetadata;
-      const { data, error } = await supabase
+      const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = data;
+      const { data:ApiData, error } = await supabase
         .from(TABLE_NAME)
         .insert({...projectMetadataWithoutGenres, genres:commaSeperatedGenres.split(",").map((g)=>g.trim())})
         .select("*")
@@ -36,7 +34,7 @@ export const Projects: ProjectCRUDWrapper = {
           output: error,
         }).build();
       }
-      const res = new APIResponse(data).build();
+      const res = new APIResponse(ApiData).build();
       console.log("createOne response:", res);
       return res;
       // return new APIResponse(data).build();
@@ -87,7 +85,7 @@ export const Projects: ProjectCRUDWrapper = {
   async deleteOneByIDPermanent(
     projectId: string,
     cbs?: Callbacks
-  ): Promise<Response> {
+  ): Promise<Response<null>> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const { error } = await supabase
@@ -131,17 +129,10 @@ export const Projects: ProjectCRUDWrapper = {
     }
   },
 
-  async get<T extends Project | Project[] = Project[]>(
-    opts: {
-      eq: { key: GetProjectsBy; value: any }[];
-      sort?: SortProjectsBy;
-      sortBy?: "asc" | "dec";
-      limit?: number;
-      single?: boolean;
-      maybeSingle?: boolean;
-    },
+  async get(
+    opts: GetProjectsOpts,
     cbs?: Callbacks
-  ): Promise<Response<T>> {
+  ): Promise<Response<Project | Project[]>> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const { eq, limit, single, maybeSingle, sortBy, sort } = opts;
@@ -185,5 +176,5 @@ export const Projects: ProjectCRUDWrapper = {
   /**
    * @function softDeleteOneByID is not built yet because of missing assistive key in projects table, and should not implemented untill properly defined.
    */
-  async softDeleteOneByID() {},
+  // async softDeleteOneByID() {},
 };

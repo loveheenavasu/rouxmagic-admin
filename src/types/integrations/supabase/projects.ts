@@ -42,10 +42,19 @@ export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_c
 
 export type SortProjectsBy = "created_at"
 
+export type GetProjectsOpts = {
+      eq: { key: GetProjectsBy; value: any }[];
+      sort?: SortProjectsBy;
+      sortBy?: "asc" | "dec";
+      limit?: number;
+      single?: boolean;
+      maybeSingle?: boolean;
+    }
+
 /**
  * @wrapper projects api
  */
 
-export interface ProjectCRUDWrapper extends Partial<CRUDWrapperBase>{}
+export interface ProjectCRUDWrapper extends Partial<CRUDWrapperBase<Project | Project[], ProjectFormData, ProjectFormData, GetProjectsOpts>>{}
 
 export interface Project extends CommonSchema, ProjectMetaData {}
