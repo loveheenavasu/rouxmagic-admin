@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { Project } from '@/types';
 import type { MediaContent, MediaFormData } from '@/types/media';
 
 const TABLE_NAME = 'projects';
@@ -7,7 +8,7 @@ export const mediaService = {
   /**
    * Fetch media content with optional server-side filtering
    */
-  async fetchAll(filters?: { search?: string; status?: string; contentType?: string }): Promise<MediaContent[]> {
+  async fetchAll(filters?: { search?: string; status?: string; contentType?: string }): Promise<Project[]> {
     let query = supabase
       .from(TABLE_NAME)
       .select('*')

@@ -17,11 +17,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { MediaContent} from "@/types/media";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { ContentTypeEnum, ProjectFormData, ProjectMetaData, ProjectStatusEnum } from "@/types";
+import { ContentTypeEnum, ProjectFormData, ProjectStatusEnum } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
 
 interface MediaDialogProps {
@@ -42,15 +41,16 @@ export default function MediaDialog({
   const [isUploading, setIsUploading] = useState<string | null>(null);
 
   const defaultBase: ProjectFormData = {
-    title: "testing1",
-    content_type: ContentTypeEnum.Film,
+    title: "",
+    //@ts-ignore
+    content_type: "",
     //@ts-ignore
     status: "",
     commaSeperatedGenres: "",
     poster_url: "",
     preview_url: "",
-    platform: "Google",
-    platform_url: "https://www.google.com",
+    platform: "",
+    platform_url: "",
     notes: "",
     in_now_playing: false,
     in_coming_soon: false,
@@ -151,10 +151,10 @@ export default function MediaDialog({
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="film">Film</SelectItem>
-              <SelectItem value="tvShow">TV Show</SelectItem>
-              <SelectItem value="song">Song</SelectItem>
-              <SelectItem value="audiobook">Audiobook</SelectItem>
+              <SelectItem value={ContentTypeEnum.Film}>Film</SelectItem>
+              <SelectItem value={ContentTypeEnum.TvShow}>TV Show</SelectItem>
+              <SelectItem value={ContentTypeEnum.Song}>Song</SelectItem>
+              <SelectItem value={ContentTypeEnum.Audiobook}>Audiobook</SelectItem>
             </SelectContent>
           </Select>
         </div>

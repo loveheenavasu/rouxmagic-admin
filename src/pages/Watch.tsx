@@ -22,57 +22,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Search, Plus, Edit, Trash2, Film, Tv, Loader2 } from "lucide-react";
-import { mediaService } from "@/services/mediaService";
 import MediaDialog from "@/components/MediaDialog";
-import type { MediaContent } from "@/types/media";
+import type { Project, ProjectFormData, Response } from "@/types";
 import { toast } from "sonner";
+import { Projects } from "@/api";
 
 export default function Watch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<MediaContent | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [mediaToDelete, setMediaToDelete] = useState<MediaContent | null>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
+  const [loading,setLoading] = useState<boolean>(false);
 
   const queryClient = useQueryClient();
 
   // Fetch all media
-  const { data: mediaList = [], isLoading, error } = useQuery({
+  const { data: mediaList, isLoading, error } = useQuery<Response<Project[]>>({
     queryKey: ["media"],
-    queryFn: mediaService.fetchAll,
+    queryFn: Projects.get as any,
   });
-
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: mediaService.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["media"] });
-      setIsMediaDialogOpen(false);
-      toast.success("Media created successfully!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to create media: ${error.message}`);
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      mediaService.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["media"] });
-      setIsMediaDialogOpen(false);
-      setSelectedMedia(null);
-      toast.success("Media updated successfully!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update media: ${error.message}`);
-    },
-  });
-
-  // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: mediaService.delete,
+    mutationFn: Projects.deleteOneByIDPermanent as any,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media"] });
       setDeleteDialogOpen(false);
@@ -84,11 +55,11 @@ export default function Watch() {
     },
   });
 
-  const filteredMedia = mediaList.filter(
+  const filteredMedia = mediaList?.data?.filter(
     (item) =>
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.content_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.platform_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      item.content_type.toLowerCase().includes(searchQuery.toLowerCase())
+      // item.platform_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleAddNew = () => {
@@ -96,39 +67,52 @@ export default function Watch() {
     setIsMediaDialogOpen(true);
   };
 
-  const handleEdit = (media: MediaContent) => {
+  const handleEdit = (media: Project) => {
     setSelectedMedia(media);
     setIsMediaDialogOpen(true);
   };
 
-  const handleDelete = (media: MediaContent) => {
+  const handleDelete = (media: Project) => {
     setMediaToDelete(media);
     setDeleteDialogOpen(true);
   };
 
-  const handleSubmit = async (data: any) => {
-    if (selectedMedia) {
-      await updateMutation.mutateAsync({ id: selectedMedia.id, data });
+  const handleSubmit = async (data: ProjectFormData) => {
+
+    let res:{type:"UPDATED"|"CREATED",response:Response};
+    if (selectedMedia) {  
+      const response = await Projects.updateOneByID?.(selectedMedia.id, data, {onLoadingStateChange:(state:boolean)=>setLoading(state)})
+      res = {type:"UPDATED",response}
     } else {
-      await createMutation.mutateAsync(data);
+      const response = await Projects.createOne?.(data, {onLoadingStateChange:(state:boolean)=>setLoading(state)})
+      res = {type:"CREATED",response}
     }
+     if (!res.response.error) {
+        setIsMediaDialogOpen(false);
+        setSelectedMedia(null);
+        if(res.type === "CREATED"){
+          toast.success("Media created successfully!");
+        }else{
+          toast.success("Media updated successfully!");
+        }
+      }
   };
 
   const confirmDelete = async () => {
     if (mediaToDelete) {
-      await deleteMutation.mutateAsync(mediaToDelete.id);
+      Projects.deleteOneByIDPermanent
+      ?.(mediaToDelete.id,{onLoadingStateChange:(state:boolean)=>setLoading(state)})
     }
   };
 
   // Calculate stats
-  const totalFilms = mediaList.filter((m) => m.content_type === "Film").length;
-  const totalTVShows = mediaList.filter((m) => m.content_type === "TV Show").length;
-  const avgRuntime = mediaList.length > 0
+  const totalFilms = mediaList?.data?.filter((m) => m.content_type === "Film").length;
+  const totalTVShows = mediaList?.data?.filter((m) => m.content_type === "TV Show").length;
+  const avgRuntime = (mediaList?.data?.length || 0) > 0
     ? Math.round(
-        mediaList
-          .filter((m) => m.runtime_minutes)
+        (mediaList?.data || []).filter((m) => m.runtime_minutes)
           .reduce((acc, m) => acc + (m.runtime_minutes || 0), 0) /
-          mediaList.filter((m) => m.runtime_minutes).length
+          (mediaList?.data || []).filter((m) => m.runtime_minutes).length
       )
     : 0;
 
@@ -164,7 +148,7 @@ export default function Watch() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Content</CardDescription>
-            <CardTitle className="text-3xl">{mediaList.length}</CardTitle>
+            <CardTitle className="text-3xl">{(mediaList?.data?.length || 0)}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -231,7 +215,7 @@ export default function Watch() {
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : filteredMedia.length > 0 ? (
+                ) : !!filteredMedia?.length ? (
                   filteredMedia.map((media) => (
                     <TableRow key={media.id}>
                       <TableCell>
@@ -269,16 +253,16 @@ export default function Watch() {
                           {media.content_type}
                         </span>
                       </TableCell>
-                      <TableCell>{media.platform_name || "—"}</TableCell>
+                      {/* <TableCell>{media.platform_name || "—"}</TableCell> */}
                       <TableCell>{media.release_year || "—"}</TableCell>
                       <TableCell>
-                        {media.rating ? (
+                        {/* {media.rating ? (
                           <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-primary/10 text-primary">
                             {media.rating}
                           </span>
                         ) : (
                           "—"
-                        )}
+                        )} */}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -317,9 +301,9 @@ export default function Watch() {
       <MediaDialog
         open={isMediaDialogOpen}
         onOpenChange={setIsMediaDialogOpen}
-        media={selectedMedia}
+        media={selectedMedia as any}
         onSubmit={handleSubmit}
-        isLoading={createMutation.isPending || updateMutation.isPending}
+        isLoading={loading}
       />
 
       {/* Delete Confirmation Dialog */}
