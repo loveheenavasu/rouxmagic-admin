@@ -20,8 +20,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { ContentTypeEnum, ProjectFormData, ProjectStatusEnum } from "@/types";
+import { ContentTypeEnum, ProjectFormData, Flag, Project } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
+import { Projects } from "@/api/integrations/supabase/projects/projects";
 
 interface MediaDialogProps {
   open: boolean;
@@ -31,6 +32,8 @@ interface MediaDialogProps {
   isLoading?: boolean;
 }
 
+const projectsAPI = Projects as Required<typeof Projects>;
+
 export default function MediaDialog({
   open,
   onOpenChange,
@@ -39,94 +42,100 @@ export default function MediaDialog({
   isLoading = false,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
+  const [formData, setFormData] = useState<ProjectFormData>({} as ProjectFormData);
+  const [availableFields, setAvailableFields] = useState<string[]>([]);
+  const [isLoadingFields, setIsLoadingFields] = useState(true);
 
-  const defaultBase: ProjectFormData = {
-    title: "",
-    //@ts-ignore
-    content_type: "",
-    //@ts-ignore
-    status: "",
-    commaSeperatedGenres: "",
-    poster_url: "",
-    preview_url: "",
-    platform: "",
-    platform_url: "",
-    notes: "",
-    in_now_playing: false,
-    in_coming_soon: false,
-    in_latest_releases: false,
-  };
-
-  const [formData, setFormData] = useState<ProjectFormData>(defaultBase);
-
+  // Fetch projects to get field structure
   useEffect(() => {
-    if (media) {
+    const fetchFields = async () => {
+      try {
+        setIsLoadingFields(true);
+        const response = await projectsAPI.get({ eq: [], limit: 1 });
+        
+        if ((response.flag === Flag.Success || response.flag === Flag.UnknownOrSuccess) && response.data) {
+          const projects = Array.isArray(response.data) ? response.data : [response.data];
+          
+          if (projects.length > 0) {
+            const fields = Object.keys(projects[0]).filter(
+              key => !["id", "created_at", "updated_at"].includes(key)
+            );
+            setAvailableFields(fields);
+            
+            // Initialize form data
+            if (media) {
+              // Edit mode - populate with existing data
+              const result: Record<string, any> = {};
+              Object.entries(media).forEach(([key, value]) => {
+                if (key === "genres" && Array.isArray(value)) {
+                  result["commaSeperatedGenres"] = value.join(", ");
+                } else {
+                  result[key] = value === null || value === undefined ? "" : value;
+                }
+              });
+              setFormData(result as ProjectFormData);
+            } else {
+              // Add mode - initialize empty fields
+              const base: Record<string, any> = {};
+              fields.forEach((key) => {
+                const sampleValue = (projects[0] as any)[key];
+                
+                if (typeof sampleValue === "boolean" || key.startsWith("in_")) {
+                  base[key] = false;
+                } else if (key === "genres") {
+                  base["commaSeperatedGenres"] = "";
+                } else {
+                  base[key] = "";
+                }
+              });
+              setFormData(base as ProjectFormData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching fields:", error);
+        toast.error("Failed to load form fields");
+      } finally {
+        setIsLoadingFields(false);
+      }
+    };
 
-      const contentTypeMap: Record<string, ContentTypeEnum> = {
-        'film': ContentTypeEnum.Film,
-        'tvShow': ContentTypeEnum.TvShow,
-        'song': ContentTypeEnum.Song,
-        'audiobook': ContentTypeEnum.Audiobook,
-      };
-      
-      const statusMap: Record<string, ProjectStatusEnum> = {
-        'released': ProjectStatusEnum.Released,
-        'coming_soon': ProjectStatusEnum.ComingSoon,
-        // 'watched': ProjectStatusEnum.Watched,
-        // 'inProgress': ProjectStatusEnum.InProgress,
-        // 'inProduction': ProjectStatusEnum.InProduction,
-      };
-      
-      // Merge media data with base to ensure any missing fields are initialized
-      setFormData({
-        ...defaultBase,
-        title: media.title,
-        content_type: contentTypeMap[media.content_type!] ?? ContentTypeEnum.Film,
-        status: statusMap[media.status!] ?? ProjectStatusEnum.ComingSoon,
-        poster_url: media.poster_url ?? undefined,
-        preview_url: media.preview_url ?? undefined,
-        release_year: media.release_year ?? undefined,
-        runtime_minutes: media.runtime_minutes ?? undefined,
-        notes: media.notes ?? undefined,
-        platform: media.platform ?? undefined,
-        platform_url: media.platform_url ?? undefined,
-        in_now_playing: media.in_now_playing,
-        in_coming_soon: media.in_coming_soon,
-        in_latest_releases: media.in_latest_releases,
-        order_index: media.order_index ?? undefined,
-      });
-    } else if (open) {
-      setFormData(defaultBase);
+    if (open) {
+      fetchFields();
     }
-  }, [media, open]);
+  }, [open, media]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate required fields
+    if (!formData.title || !formData.content_type || !formData.status) {
+      toast.error("Please fill in all required fields (Title, Content Type, Status)");
+      return;
+    }
+
     // Prepare data for submission
-    const submitData: Record<string, any> = { ...formData };
-    
-    // Convert numeric strings back to integers
-    const numFields = ["release_year", "runtime_minutes", "order_index"];
-    numFields.forEach(field => {
-      if (submitData[field]) {
-        submitData[field] = parseInt(submitData[field]);
-      } else {
-        submitData[field] = null;
-      }
-    });
+    const submitData: Record<string, any> = {};
 
-    // Handle nulls for optional strings (but keep genres as array)
-    Object.keys(submitData).forEach(key => {
-      if (submitData[key] === "" && !["id", "created_at", "updated_at"].includes(key)) {
+    // Only include fields that have actual values
+    Object.entries(formData).forEach(([key, value]) => {
+      // Skip internal fields
+      if (["id", "created_at", "updated_at"].includes(key)) {
+        return;
+      }
+
+      // Handle different value types
+      if (value === "" || value === undefined) {
         submitData[key] = null;
+      } else if (["release_year", "runtime_minutes", "order_index", "total_episodes", "episode_runtime_minutes"].includes(key)) {
+        // Convert numeric strings to integers
+        submitData[key] = value ? parseInt(String(value)) : null;
+      } else if (typeof value === "boolean") {
+        submitData[key] = value;
+      } else {
+        submitData[key] = value;
       }
     });
-
-    // Clean up internal fields that shouldn't be sent to update
-    delete submitData.id;
-    delete submitData.created_at;
-    delete submitData.updated_at;
 
     await onSubmit(submitData);
   };
@@ -135,18 +144,19 @@ export default function MediaDialog({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const renderField = (key: keyof ProjectFormData, value: any) => {
-    // Skip administrative fields
-    if (["id", "created_at", "updated_at"].includes(key)) return null;
-
-    const label = key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  const renderField = (key: string, value: any) => {
+    const label = key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
 
     // Special: Content Type Select
     if (key === "content_type") {
       return (
         <div key={key}>
-          <Label htmlFor={key} className="font-medium">{label} *</Label>
-          <Select value={value} onValueChange={(v) => handleChange(key, v)}>
+          <Label htmlFor={key} className="font-medium">
+            {label} *
+          </Label>
+          <Select value={value || ""} onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}>
             <SelectTrigger className="mt-1.5 capitalize">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -165,17 +175,16 @@ export default function MediaDialog({
     if (key === "status") {
       return (
         <div key={key}>
-          <Label htmlFor={key} className="font-medium">{label} *</Label>
-          <Select value={value} onValueChange={(v) => handleChange(key, v)}>
+          <Label htmlFor={key} className="font-medium">
+            {label} *
+          </Label>
+          <Select value={value || ""} onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}>
             <SelectTrigger className="mt-1.5 capitalize">
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="released">Released</SelectItem>
               <SelectItem value="coming_soon">Coming Soon</SelectItem>
-              {/* <SelectItem value="watched">Watched</SelectItem>
-              <SelectItem value="inProgress">In Progress</SelectItem>
-              <SelectItem value="inProduction">In Production</SelectItem> */}
             </SelectContent>
           </Select>
         </div>
@@ -183,54 +192,87 @@ export default function MediaDialog({
     }
 
     // Special: Boolean / Checkbox
-    if (key.startsWith("in_") || typeof value === "boolean") {
+    if (key.startsWith("in_") || key === "featured" || key === "is_downloadable") {
       return (
-        <div key={key} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
-          <Checkbox 
+        <div
+          key={key}
+          className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30"
+        >
+          <Checkbox
             id={key}
             checked={!!value}
-            onCheckedChange={(checked: boolean) => handleChange(key as keyof ProjectFormData, checked)}
+            onCheckedChange={(checked: boolean) =>
+              handleChange(key as keyof ProjectFormData, checked)
+            }
           />
-          <Label htmlFor={key} className="font-bold cursor-pointer text-sm">{label}</Label>
+          <Label htmlFor={key} className="font-bold cursor-pointer text-sm">
+            {label}
+          </Label>
         </div>
       );
     }
 
-    // Special: Genres (Array of strings - display as comma-separated)
+    // Special: Genres (comma-separated)
     if (key === "commaSeperatedGenres") {
       return (
         <div key={key} className="col-span-2">
-          <Label htmlFor={key} className="font-medium">Comma Seperated Genres</Label>
+          <Label htmlFor={key} className="font-medium">
+            Genres (comma-separated)
+          </Label>
           <Input
             id={key}
             type="text"
-            value={formData.commaSeperatedGenres}
-            onChange={(e) => setFormData(curr=>({...curr, commaSeperatedGenres:e.target.value}))}
-            placeholder="Enter genres separated by commas (e.g., Action, Drama, Comedy)"
+            value={value || ""}
+            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            placeholder="e.g., Action, Drama, Comedy"
             className="mt-1.5"
           />
         </div>
       );
     }
 
+    // Skip genres array field (we use commaSeperatedGenres instead)
+    if (key === "genres") {
+      return null;
+    }
+
     // Default: Input (Numeric or Text)
-    const isNumeric = ["release_year", "runtime_minutes", "order_index"].includes(key);
-    const isFullWidth = ["title", "notes", "poster_url", "preview_url", "platform_url"].includes(key);
+    const isNumeric = [
+      "release_year",
+      "runtime_minutes",
+      "order_index",
+      "total_episodes",
+      "episode_runtime_minutes",
+      "order"
+    ].includes(key);
+    
+    const isFullWidth = [
+      "title",
+      "notes",
+      "poster_url",
+      "preview_url",
+      "platform_url",
+      "slug",
+      "synopsis",
+      "external_url",
+      "audio_url",
+      "audio_preview_url"
+    ].includes(key);
 
     return (
       <div key={key} className={isFullWidth ? "col-span-2" : ""}>
         <Label htmlFor={key} className="font-medium">
           {label} {key === "title" ? "*" : ""}
         </Label>
-        
+
         {/* Special handling for image/video URLs to allow uploads */}
-        {(key === "poster_url" || key === "preview_url") ? (
+        {key === "poster_url" || key === "preview_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
               type="text"
               value={value ?? ""}
-              onChange={(e) => handleChange(key, e.target.value)}
+              onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
               placeholder={`Enter or upload ${label.toLowerCase()}`}
               className="flex-1"
             />
@@ -245,10 +287,17 @@ export default function MediaDialog({
                   if (file) {
                     try {
                       setIsUploading(key);
-                      const bucket = "Media"; 
-                      const path = createBucketPath(`${Date.now()}-${file.name.replace(/\s+/g, "_")}`, formData.content_type!);
-                      const publicUrl = await mediaService.uploadFile(file, bucket, path);
-                      handleChange(key, publicUrl);
+                      const bucket = "Media";
+                      const path = createBucketPath(
+                        `${Date.now()}-${file.name.replace(/\s+/g, "_")}`,
+                        formData.content_type!,
+                      );
+                      const publicUrl = await mediaService.uploadFile(
+                        file,
+                        bucket,
+                        path,
+                      );
+                      handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded successfully!`);
                     } catch (error: any) {
                       toast.error(`Upload failed: ${error.message}`);
@@ -258,14 +307,18 @@ export default function MediaDialog({
                   }
                 }}
               />
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 disabled={isUploading === key}
                 onClick={() => document.getElementById(`file-${key}`)?.click()}
                 className="h-10 px-3 bg-slate-50 border-dashed"
               >
-                {isUploading === key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isUploading === key ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
                 <span className="ml-2 hidden sm:inline">Upload</span>
               </Button>
             </div>
@@ -275,7 +328,7 @@ export default function MediaDialog({
             id={key}
             type={isNumeric ? "number" : "text"}
             value={value ?? ""}
-            onChange={(e) => handleChange(key, e.target.value)}
+            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
             placeholder={`Enter ${label.toLowerCase()}`}
             required={key === "title"}
             className="mt-1.5"
@@ -299,39 +352,61 @@ export default function MediaDialog({
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="grid grid-cols-2 gap-5">
-            {Object.keys(formData)
-              .filter(k => !k.startsWith('in_') && typeof (formData as Record<string, any>)[k] !== 'boolean')
-              .map((key) => renderField(key as keyof ProjectFormData, (formData as any)[key]))}
-            
-            <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
-              {Object.keys(formData)
-                .filter(k => k.startsWith('in_') || typeof (formData as Record<string, any>)[k] === 'boolean')
-                .map(key => renderField(key as keyof ProjectFormData, (formData as Record<string, any>)[key]))}
-            </div>
+        {isLoadingFields ? (
+          <div className="p-6 flex items-center justify-center min-h-[400px]">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            <p className="ml-2 text-sm text-slate-500">Loading form fields...</p>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6">
+            <div className="grid grid-cols-2 gap-5">
+              {availableFields
+                .filter(
+                  (k) =>
+                    !k.startsWith("in_") &&
+                    k !== "featured" &&
+                    k !== "is_downloadable" &&
+                    k !== "genres"
+                )
+                .map((key) =>
+                  renderField(key, (formData as any)[key])
+                )}
 
-          <div className="flex justify-end gap-3 pb-2 pt-10">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isLoading}
-              className="px-6 h-11 rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading}
-              className="px-8 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {media ? "Update Content" : "Save Content"}
-            </Button>
-          </div>
-        </form>
+              <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
+                {availableFields
+                  .filter(
+                    (k) =>
+                      k.startsWith("in_") ||
+                      k === "featured" ||
+                      k === "is_downloadable"
+                  )
+                  .map((key) =>
+                    renderField(key, (formData as any)[key])
+                  )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pb-2 pt-10">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading}
+                className="px-6 h-11 rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="px-8 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100"
+              >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {media ? "Update Content" : "Save Content"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -26,7 +26,7 @@ export const Projects: ProjectCRUDWrapper = {
       const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = data;
       const { data:ApiData, error } = await supabase
         .from(TABLE_NAME)
-        .insert({...projectMetadataWithoutGenres, genres:commaSeperatedGenres.split(",").map((g)=>g.trim())})
+        .insert({...projectMetadataWithoutGenres, genres:commaSeperatedGenres?.split(",")?.map((g)=>g?.trim())})
         .select("*")
         .maybeSingle();
       if (error) {
@@ -63,7 +63,7 @@ export const Projects: ProjectCRUDWrapper = {
       }
       const { data, error } = await supabase
         .from(TABLE_NAME)
-        .update({...projectMetadataWithoutCommaGenres, genres:commaSeperatedGenres?.split(",").map((g)=>g.trim()) })
+        .update({...projectMetadataWithoutCommaGenres, genres:commaSeperatedGenres?.split(",")?.map((g)=>g?.trim()) })
         .eq("id", projectId)
         .select("*")
         .maybeSingle();
@@ -97,7 +97,7 @@ export const Projects: ProjectCRUDWrapper = {
           output: error,
         }).build();
       }
-      return new APIResponse(null).build();
+      return new APIResponse(null, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -135,13 +135,33 @@ export const Projects: ProjectCRUDWrapper = {
   ): Promise<Response<Project | Project[]>> {
     cbs?.onLoadingStateChange?.(true);
     try {
-      const { eq, limit, single, maybeSingle, sortBy, sort } = opts;
+      const {
+        eq,
+        or,
+        inValue,
+        limit,
+        single,
+        maybeSingle,
+        sortBy,
+        sort,
+        search,
+        searchFields,
+      } = opts;
+
       const query = supabase.from(TABLE_NAME).select("*");
 
-      if (eq.length > 0) {
+      if (eq && eq.length > 0) {
         eq.forEach(({ key, value }) => {
           query.eq(key, value);
         });
+      }
+
+      if(or && typeof or === "string"){
+        query.or(or);
+      }
+
+      if (inValue?.key && inValue?.value?.length) {
+        query.in(inValue.key, inValue.value);
       }
 
       if (typeof limit === "number" && limit > 0) {
@@ -158,13 +178,30 @@ export const Projects: ProjectCRUDWrapper = {
         query.order(sort, { ascending: sortBy === "asc" });
       }
 
+      // Apply server-side search so filtering happens in the API, not the UI
+      if (search && search.trim()) {
+        const trimmed = search.trim();
+        const fields =
+          searchFields && searchFields.length > 0
+            ? searchFields
+            : (["title", "platform", "notes"] as const);
+
+        const pattern = `%${trimmed}%`;
+        const orFilters = fields
+          .map((field) => `${field}.ilike.${pattern}`)
+          .join(",");
+
+        // Supabase Postgrest: combine OR conditions across multiple columns
+        query.or(orFilters);
+      }
+
       const { data, error } = await query;
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
-import { Flag, Project } from "@/types";
+import { ContentTypeEnum, Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
@@ -39,7 +39,6 @@ const projectsAPI = Projects as Required<typeof Projects>;
 export default function Watch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -53,21 +52,18 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter],
+    queryKey: ["media", searchQuery, statusFilter],
     queryFn: async () => {
-      const eqFilters: { key: "status" | "content_type"; value: any }[] = [];
+      const eqFilters: { key: "status" | "content_type"; value: any }[] = [
+        { key: "content_type", value: ContentTypeEnum.Song },
+      ];
 
       if (statusFilter !== "all") {
         eqFilters.push({ key: "status", value: statusFilter });
       }
-      if (contentTypeFilter !== "all") {
-        eqFilters.push({ key: "content_type", value: contentTypeFilter });
-      }
 
       const response = await projectsAPI.get({
-        // eq: eqFilters,
-        // or: "content_type.eq.TV Show,content_type.eq.Film",
-        inValue: { key: "content_type", value: ["TV Show", "Film"] },
+        eq: eqFilters,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -87,9 +83,11 @@ export default function Watch() {
         throw new Error(errorMessage);
       }
 
-      return Array.isArray(response.data)
+      const data = Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
+
+      return data;
     },
   });
 
@@ -97,6 +95,7 @@ export default function Watch() {
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await projectsAPI.createOne(data);
+      console.log("response::::::", response);
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -162,28 +161,18 @@ export default function Watch() {
     },
   });
 
+  const filteredMedia = mediaList;
+
   const displayFields =
     mediaList.length > 0
-      ? Object.keys(mediaList[0]).filter(
-          (key) =>
-            ![
-              "id",
-              "poster_url",
-              "preview_url",
-              "platform_url",
-              "order_index",
-              "created_at",
-              "updated_at",
-            ].includes(key),
-        )
+      ? Object.keys(mediaList[0])
       : ["title", "content_type", "status", "release_year", "platform"];
 
   // Fetch unique statuses for filters (global, not affected by current filter)
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["unique-statuses"],
     queryFn: async () => {
-      const response = await projectsAPI.get({or:'content_type.eq.TV Show,content_type.eq.Film' });
-      console.log(response,"kjdkjsgjkfhgs");
+      const response = await projectsAPI.get({ eq: [] });
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -199,23 +188,8 @@ export default function Watch() {
   });
 
   // Fetch unique types for filters (global, not affected by current filter)
-  const { data: availableTypes = [] } = useQuery({
-    queryKey: ["unique-types"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({ eq: [] });
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        return [];
-      }
-      const types = (response.data as Project[])
-        .map((item) => item.content_type)
-        .filter(Boolean);
-      return [...new Set(types)].sort();
-    },
-  });
+  // For Listen page we always show songs, so we don't need a type filter dropdown.
+  const availableTypes: string[] = [];
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -273,18 +247,15 @@ export default function Watch() {
       </div>
     );
   }
-  {
-    console.log("selectedMedia", selectedMedia);
-  }
 
   return (
     <div className="space-y-6">
       {/* Header Section */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Watch Library</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Listen Library</h1>
           <p className="text-muted-foreground">
-            Manage films and TV shows in your catalog
+            Manage songs and audiobooks in your catalog
           </p>
         </div>
         <Button
@@ -325,19 +296,18 @@ export default function Watch() {
           </CardHeader>
         </Card>
       </div>
-      <MediaFilters
-        searchPlaceholder="Search by title..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        contentTypeFilter={contentTypeFilter}
-        onContentTypeFilterChange={setContentTypeFilter}
-        availableStatuses={availableStatuses}
-        availableTypes={availableTypes}
-      />
-      {/* Search and Filter Section / Table */}
-     
+
+      {/* Search and Filter Section */}
+   
+          <MediaFilters
+            searchPlaceholder="Search by title..."
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            availableStatuses={availableStatuses}
+            availableTypes={availableTypes}
+          />
           {/* Table */}
           <div className="rounded-md border">
             <Table>
@@ -364,8 +334,8 @@ export default function Watch() {
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : !!mediaList?.length ? (
-                  mediaList.map(
+                ) : !!filteredMedia?.length ? (
+                  filteredMedia.map(
                     (media) => (
                       console.log("media::::", media),
                       (
@@ -424,7 +394,7 @@ export default function Watch() {
               </TableBody>
             </Table>
           </div>
-        
+       
       {/* Media Dialog */}
       <MediaDialog
         open={isMediaDialogOpen}

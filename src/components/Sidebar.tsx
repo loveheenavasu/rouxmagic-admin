@@ -13,12 +13,16 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Music,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 
 const navigation = [
   { name: "Home Page", href: "/home", icon: LayoutDashboard },
   { name: "Watch Library", href: "/watch", icon: Film },
+  { name: "Listen Library", href: "/listen", icon: Music },
+  { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

@@ -2,14 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -28,9 +20,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
+import { MediaFilters } from "@/components/MediaFilters";
 // import type { MediaContent } from "@/types/media";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
@@ -47,7 +40,7 @@ export default function ContentLibrary() {
   const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
-  const debouncedSearchQuery = useDebounce(searchQuery)
+  const debouncedSearchQuery = useDebounce(searchQuery);
 
   const queryClient = useQueryClient();
 
@@ -56,10 +49,12 @@ export default function ContentLibrary() {
     queryKey: ["unique-statuses"],
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
-      if (response.flag === Flag.Success && response.data) {
+      console.log("response", response);
+      if (response.flag === Flag.Success || Flag.UnknownOrSuccess && response.data) {
         const statuses = (response.data as Project[])
           .map(item => item.status)
           .filter(Boolean);
+          console.log("statuses", statuses);
         return [...new Set(statuses)].sort();
       }
       return [];
@@ -94,17 +89,19 @@ export default function ContentLibrary() {
         eqFilters.push({ key: "content_type" as const, value: contentTypeFilter });
       }
 
-      // Fetch projects using Projects.get()
+      // Fetch projects using Projects.get() with server-side filters + search
       const response = await projectsAPI.get({
         eq: eqFilters,
         sort: "created_at",
         sortBy: "dec",
+        search: debouncedSearchQuery || undefined,
+        searchFields: ["title", "platform", "notes"],
       });
 
       // Handle error responses - check for both Success and UnknownOrSuccess flags
       if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
         // Extract error message from Supabase error object
-        const supabaseError = response.error?.output;
+        const supabaseError = response.error?.output as { message?: string } | undefined;
         const errorMessage = 
           supabaseError?.message || 
           response.error?.message || 
@@ -122,28 +119,9 @@ export default function ContentLibrary() {
         return [];
       }
 
-      let filteredProjects = Array.isArray(response.data) 
+      return Array.isArray(response.data)
         ? (response.data as Project[])
         : [];
-
-      // Apply client-side search filter if search query exists
-      if (debouncedSearchQuery.trim()) {
-        const searchLower = debouncedSearchQuery.toLowerCase();
-        filteredProjects = filteredProjects.filter((project) => {
-          const title = project.title?.toLowerCase() || "";
-          const platform = project.platform?.toLowerCase() || "";
-          const genres = project.genres;
-          const notes = project.notes?.toLowerCase() || "";
-          return (
-            title.includes(searchLower) ||
-            platform.includes(searchLower) ||
-            // genres.includes(searchLower) ||
-            notes.includes(searchLower)
-          );
-        });
-      }
-
-      return filteredProjects;
     },
   });
 
@@ -152,7 +130,7 @@ export default function ContentLibrary() {
     mutationFn: async (data: any) => {
       const response = await projectsAPI.createOne(data);
       if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
-        const supabaseError = response.error?.output;
+        const supabaseError = response.error?.output as { message?: string } | undefined;
         const errorMessage = 
           supabaseError?.message || 
           response.error?.message || 
@@ -181,7 +159,7 @@ export default function ContentLibrary() {
       const response = await projectsAPI.updateOneByID(id, data);
       console.log("Update response:", response);
       if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
-        const supabaseError = response.error?.output;
+        const supabaseError = response.error?.output as { message?: string } | undefined;
         const errorMessage = 
           supabaseError?.message || 
           response.error?.message || 
@@ -209,7 +187,7 @@ export default function ContentLibrary() {
     mutationFn: async (id: string) => {
       const response = await projectsAPI.deleteOneByIDPermanent(id);
       if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
-        const supabaseError = response.error?.output;
+        const supabaseError = response.error?.output as { message?: string } | undefined;
         const errorMessage = 
           supabaseError?.message || 
           response.error?.message || 
@@ -236,9 +214,9 @@ export default function ContentLibrary() {
     : ["title", "content_type", "status", "release_year", "platform"];
 
   const handleAddNew = () => {
-    setSelectedMedia(null);
-    setIsMediaDialogOpen(true);
-  };
+  setSelectedMedia(null); 
+  setIsMediaDialogOpen(true);
+};
 
   const handleEdit = (media: Project) => {
     setSelectedMedia(media);
@@ -298,47 +276,16 @@ export default function ContentLibrary() {
       {/* Main Content Area */}
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <div className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search by title, platform..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11 border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/30"
-              />
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-              <div className="w-full sm:w-44">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30 capitalize">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    {availableStatuses.map(status => (
-                      <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full sm:w-44">
-                <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30 capitalize">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    {availableTypes.map(type => (
-                      <SelectItem key={type} value={type} className="capitalize">{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+          <MediaFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            contentTypeFilter={contentTypeFilter}
+            onContentTypeFilterChange={setContentTypeFilter}
+            availableStatuses={availableStatuses}
+            availableTypes={availableTypes}
+          />
 
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
             <Table>

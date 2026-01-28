@@ -42,14 +42,28 @@ export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_c
 
 export type SortProjectsBy = "created_at"
 
+export type SearchableProjectField = "title" | "platform" | "notes" | "content_type";
+
 export type GetProjectsOpts = {
-      eq: { key: GetProjectsBy; value: any }[];
-      sort?: SortProjectsBy;
-      sortBy?: "asc" | "dec";
-      limit?: number;
-      single?: boolean;
-      maybeSingle?: boolean;
-    }
+  eq?: { key: GetProjectsBy; value: any }[];
+  sort?: SortProjectsBy;
+  sortBy?: "asc" | "dec";
+  limit?: number;
+  single?: boolean;
+  maybeSingle?: boolean;
+  or?: string;
+  inValue?:{key: keyof ProjectMetaData, value: any[]}
+  /**
+   * Optional search term to be applied on the server using ILIKE.
+   * This allows all filtering (including search) to be handled by the API.
+   */
+  search?: string;
+  /**
+   * Fields to search in when `search` is provided.
+   * Defaults to ["title", "platform", "notes"] if not specified.
+   */
+  searchFields?: SearchableProjectField[];
+}
 
 /**
  * @wrapper projects api

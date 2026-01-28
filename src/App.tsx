@@ -5,6 +5,8 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import ContentLibrary from './pages/ContentLibrary'
 import Watch from './pages/Watch'
+import Listen from './pages/Listen'
+import Read from './pages/Read'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 
@@ -47,6 +49,26 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Watch />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/listen"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Listen />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/read"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Read />
               </Layout>
             </ProtectedRoute>
           }
