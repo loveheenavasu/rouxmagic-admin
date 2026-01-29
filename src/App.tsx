@@ -3,7 +3,8 @@ import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
-import ContentLibrary from './pages/ContentLibrary'
+import Home from './pages/home'
+import HomeCarousel from './pages/home/HomeCarousel'
 import Watch from './pages/Watch'
 import Listen from './pages/Listen'
 import Read from './pages/Read'
@@ -38,7 +39,17 @@ function App() {
           element={
             <ProtectedRoute>
               <Layout>
-                <ContentLibrary />
+                <Home />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/home/carousel"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <HomeCarousel />
               </Layout>
             </ProtectedRoute>
           }

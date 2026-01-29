@@ -38,9 +38,9 @@ export interface ProjectFormData extends Partial<Project>{
   commaSeperatedGenres:string;
 }
 
-export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases"
+export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases" | "in_hero_carousel"
 
-export type SortProjectsBy = "created_at"
+export type SortProjectsBy = "created_at" | "order_index"
 
 export type SearchableProjectField = "title" | "platform" | "notes" | "content_type";
 

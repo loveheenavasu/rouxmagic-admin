@@ -13,9 +13,8 @@ import {
 import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
-import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { MediaFilters } from "@/components/MediaFilters";
-// import type { MediaContent } from "@/types/media";
+import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
 import { Flag, Project } from "@/types";
@@ -23,12 +22,14 @@ import { Flag, Project } from "@/types";
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
 
-export default function ContentLibrary() {
+const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
+    null,
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const debouncedSearchQuery = useDebounce(searchQuery);
@@ -41,10 +42,14 @@ export default function ContentLibrary() {
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
       console.log("response", response);
-      if (response.flag === Flag.Success || (Flag.UnknownOrSuccess && response.data)) {
+      if (
+        response.flag === Flag.Success ||
+        (Flag.UnknownOrSuccess && response.data)
+      ) {
         const statuses = (response.data as Project[])
           .map((item) => item.status)
           .filter(Boolean);
+        console.log("statuses", statuses);
         return [...new Set(statuses)].sort();
       }
       return [];
@@ -67,16 +72,27 @@ export default function ContentLibrary() {
   });
 
   // Fetch projects with server-side filters
-  const { data: projects = [], isLoading, error } = useQuery<Project[]>({
-    queryKey: ["projects", debouncedSearchQuery, statusFilter, contentTypeFilter],
+  const {
+    data: projects = [],
+    isLoading,
+    error,
+  } = useQuery<Project[]>({
+    queryKey: [
+      "projects",
+      debouncedSearchQuery,
+      statusFilter,
+      contentTypeFilter,
+    ],
     queryFn: async () => {
-      // Build eq filters for Projects.get()
       const eqFilters = [];
       if (statusFilter !== "all") {
         eqFilters.push({ key: "status" as const, value: statusFilter });
       }
       if (contentTypeFilter !== "all") {
-        eqFilters.push({ key: "content_type" as const, value: contentTypeFilter });
+        eqFilters.push({
+          key: "content_type" as const,
+          value: contentTypeFilter,
+        });
       }
 
       // Fetch projects using Projects.get() with server-side filters + search
@@ -89,17 +105,22 @@ export default function ContentLibrary() {
       });
 
       // Handle error responses - check for both Success and UnknownOrSuccess flags
-      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
         // Extract error message from Supabase error object
-        const supabaseError = response.error?.output as { message?: string } | undefined;
-        const errorMessage = 
-          supabaseError?.message || 
-          response.error?.message || 
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
           "Failed to fetch projects";
         console.error("Projects API Error:", {
           flag: response.flag,
           error: response.error,
-          supabaseError
+          supabaseError,
         });
         throw new Error(errorMessage);
       }
@@ -109,9 +130,7 @@ export default function ContentLibrary() {
         return [];
       }
 
-      return Array.isArray(response.data)
-        ? (response.data as Project[])
-        : [];
+      return Array.isArray(response.data) ? (response.data as Project[]) : [];
     },
   });
 
@@ -119,11 +138,17 @@ export default function ContentLibrary() {
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await projectsAPI.createOne(data);
-      if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
-        const supabaseError = response.error?.output as { message?: string } | undefined;
-        const errorMessage = 
-          supabaseError?.message || 
-          response.error?.message || 
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
           "Failed to create content";
         console.error("Create Error:", response);
         throw new Error(errorMessage);
@@ -148,11 +173,17 @@ export default function ContentLibrary() {
       console.log("Update payload:", { id, data });
       const response = await projectsAPI.updateOneByID(id, data);
       console.log("Update response:", response);
-      if ((response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) || !response.data) {
-        const supabaseError = response.error?.output as { message?: string } | undefined;
-        const errorMessage = 
-          supabaseError?.message || 
-          response.error?.message || 
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
           "Failed to update content";
         console.error("Update Error:", response);
         throw new Error(errorMessage);
@@ -176,11 +207,16 @@ export default function ContentLibrary() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await projectsAPI.deleteOneByIDPermanent(id);
-      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
-        const supabaseError = response.error?.output as { message?: string } | undefined;
-        const errorMessage = 
-          supabaseError?.message || 
-          response.error?.message || 
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
           "Failed to delete content";
         console.error("Delete Error:", response);
         throw new Error(errorMessage);
@@ -199,14 +235,26 @@ export default function ContentLibrary() {
     },
   });
 
-  const displayFields = projects.length > 0 
-    ? Object.keys(projects[0]).filter((key) => !["id", "poster_url", "preview_url", "platform_url", "order_index", "created_at", "updated_at"].includes(key))
-    : ["title", "content_type", "status", "release_year", "platform"];
+  const displayFields =
+    projects.length > 0
+      ? Object.keys(projects[0]).filter(
+          (key) =>
+            ![
+              "id",
+              "poster_url",
+              "preview_url",
+              "platform_url",
+              "order_index",
+              "created_at",
+              "updated_at",
+            ].includes(key),
+        )
+      : ["title", "content_type", "status", "release_year", "platform"];
 
   const handleAddNew = () => {
-  setSelectedMedia(null); 
-  setIsMediaDialogOpen(true);
-};
+    setSelectedMedia(null);
+    setIsMediaDialogOpen(true);
+  };
 
   const handleEdit = (media: Project) => {
     setSelectedMedia(media);
@@ -243,18 +291,19 @@ export default function ContentLibrary() {
     );
   }
 
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Home Page</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Home Page
+          </h1>
           <p className="text-muted-foreground mt-1">
             One form, multiple categories - manage all content dynamically
           </p>
         </div>
-        <Button 
+        <Button
           onClick={handleAddNew}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
         >
@@ -282,44 +331,75 @@ export default function ContentLibrary() {
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
                   {displayFields.map((key) => (
-                    <TableHead key={key} className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4">
+                    <TableHead
+                      key={key}
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4"
+                    >
                       {key.replace(/_/g, " ")}
                     </TableHead>
                   ))}
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 text-right px-4">Actions</TableHead>
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 text-right px-4">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={displayFields.length + 1} className="h-64 text-center">
+                    <TableCell
+                      colSpan={displayFields.length + 1}
+                      className="h-64 text-center"
+                    >
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
-                      <p className="mt-2 text-sm text-slate-500 font-medium">Loading content library...</p>
+                      <p className="mt-2 text-sm text-slate-500 font-medium">
+                        Loading content library...
+                      </p>
                     </TableCell>
                   </TableRow>
                 ) : projects.length > 0 ? (
                   projects.map((project: Project) => (
-                    <TableRow key={project.id} className="hover:bg-slate-50/50 transition-colors">
+                    <TableRow
+                      key={project.id}
+                      className="hover:bg-slate-50/50 transition-colors"
+                    >
                       {displayFields.map((key) => {
                         const value = project[key as keyof Project];
-                        
+
                         return (
-                          <TableCell key={key} className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <TableCell
+                            key={key}
+                            className="text-slate-600 font-medium px-4 max-w-[200px] truncate"
+                          >
                             {value === null || value === undefined ? (
                               <span className="text-slate-300 text-xs">—</span>
                             ) : (
-                              <span className="truncate block" title={String(value)}>{String(value)}</span>
+                              <span
+                                className="truncate block"
+                                title={String(value)}
+                              >
+                                {String(value)}
+                              </span>
                             )}
                           </TableCell>
                         );
                       })}
-                      
+
                       <TableCell className="text-right px-4">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(project)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(project)}
+                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(project)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(project)}
+                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -328,7 +408,10 @@ export default function ContentLibrary() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={displayFields.length + 1} className="h-32 text-center text-slate-500 font-medium">
+                    <TableCell
+                      colSpan={displayFields.length + 1}
+                      className="h-32 text-center text-slate-500 font-medium"
+                    >
                       No content found matching your filters.
                     </TableCell>
                   </TableRow>
@@ -351,10 +434,11 @@ export default function ContentLibrary() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        title="Delete Content?"
         itemName={mediaToDelete?.title}
         isDeleting={deleteMutation.isPending}
       />
     </div>
   );
-}
+};
+
+export default HomePage;

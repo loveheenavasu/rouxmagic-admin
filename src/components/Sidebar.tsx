@@ -15,11 +15,23 @@ import {
   PanelLeftOpen,
   Music,
   BookOpen,
+  ChevronDown,
+  ChevronRight,
+  LayoutGrid,
+  ImagePlay,
 } from "lucide-react";
 import { useState } from "react";
 
 const navigation = [
-  { name: "Home Page", href: "/home", icon: LayoutDashboard },
+  { 
+    name: "Home Page", 
+    href: "/home", 
+    icon: LayoutDashboard,
+    subItems: [
+      { name: "Content Library", href: "/home", icon: LayoutGrid },
+      { name: "Carousel", href: "/home/carousel", icon: ImagePlay },
+    ]
+  },
   { name: "Watch Library", href: "/watch", icon: Film },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
@@ -32,6 +44,15 @@ export default function Sidebar() {
   const { user, logout } = useAuthStore();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["Home Page"]); // Home Page expanded by default
+
+  const toggleExpanded = (itemName: string) => {
+    setExpandedItems(prev => 
+      prev.includes(itemName) 
+        ? prev.filter(name => name !== itemName)
+        : [...prev, itemName]
+    );
+  };
 
   return (
     <>
@@ -106,23 +127,46 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className={cn("flex-1 p-4 space-y-2 overflow-y-auto overflow-x-hidden", sidebarCollapsed ? "px-2" : "")}>
+          <nav className={cn("flex-1 p-4 space-y-1 overflow-y-auto overflow-x-visible", sidebarCollapsed ? "px-2" : "")}>
             {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
+              const isParentActive = location.pathname.startsWith(item.href);
+              const hasSubItems = item.subItems && item.subItems.length > 0;
+              const isExpanded = expandedItems.includes(item.name);
+
               return (
+                <div key={item.name}>
+                  {/* Parent Item */}
+                  {hasSubItems && !sidebarCollapsed ? (
+                    <button
+                      onClick={() => toggleExpanded(item.name)}
+                      className={cn(
+                        "w-full flex items-center rounded-xl text-sm font-medium transition-all group relative h-11 px-3 gap-3",
+                        isParentActive
+                          ? "bg-indigo-50 text-indigo-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                      )}
+                    >
+                      <item.icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isParentActive ? "text-indigo-600" : "text-slate-500 group-hover:text-indigo-600")} />
+                      <span className="truncate flex-1 text-left">{item.name}</span>
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      )}
+                    </button>
+                  ) : (
                 <Link
-                  key={item.name}
                   to={item.href}
                   onClick={() => setIsMobileOpen(false)}
                   className={cn(
                     "flex items-center rounded-xl text-sm font-medium transition-all group relative h-11",
                     sidebarCollapsed ? "justify-center px-0" : "px-3 gap-3",
-                    isActive
+                    isParentActive && !hasSubItems
                       ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
                       : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
                   )}
                 >
-                  <item.icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-slate-500 group-hover:text-indigo-600")} />
+                  <item.icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isParentActive && !hasSubItems ? "text-white" : "text-slate-500 group-hover:text-indigo-600")} />
                   
                   {!sidebarCollapsed && (
                     <span className="truncate animate-in fade-in slide-in-from-left-2 duration-300">
@@ -138,6 +182,32 @@ export default function Sidebar() {
                     </div>
                   )}
                 </Link>
+              )}
+                  {/* Sub Items */}
+                  {hasSubItems && !sidebarCollapsed && isExpanded && (
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-200 pl-2">
+                      {item.subItems!.map((subItem) => {
+                        const isSubActive = location.pathname === subItem.href;
+                        return (
+                          <Link
+                            key={subItem.name}
+                            to={subItem.href}
+                            onClick={() => setIsMobileOpen(false)}
+                            className={cn(
+                              "flex items-center rounded-lg text-sm font-medium transition-all group relative h-10 px-3 gap-3",
+                              isSubActive
+                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                            )}
+                          >
+                            <subItem.icon className={cn("h-4 w-4 shrink-0", isSubActive ? "text-white" : "text-slate-400 group-hover:text-indigo-600")} />
+                            <span className="truncate">{subItem.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
