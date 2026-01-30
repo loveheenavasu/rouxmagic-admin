@@ -22,9 +22,9 @@ export interface CRUDWrapperBase<
     [id: string, cbs?: Callbacks]
   >;
 
-  softDeleteOneByID: WrapperFunctionType<
+  toogleSoftDeleteOneByID: WrapperFunctionType<
     Entity | null,
-    [id: string, cbs?: Callbacks]
+    [id: string,intent?:boolean, cbs?: Callbacks]
   >;
 
   get:(

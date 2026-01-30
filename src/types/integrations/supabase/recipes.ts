@@ -1,6 +1,9 @@
 import { CRUDWrapperBase } from "@/types/api/CRUDWrapper";
 import { CommonSchema } from "./common";
 
+export enum RecipeCategory {
+  Snacks = "snacks"
+}
 export interface RecipeMetadata {
   title: string;
   slug: string;
@@ -9,7 +12,7 @@ export interface RecipeMetadata {
   ingredients: string;
   instructions: string;
   download_url: string | null;
-  category: string;
+  category: RecipeCategory;
   paired_project_id: string;
   paired_type: string | null;
   suggested_pairings: string | null;

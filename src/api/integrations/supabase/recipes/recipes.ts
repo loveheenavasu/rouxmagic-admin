@@ -191,5 +191,30 @@ export const Recipes: RecipeCRUDWrapper = {
   /**
    * @function softDeleteOneByID is not built yet because of missing assistive key in projects table, and should not implemented untill properly defined.
    */
-  // async softDeleteOneByID() {},
+  async toogleSoftDeleteOneByID(
+    recipeId?: string,
+    intent?: boolean,
+    cbs?: Callbacks
+  ) {
+    cbs?.onLoadingStateChange?.(true);
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .update({
+          is_deleted: intent,
+          deleted_at: !!intent ? null : new Date().toISOString(),
+        })
+        .eq("id", recipeId)
+        .select("*")
+        .maybeSingle();
+      if (error) {
+        return new APIResponse(null, Flag.APIError, { output: error }).build();
+      }
+      return new APIResponse(data, Flag.Success).build();
+    } catch (error) {
+      return new APIResponse(null, Flag.InternalError).build();
+    } finally {
+      cbs?.onLoadingStateChange?.(false);
+    }
+  },
 };
