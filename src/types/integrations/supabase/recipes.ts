@@ -19,8 +19,8 @@ export interface RecipeMetadata {
 
 export type SortRecipesBy = "created_at"
 
-export type SearchableRecipeField = "title" | "platform" | "notes" | "content_type";
-export type GetRecipesBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases"
+export type SearchableRecipeField = "title";
+export type GetRecipesBy = "category";
 
 export interface RecipeFormData extends RecipeMetadata {}
 

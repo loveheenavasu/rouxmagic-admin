@@ -5,7 +5,10 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Home from './pages/home'
 import HomeCarousel from './pages/home/HomeCarousel'
-import Watch from './pages/Watch'
+import Watch from './pages/watch'
+import WatchCarousel from './pages/watch/WatchCarousal'
+import Recipes from './pages/recipes'
+import RecipesCarousel from './pages/recipes/RecipesCarousel'
 import Listen from './pages/Listen'
 import Read from './pages/Read'
 import Users from './pages/Users'
@@ -60,6 +63,36 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Watch />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/watch/carousel"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <WatchCarousel />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recipes"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Recipes />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recipes/carousel"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <RecipesCarousel />
               </Layout>
             </ProtectedRoute>
           }

@@ -1,11 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -22,6 +16,7 @@ import { ContentTypeEnum, Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
+import { StatsRow } from "@/components/StatsRow";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -155,7 +150,7 @@ export default function Watch() {
 
   const displayFields =
     mediaList.length > 0
-      ? Object.keys(mediaList[0])
+      ? Object.keys(mediaList[0]).filter((key) => key !== "id")
       : ["title", "content_type", "status", "release_year", "platform"];
 
   // Fetch unique statuses for filters (global, not affected by current filter)
@@ -204,6 +199,33 @@ export default function Watch() {
     }
   };
 
+  const carouselAllowedFields = [
+    "title",
+    "content_type",
+    "creators",
+    "poster_url",
+    "runtime_minutes",
+
+    // Playback
+    "preview_url",
+    "preview_type",
+    "audio_url",
+    "audio_path",
+    "youtube_id",
+
+    // Metadata / feeds
+    "slug",
+    "platform_name",
+    "vibes",
+    "status",
+    "release_status",
+    "in_now_playing",
+    "in_coming_soon",
+    "in_latest_releases",
+    "release_date",
+    "order_index",
+    "created_at",
+  ];
   const confirmDelete = async () => {
     if (mediaToDelete) {
       await deleteMutation.mutateAsync(mediaToDelete.id);
@@ -215,15 +237,6 @@ export default function Watch() {
   const totalTVShows = mediaList.filter(
     (m) => m.content_type === "TV Show",
   ).length;
-  const avgRuntime =
-    mediaList.length > 0
-      ? Math.round(
-          mediaList
-            .filter((m) => m.runtime_minutes)
-            .reduce((acc, m) => acc + (m.runtime_minutes || 0), 0) /
-            (mediaList.filter((m) => m.runtime_minutes).length || 1),
-        )
-      : 0;
 
   if (error) {
     return (
@@ -240,55 +253,19 @@ export default function Watch() {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Listen Library</h1>
-          <p className="text-muted-foreground">
-            Manage songs and audiobooks in your catalog
-          </p>
-        </div>
-        <Button
-          onClick={handleAddNew}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          Add New Content
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Content</CardDescription>
-            <CardTitle className="text-3xl">{mediaList.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Films</CardDescription>
-            <CardTitle className="text-3xl">{totalFilms}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>TV Shows</CardDescription>
-            <CardTitle className="text-3xl">{totalTVShows}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Avg Runtime</CardDescription>
-            <CardTitle className="text-3xl">
-              {avgRuntime > 0 ? `${avgRuntime}m` : "N/A"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <StatsRow
+        items={[
+          { label: "Total Items", value: mediaList?.length },
+          { label: "Films", value: totalFilms },
+          { label: "TV Shows", value: totalTVShows },
+        ]}
+        title="Listen Library"
+        description="Manage songs and audiobooks in your catalog"
+        handleNew={handleAddNew}
+      />
 
       {/* Search and Filter Section */}
-   
+
           <MediaFilters
             searchPlaceholder="Search by title..."
             searchQuery={searchQuery}
@@ -327,8 +304,6 @@ export default function Watch() {
                 ) : !!filteredMedia?.length ? (
                   filteredMedia.map(
                     (media) => (
-                      console.log("media::::", media),
-                      (
                         <TableRow key={media.id}>
                           {displayFields.map((key) => {
                             const value = media[key as keyof Project];
@@ -369,7 +344,6 @@ export default function Watch() {
                           </TableCell>
                         </TableRow>
                       )
-                    ),
                   )
                 ) : (
                   <TableRow>
@@ -392,6 +366,7 @@ export default function Watch() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        allowedFields={carouselAllowedFields}
       />
 
       {/* Delete Confirmation Dialog */}

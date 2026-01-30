@@ -14,23 +14,29 @@ import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { supabase } from "@/lib";
 import { toast } from "sonner";
 import { Flag, Project } from "@/types";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
 
-export default function HomeCarousel() {
+type WatchCarouselItem = Partial<Project> & { id: string };
+
+export default function WatchCarousel() {
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
     null,
   );
+  const [isLoadingEditItem, setIsLoadingEditItem] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<WatchCarouselItem | null>(
+    null,
+  );
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderValue, setOrderValue] = useState<number | "">("");
 
-  const startEditOrder = (item: Project) => {
+  const startEditOrder = (item: WatchCarouselItem) => {
     setEditingOrderId(item.id);
     setOrderValue(item.order_index ?? "");
   };
@@ -40,43 +46,42 @@ export default function HomeCarousel() {
     setOrderValue("");
   };
 
- const saveOrderIndex = async (item: Project) => {
-   if (orderValue === "" || orderValue === item.order_index) {
-     cancelEditOrder();
-     return;
-   }
+  const saveOrderIndex = async (item: WatchCarouselItem) => {
+    if (orderValue === "" || orderValue === item.order_index) {
+      cancelEditOrder();
+      return;
+    }
 
-   const newIndex = Number(orderValue);
-   const oldIndex = item?.order_index;
+    const newIndex = Number(orderValue);
+    const oldIndex = item?.order_index;
 
-   // Find conflicting item
-   const conflictingItem = carouselItems.find(
-     (i) => i.order_index === newIndex && i.id !== item.id,
-   );
+    // Find conflicting item
+    const conflictingItem = carouselItems.find(
+      (i) => i.order_index === newIndex && i.id !== item.id,
+    );
 
-   try {
-     // If conflict exists → swap its order_index
-     if (conflictingItem) {
-       await updateMutation.mutateAsync({
-         id: conflictingItem.id,
-         data: { order_index: oldIndex },
-       });
-     }
+    try {
+      // If conflict exists → swap its order_index
+      if (conflictingItem) {
+        await updateMutation.mutateAsync({
+          id: conflictingItem.id,
+          data: { order_index: oldIndex },
+        });
+      }
 
-     // Update current item
-     await updateMutation.mutateAsync({
-       id: item.id,
-       data: { order_index: newIndex },
-     });
+      // Update current item
+      await updateMutation.mutateAsync({
+        id: item.id,
+        data: { order_index: newIndex },
+      });
 
-     toast.success("Order index updated");
-     cancelEditOrder();
-   } catch (err) {
-     console.error(err);
-     toast.error("Failed to update order index");
-   }
- };
-
+      toast.success("Order index updated");
+      cancelEditOrder();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update order index");
+    }
+  };
 
   const queryClient = useQueryClient();
 
@@ -86,37 +91,26 @@ export default function HomeCarousel() {
     data: carouselItems = [],
     isLoading,
     error,
-  } = useQuery<Project[]>({
-    queryKey: ["home-carousel"],
+  } = useQuery<WatchCarouselItem[]>({
+    queryKey: ["watch-carousel"],
     queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "in_hero_carousel" as const, value: true }],
-        sort: "order_index",
-        sortBy: "asc",
-      });
-      console.log("response11111", response);
-      if (
-        response.flag !== Flag.Success &&
-        response.flag !== Flag.UnknownOrSuccess
-      ) {
-        const supabaseError = response.error?.output as
-          | { message?: string }
-          | undefined;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to fetch carousel items";
-        console.error("Carousel API Error:", response);
-        throw new Error(errorMessage);
+      const { data, error } = await supabase
+        .from("projects")
+        .select(
+          "id, title, content_type, status, in_hero_carousel, poster_url, preview_url, rating, release_year, runtime_minutes, synopsis, notes, platform_name, audio_preview_url, order_index",
+        )
+        .in("content_type", ["Film", "TV Show"])
+        .eq("in_hero_carousel", true)
+        .order("order_index", { ascending: true });
+
+      if (error) {
+        throw new Error(error.message || "Failed to fetch carousel items");
       }
 
-      if (response.data === null || response.data === undefined) {
-        return [];
-      }
-
-      return Array.isArray(response.data) ? (response.data as Project[]) : [];
+      return (data || []) as WatchCarouselItem[];
     },
   });
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -139,7 +133,7 @@ export default function HomeCarousel() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["home-carousel"] });
+      queryClient.invalidateQueries({ queryKey: ["watch-carousel"] });
       setIsMediaDialogOpen(false);
       toast.success("Carousel item added successfully!");
     },
@@ -170,7 +164,7 @@ export default function HomeCarousel() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["home-carousel"] });
+      queryClient.invalidateQueries({ queryKey: ["watch-carousel"] });
       setIsMediaDialogOpen(false);
       setSelectedMedia(null);
       toast.success("Carousel item updated successfully!");
@@ -200,7 +194,7 @@ export default function HomeCarousel() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["home-carousel"] });
+      queryClient.invalidateQueries({ queryKey: ["watch-carousel"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
       toast.success("Carousel item deleted successfully!");
@@ -215,12 +209,31 @@ export default function HomeCarousel() {
     setIsMediaDialogOpen(true);
   };
 
-  const handleEdit = (media: Project) => {
-    setSelectedMedia(media);
-    setIsMediaDialogOpen(true);
+  const handleEdit = async (media: WatchCarouselItem) => {
+    try {
+      setIsLoadingEditItem(true);
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", media.id)
+        .single();
+
+      if (error) {
+        throw new Error(error.message || "Failed to fetch item details");
+      }
+
+      setSelectedMedia((data || {}) as Project);
+      setIsMediaDialogOpen(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load item for editing");
+    } finally {
+      setIsLoadingEditItem(false);
+    }
   };
 
-  const handleDelete = (media: Project) => {
+  const handleDelete = (media: WatchCarouselItem) => {
     setMediaToDelete(media);
     setDeleteDialogOpen(true);
   };
@@ -270,7 +283,7 @@ export default function HomeCarousel() {
     { key: "title", label: "Title" },
     { key: "content_type", label: "Content Type" },
     { key: "status", label: "Status" },
-    { key: "platform", label: "Platform" },
+    { key: "platform_name", label: "Platform" },
     { key: "order_index", label: "Order Index" },
     { key: "release_year", label: "Release Year", align: "right" as const },
     {
@@ -288,7 +301,7 @@ export default function HomeCarousel() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Home Carousel
+            Watch Carousel
           </h1>
           <p className="text-muted-foreground mt-1">
             Manage featured content displayed on the home page carousel
@@ -336,7 +349,7 @@ export default function HomeCarousel() {
                     </TableCell>
                   </TableRow>
                 ) : carouselItems.length > 0 ? (
-                  carouselItems.map((item: Project) => (
+                  carouselItems.map((item: WatchCarouselItem) => (
                     <TableRow
                       key={item.id}
                       className="hover:bg-slate-50/50 transition-colors"
@@ -377,9 +390,9 @@ export default function HomeCarousel() {
                       <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
                         <span
                           className="truncate block"
-                          title={item.platform || ""}
+                          title={item.platform_name || ""}
                         >
-                          {item.platform || (
+                          {item.platform_name || (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
                         </span>
@@ -493,7 +506,11 @@ export default function HomeCarousel() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
-        isLoading={createMutation.isPending || updateMutation.isPending}
+        isLoading={
+          isLoadingEditItem ||
+          createMutation.isPending ||
+          updateMutation.isPending
+        }
         allowedFields={carouselAllowedFields}
       />
 

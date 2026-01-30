@@ -13,11 +13,12 @@ const TABLE_NAME = "recipes";
 export const Recipes: RecipeCRUDWrapper = {
   async createOne(data: RecipeFormData, cbs?: Callbacks) {
     cbs?.onLoadingStateChange?.(true);
+    const { paired_project_id, ...rest } = data;
     console.log("createOne projectMetadata:", data);
     try {
       const { data: ApiData, error } = await supabase
         .from(TABLE_NAME)
-        .insert({ ...data })
+        .insert({ ...rest })
         .select("*")
         .maybeSingle();
       if (error) {
@@ -25,7 +26,7 @@ export const Recipes: RecipeCRUDWrapper = {
           output: error,
         }).build();
       }
-      return new APIResponse(ApiData).build();
+      return new APIResponse(ApiData, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -57,7 +58,7 @@ export const Recipes: RecipeCRUDWrapper = {
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -100,7 +101,7 @@ export const Recipes: RecipeCRUDWrapper = {
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,

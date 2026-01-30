@@ -14,9 +14,10 @@ import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
-import { Flag, Project } from "@/types";
+import { Flag, Project, ContentTypeEnum } from "@/types";
 import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
+import { StatsRow } from "@/components/StatsRow";
 
 const READ_TYPES = ["Comic", "Book", "Audiobook"] as const;
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -211,6 +212,17 @@ export default function Read() {
     }
   };
 
+  const totalItems = items.length;
+  const totalComics = items.filter(
+    (m) => m.content_type === ContentTypeEnum.Comic,
+  ).length;
+  const totalBooks = items.filter(
+    (m) => m.content_type === ContentTypeEnum.Book,
+  ).length;
+  const totalAudiobooks = items.filter(
+    (m) => m.content_type === ContentTypeEnum.Audiobook,
+  ).length;
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -226,22 +238,17 @@ export default function Read() {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Read Library</h1>
-          <p className="text-muted-foreground">
-            Browse comics, books, and audiobooks from your catalog
-          </p>
-        </div>
-        <Button
-          onClick={handleAddNew}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          Add New Content
-        </Button>
-      </div>
+      <StatsRow
+        items={[
+          { label: "Total Items", value: totalItems },
+          { label: "Comics", value: totalComics },
+          { label: "Books", value: totalBooks },
+          { label: "Audiobooks", value: totalAudiobooks },
+        ]}
+        title="Read Library"
+        description="Browse comics, books, and audiobooks from your catalog"
+        handleNew={handleAddNew}
+      />
 
       {/* Search and Filter Section */}
           <MediaFilters

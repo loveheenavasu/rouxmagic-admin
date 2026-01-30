@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2 } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
 import { MediaFilters } from "@/components/MediaFilters";
@@ -18,6 +18,7 @@ import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
 import { Flag, Project } from "@/types";
+import { StatsRow } from "@/components/StatsRow";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -291,26 +292,22 @@ const HomePage = () => {
     );
   }
 
+   const totalFilms = projects.filter((m) => m.content_type === "Film").length;
+   const totalTVShows = projects.filter(
+     (m) => m.content_type === "TV Show",
+   ).length;
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Home Page
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            One form, multiple categories - manage all content dynamically
-          </p>
-        </div>
-        <Button
-          onClick={handleAddNew}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          Add New Content
-        </Button>
-      </div>
+      <StatsRow
+        items={[
+          { label: "Total Items", value: projects?.length },
+          { label: "Films", value: totalFilms },
+          { label: "TV Shows", value: totalTVShows },
+        ]}
+        title="Home Page"
+        description="One form, multiple categories - manage all content dynamically"
+        handleNew={handleAddNew}
+      />
 
       {/* Main Content Area */}
       <Card className="border-none shadow-sm overflow-hidden bg-white">

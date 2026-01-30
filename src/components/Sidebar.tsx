@@ -19,20 +19,38 @@ import {
   ChevronRight,
   LayoutGrid,
   ImagePlay,
+  Utensils,
 } from "lucide-react";
 import { useState } from "react";
 
 const navigation = [
-  { 
-    name: "Home Page", 
-    href: "/home", 
+  {
+    name: "Home Page",
+    href: "/home",
     icon: LayoutDashboard,
     subItems: [
       { name: "Content Library", href: "/home", icon: LayoutGrid },
       { name: "Carousel", href: "/home/carousel", icon: ImagePlay },
-    ]
+    ],
   },
-  { name: "Watch Library", href: "/watch", icon: Film },
+  {
+    name: "Watch Library",
+    href: "/watch",
+    icon: Film,
+    subItems: [
+      { name: "Content Library", href: "/watch", icon: LayoutGrid },
+      { name: "Carousel", href: "/watch/carousel", icon: ImagePlay },
+    ],
+  },
+  {
+    name: "Recipes",
+    href: "/recipes",
+    icon: Utensils,
+    subItems: [
+      { name: "Content", href: "/recipes", icon: LayoutGrid },
+      { name: "Carousel", href: "/recipes/carousel", icon: ImagePlay },
+    ],
+  },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Users", href: "/users", icon: Users },
@@ -47,10 +65,10 @@ export default function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>(["Home Page"]); // Home Page expanded by default
 
   const toggleExpanded = (itemName: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemName) 
-        ? prev.filter(name => name !== itemName)
-        : [...prev, itemName]
+    setExpandedItems((prev) =>
+      prev.includes(itemName)
+        ? prev.filter((name) => name !== itemName)
+        : [...prev, itemName],
     );
   };
 
@@ -72,7 +90,7 @@ export default function Sidebar() {
         className={cn(
           "fixed inset-y-0 left-0 z-40 bg-card border-r transition-all duration-300 ease-in-out lg:translate-x-0 overflow-visible",
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full lg:translate-x-0",
-          sidebarCollapsed ? "lg:w-20" : "lg:w-64"
+          sidebarCollapsed ? "lg:w-20" : "lg:w-64",
         )}
       >
         <div className="flex flex-col h-full relative">
@@ -143,7 +161,7 @@ export default function Sidebar() {
                         "w-full flex items-center rounded-xl text-sm font-medium transition-all group relative h-11 px-3 gap-3",
                         isParentActive
                           ? "bg-indigo-50 text-indigo-600"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600",
                       )}
                     >
                       <item.icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isParentActive ? "text-indigo-600" : "text-slate-500 group-hover:text-indigo-600")} />
@@ -167,7 +185,7 @@ export default function Sidebar() {
                   )}
                 >
                   <item.icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isParentActive && !hasSubItems ? "text-white" : "text-slate-500 group-hover:text-indigo-600")} />
-                  
+
                   {!sidebarCollapsed && (
                     <span className="truncate animate-in fade-in slide-in-from-left-2 duration-300">
                       {item.name}
@@ -197,10 +215,15 @@ export default function Sidebar() {
                               "flex items-center rounded-lg text-sm font-medium transition-all group relative h-10 px-3 gap-3",
                               isSubActive
                                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-100"
-                                : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600",
                             )}
                           >
-                            <subItem.icon className={cn("h-4 w-4 shrink-0", isSubActive ? "text-white" : "text-slate-400 group-hover:text-indigo-600")} />
+                            <subItem.icon className={cn(                                "h-4 w-4 shrink-0",
+                                isSubActive
+                                  ? "text-white"
+                                  : "text-slate-400 group-hover:text-indigo-600",
+                              )}
+                            />
                             <span className="truncate">{subItem.name}</span>
                           </Link>
                         );

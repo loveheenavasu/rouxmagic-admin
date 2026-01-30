@@ -20,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { ContentTypeEnum, ProjectFormData, Flag, Project } from "@/types";
+import { ContentTypeEnum, ProjectFormData, Flag } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 
@@ -30,6 +30,7 @@ interface MediaDialogProps {
   media?: ProjectFormData | null;
   onSubmit: (data: any) => Promise<void>;
   isLoading?: boolean;
+  allowedFields?: string[];
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -40,6 +41,7 @@ export default function MediaDialog({
   media,
   onSubmit,
   isLoading = false,
+  allowedFields,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>({} as ProjectFormData);
@@ -59,7 +61,7 @@ export default function MediaDialog({
           if (projects.length > 0) {
             const fields = Object.keys(projects[0]).filter(
               key => !["id", "created_at", "updated_at"].includes(key)
-            );
+            ).filter((key) => allowedFields ? allowedFields.includes(key) : true);
             setAvailableFields(fields);
             
             // Initialize form data
@@ -67,6 +69,7 @@ export default function MediaDialog({
               // Edit mode - populate with existing data
               const result: Record<string, any> = {};
               Object.entries(media).forEach(([key, value]) => {
+                if (allowedFields && !allowedFields.includes(key)) return;
                 if (key === "genres" && Array.isArray(value)) {
                   result["commaSeperatedGenres"] = value.join(", ");
                 } else {
@@ -110,7 +113,7 @@ export default function MediaDialog({
 
     // Validate required fields
     if (!formData.title || !formData.content_type || !formData.status) {
-      toast.error("Please fill in all required fields (Title, Content Type, Status)");
+      toast.error("Please fill in all required fields (Title, Content Type, Status)",);
       return;
     }
 
@@ -191,6 +194,29 @@ export default function MediaDialog({
       );
     }
 
+    // Special: Release Status Select (e.g. none / new_release)
+    if (key === "release_status") {
+      return (
+        <div key={key}>
+          <Label htmlFor={key} className="font-medium">
+            Release Status
+          </Label>
+          <Select
+            value={value ?? "none"}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
+            <SelectTrigger className="mt-1.5 capitalize">
+              <SelectValue placeholder="Select release status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="new_release">New Release</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
     // Special: Boolean / Checkbox
     if (key.startsWith("in_") || key === "featured" || key === "is_downloadable") {
       return (
@@ -256,7 +282,7 @@ export default function MediaDialog({
       "synopsis",
       "external_url",
       "audio_url",
-      "audio_preview_url"
+      "audio_preview_url",
     ].includes(key);
 
     return (
@@ -265,8 +291,8 @@ export default function MediaDialog({
           {label} {key === "title" ? "*" : ""}
         </Label>
 
-        {/* Special handling for image/video URLs to allow uploads */}
-        {key === "poster_url" || key === "preview_url" ? (
+        {/* Special handling for image/video/audio URLs to allow uploads */}
+        {key === "poster_url" || key === "preview_url" || key === "audio_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
@@ -281,17 +307,21 @@ export default function MediaDialog({
                 type="file"
                 className="hidden"
                 id={`file-${key}`}
-                accept={key === "poster_url" ? "image/*" : "video/*,image/*"}
+                accept={key === "poster_url" ? "image/*" : key === "preview_url" ? "video/*,image/*" : "audio/*"}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
                     try {
                       setIsUploading(key);
                       const bucket = "Media";
-                      const path = createBucketPath(
-                        `${Date.now()}-${file.name.replace(/\s+/g, "_")}`,
-                        formData.content_type!,
-                      );
+                      const safeName = file.name.replace(/\s+/g, "_");
+                      const path =
+                        key === "audio_url"
+                          ? `Audio/${formData.content_type ?? "generic"}/${Date.now()}-${safeName}`
+                          : createBucketPath(
+                              `${Date.now()}-${safeName}`,
+                              formData.content_type!,
+                            );
                       const publicUrl = await mediaService.uploadFile(
                         file,
                         bucket,

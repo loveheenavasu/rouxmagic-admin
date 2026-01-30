@@ -4,9 +4,6 @@ import { CommonSchema } from "./common";
 export enum ProjectStatusEnum {
   Released = 'released',
   ComingSoon = 'coming_soon',
-  // Watched = 'watched',
-  // InProgress = 'in_progress',
-  // InProduction = 'in_production',
 }
 
 export enum ContentTypeEnum {
@@ -14,6 +11,8 @@ export enum ContentTypeEnum {
   TvShow = 'TV Show',
   Song = 'Song',
   Audiobook = 'Audiobook',
+  Comic = 'Comic',    
+  Book = 'Book',
 }
 
 export interface ProjectMetaData{
@@ -32,6 +31,7 @@ export interface ProjectMetaData{
   in_coming_soon: boolean;
   in_latest_releases: boolean;
   order_index?:number;
+  platform_name?: string;
 }
 
 export interface ProjectFormData extends Partial<Project>{

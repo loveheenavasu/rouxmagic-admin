@@ -1,11 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -15,9 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2 } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { StatsRow } from "@/components/StatsRow";
 import { Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
@@ -172,7 +167,9 @@ export default function Watch() {
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["unique-statuses"],
     queryFn: async () => {
-      const response = await projectsAPI.get({or:'content_type.eq.TV Show,content_type.eq.Film' });
+      const response = await projectsAPI.get({
+        or: "content_type.eq.TV Show,content_type.eq.Film",
+      });
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -268,52 +265,16 @@ export default function Watch() {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Watch Library</h1>
-          <p className="text-muted-foreground">
-            Manage films and TV shows in your catalog
-          </p>
-        </div>
-        <Button
-          onClick={handleAddNew}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          Add New Content
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Content</CardDescription>
-            <CardTitle className="text-3xl">{mediaList.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Films</CardDescription>
-            <CardTitle className="text-3xl">{totalFilms}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>TV Shows</CardDescription>
-            <CardTitle className="text-3xl">{totalTVShows}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Avg Runtime</CardDescription>
-            <CardTitle className="text-3xl">
-              {avgRuntime > 0 ? `${avgRuntime}m` : "N/A"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <StatsRow
+        items={[
+          { label:"Total Items", value: mediaList?.length },
+          { label: "Films", value: totalFilms },
+          { label: "TV Shows", value: totalTVShows },
+        ]}
+        title="Watch Library"
+        description="Manage films and TV shows in your catalog"
+        handleNew={handleAddNew}
+      />
       <MediaFilters
         searchPlaceholder="Search by title..."
         searchQuery={searchQuery}
@@ -326,94 +287,92 @@ export default function Watch() {
         availableTypes={availableTypes}
       />
       {/* Search and Filter Section / Table */}
-     
-          {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {displayFields.map((key) => (
-                    <TableHead
-                      key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
-                    >
-                      {key.replace(/_/g, " ")}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-                  <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center py-8"
-                    >
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ) : !!mediaList?.length ? (
-                  mediaList.map(
-                    (media) => (
-                      console.log("media::::", media),
-                      (
-                        <TableRow key={media.id}>
-                          {displayFields.map((key) => {
-                            const value = media[key as keyof Project];
-                            return (
-                              <TableCell
-                                key={key}
-                                className="max-w-[200px] truncate"
-                              >
-                                {value === null || value === undefined ? (
-                                  <span className="text-muted-foreground text-xs">
-                                    —
-                                  </span>
-                                ) : (
-                                  <span title={String(value)}>
-                                    {String(value)}
-                                  </span>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(media)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(media)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
+
+      {/* Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {displayFields.map((key) => (
+                <TableHead
+                  key={key}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
+                >
+                  {key.replace(/_/g, " ")}
+                </TableHead>
+              ))}
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center py-8"
+                >
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : !!mediaList?.length ? (
+              mediaList.map(
+                (media) => (
+                  console.log("media::::", media),
+                  (
+                    <TableRow key={media.id}>
+                      {displayFields.map((key) => {
+                        const value = media[key as keyof Project];
+                        return (
+                          <TableCell
+                            key={key}
+                            className="max-w-[200px] truncate"
+                          >
+                            {value === null || value === undefined ? (
+                              <span className="text-muted-foreground text-xs">
+                                —
+                              </span>
+                            ) : (
+                              <span title={String(value)}>{String(value)}</span>
+                            )}
                           </TableCell>
-                        </TableRow>
-                      )
-                    ),
+                        );
+                      })}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(media)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(media)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   )
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      No media found matching your search.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        
+                ),
+              )
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center text-muted-foreground py-8"
+                >
+                  No media found matching your search.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
       {/* Media Dialog */}
       <MediaDialog
         open={isMediaDialogOpen}
