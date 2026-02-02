@@ -1,4 +1,3 @@
-import { CRUDWrapperBase } from "@/types/api/CRUDWrapper";
 import { CommonSchema, GetTableOpts } from "./common";
 
 export enum RecipeCategory {

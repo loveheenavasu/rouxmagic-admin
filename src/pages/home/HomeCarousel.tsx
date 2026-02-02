@@ -23,7 +23,7 @@ const projectsAPI = Projects as Required<typeof Projects>;
 export default function HomeCarousel() {
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
-    null,
+    null
   );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
@@ -40,43 +40,42 @@ export default function HomeCarousel() {
     setOrderValue("");
   };
 
- const saveOrderIndex = async (item: Project) => {
-   if (orderValue === "" || orderValue === item.order_index) {
-     cancelEditOrder();
-     return;
-   }
+  const saveOrderIndex = async (item: Project) => {
+    if (orderValue === "" || orderValue === item.order_index) {
+      cancelEditOrder();
+      return;
+    }
 
-   const newIndex = Number(orderValue);
-   const oldIndex = item?.order_index;
+    const newIndex = Number(orderValue);
+    const oldIndex = item?.order_index;
 
-   // Find conflicting item
-   const conflictingItem = carouselItems.find(
-     (i) => i.order_index === newIndex && i.id !== item.id,
-   );
+    // Find conflicting item
+    const conflictingItem = carouselItems.find(
+      (i) => i.order_index === newIndex && i.id !== item.id
+    );
 
-   try {
-     // If conflict exists → swap its order_index
-     if (conflictingItem) {
-       await updateMutation.mutateAsync({
-         id: conflictingItem.id,
-         data: { order_index: oldIndex },
-       });
-     }
+    try {
+      // If conflict exists → swap its order_index
+      if (conflictingItem) {
+        await updateMutation.mutateAsync({
+          id: conflictingItem.id,
+          data: { order_index: oldIndex },
+        });
+      }
 
-     // Update current item
-     await updateMutation.mutateAsync({
-       id: item.id,
-       data: { order_index: newIndex },
-     });
+      // Update current item
+      await updateMutation.mutateAsync({
+        id: item.id,
+        data: { order_index: newIndex },
+      });
 
-     toast.success("Order index updated");
-     cancelEditOrder();
-   } catch (err) {
-     console.error(err);
-     toast.error("Failed to update order index");
-   }
- };
-
+      toast.success("Order index updated");
+      cancelEditOrder();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update order index");
+    }
+  };
 
   const queryClient = useQueryClient();
 
@@ -114,7 +113,10 @@ export default function HomeCarousel() {
         return [];
       }
 
-      return Array.isArray(response.data) ? (response.data as Project[]) : [];
+      const rows = Array.isArray(response.data)
+        ? (response.data as Project[])
+        : [];
+      return rows.filter((item) => (item as any).is_deleted !== true);
     },
   });
   // Create mutation
@@ -183,7 +185,7 @@ export default function HomeCarousel() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -203,7 +205,7 @@ export default function HomeCarousel() {
       queryClient.invalidateQueries({ queryKey: ["home-carousel"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
-      toast.success("Carousel item deleted successfully!");
+      toast.success("Moved to archive.");
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete carousel item: ${error.message}`);
@@ -367,8 +369,8 @@ export default function HomeCarousel() {
                             item.status === "released"
                               ? "bg-green-100 text-green-700"
                               : item.status === "coming_soon"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-gray-100 text-gray-700"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-gray-100 text-gray-700"
                           }`}
                         >
                           {item.status || "—"}
@@ -501,8 +503,13 @@ export default function HomeCarousel() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        title="Delete Carousel Item?"
-        description={`Are you sure you want to remove "${mediaToDelete?.title}" from the carousel? This action cannot be undone.`}
+        title="Move to archive?"
+        itemName={mediaToDelete?.title}
+        description={
+          mediaToDelete?.title
+            ? `Are you sure you want to move "${mediaToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        }
         isDeleting={deleteMutation.isPending}
       />
     </div>

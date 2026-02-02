@@ -1,6 +1,6 @@
 import { WrapperFunctionType } from "../core/api/common";
 import { Response } from "../core/api/response";
-import { Callbacks } from "./cb";
+import { Callbacks } from "./args";
 export interface CRUDWrapperBase<
   Entity,
   CreateDTO,

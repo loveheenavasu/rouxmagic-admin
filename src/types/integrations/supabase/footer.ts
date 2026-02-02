@@ -8,7 +8,7 @@ export interface FooterMetaData {
 
 export interface FooterFormData extends Partial<Footer> {}
 
-export type GetFootersBy = "title" | "url";
+export type GetFootersBy = "title" | "url" | "is_deleted";
 
 export type SortFootersBy = "created_at" | "order_index";
 

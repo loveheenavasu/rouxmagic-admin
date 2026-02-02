@@ -55,7 +55,7 @@ export default function RecipesCarousel() {
         ? (response.data as Recipe[])
         : ([response.data] as Recipe[]);
 
-      return data;
+      return data.filter((item) => item.is_deleted !== true);
     },
   });
 
@@ -64,7 +64,7 @@ export default function RecipesCarousel() {
       if (payload.id) {
         const response = await recipesAPI.updateOneByID(
           payload.id,
-          payload.data,
+          payload.data
         );
         if (response.flag !== Flag.Success || !response.data) {
           const supabaseError = response.error?.output as
@@ -105,7 +105,7 @@ export default function RecipesCarousel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await recipesAPI.deleteOneByIDPermanent(id);
+      const response = await recipesAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -124,7 +124,7 @@ export default function RecipesCarousel() {
       queryClient.invalidateQueries({ queryKey: ["recipes-carousel"] });
       setDeleteDialogOpen(false);
       setRecipeToDelete(null);
-      toast.success("Recipe deleted successfully!");
+      toast.success("Moved to archive.");
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete recipe: ${err.message}`);
@@ -314,7 +314,7 @@ export default function RecipesCarousel() {
           recipeToDelete
             ? `Are you sure you want to move "${recipeToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
             : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
-        } 
+        }
       />
     </div>
   );

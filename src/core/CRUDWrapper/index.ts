@@ -1,6 +1,18 @@
-import { Callbacks, Flag, GetTableOpts, Response } from "@/types";
+import {
+  Callbacks,
+  Flag,
+  GetTableOpts,
+  ProjectFormData,
+  Response,
+  Tables,
+} from "@/types";
 import { APIResponse } from "../response";
 import { supabase } from "@/lib";
+import { validator } from "@/helpers";
+
+const {
+  amend: { deleteUnwantedValues },
+} = validator;
 
 interface TableBehaviour {
   supports_soft_deletion?: boolean;
@@ -12,7 +24,7 @@ export class CRUDWrapper<
   GetOptions extends GetTableOpts<any, any, any, any> = any
 > {
   constructor(
-    private readonly table_name: string,
+    private readonly table_name: Tables,
     private readonly behaviour: TableBehaviour = {
       supports_soft_deletion: true,
     }
@@ -30,18 +42,37 @@ export class CRUDWrapper<
     cbs?: Callbacks
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
+
     try {
-      const { data: ApiData, error } = await supabase
+      let payload: any = { ...data };
+
+      if (this.table_name === Tables.Projects) {
+        const { commaSeperatedGenres, ...rest } = data as ProjectFormData;
+
+        payload = {
+          ...rest,
+          genres: commaSeperatedGenres
+            ? commaSeperatedGenres
+                .split(",")
+                .map((g) => g.trim())
+                .filter(Boolean)
+            : [],
+        };
+      }
+
+      const newPayload = deleteUnwantedValues(payload, ["undefined"]);
+
+      const { data: apiData, error } = await supabase
         .from(this.table_name)
-        .insert({ ...data })
+        .insert(newPayload)
         .select("*")
         .maybeSingle();
+
       if (error) {
-        return new APIResponse(null, Flag.APIError, {
-          output: error,
-        }).build();
+        return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
-      return new APIResponse(ApiData, Flag.Success).build();
+
+      return new APIResponse(apiData, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -58,15 +89,36 @@ export class CRUDWrapper<
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
     try {
+      let payload: any = { ...update };
+
+      if (this.table_name === Tables.Projects) {
+        const { commaSeperatedGenres, ...rest } =
+          update as Partial<ProjectFormData>;
+
+        payload = {
+          ...rest,
+          genres: commaSeperatedGenres
+            ? commaSeperatedGenres
+                .split(",")
+                .map((g) => g.trim())
+                .filter(Boolean)
+            : [],
+        };
+      }
+      const newPayload = deleteUnwantedValues(payload, [
+        "undefined",
+        "emptystrings",
+      ]);
       // Check if update object is empty or has no valid fields
-      if (!update || Object.keys(update).length === 0) {
+      if (!newPayload || Object.keys(newPayload).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {
           message: "No updates found.",
         }).build();
       }
+
       const { data, error } = await supabase
         .from(this.table_name)
-        .update({ ...update })
+        .update({ ...newPayload })
         .eq("id", tableId)
         .select("*")
         .maybeSingle();

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -20,9 +21,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { ContentTypeEnum, ProjectFormData, Flag } from "@/types";
+import { Chapter, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
+<<<<<<< HEAD
 import { Projects } from "@/api";
+=======
+import { Projects } from "@/api/integrations/supabase/projects/projects";
+import { Chapters } from "@/api/integrations/supabase/chapters/chapters";
+import ChapterDialog from "@/components/ChapterDialog";
+import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import ChaptersSection from "@/components/ChaptersSection";
+>>>>>>> 80c549835055e7731d0062d0166b3f535cfc575d
 
 interface MediaDialogProps {
   open: boolean;
@@ -34,6 +43,7 @@ interface MediaDialogProps {
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
+const chaptersAPI = Chapters as Required<typeof Chapters>;
 
 export default function MediaDialog({
   open,
@@ -44,9 +54,140 @@ export default function MediaDialog({
   allowedFields,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
-  const [formData, setFormData] = useState<ProjectFormData>({} as ProjectFormData);
+  const [formData, setFormData] = useState<ProjectFormData>(
+    {} as ProjectFormData
+  );
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Chapters UI state (only relevant for Audiobooks)
+  const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [deleteChapterDialogOpen, setDeleteChapterDialogOpen] = useState(false);
+  const [chapterToDelete, setChapterToDelete] = useState<Chapter | null>(null);
+
+  const projectId = (media as any)?.id as string | undefined;
+  const showChapters =
+    (formData as any)?.content_type === ContentTypeEnum.Audiobook ||
+    (formData as any)?.content_type === "AudioBook" ||
+    (formData as any)?.content_type === ContentTypeEnum.TvShow ||
+    (formData as any)?.content_type === "TvShow" ||
+    (formData as any)?.content_type === "tv_show";
+
+  const {
+    data: chapters = [],
+    isLoading: chaptersLoading,
+    error: chaptersError,
+  } = useQuery<Chapter[]>({
+    queryKey: ["chapters-by-project", projectId],
+    enabled: open && !!projectId && showChapters,
+    queryFn: async () => {
+      const response = await chaptersAPI.get({
+        eq: [{ key: "project_id" as any, value: audiobookId }],
+        sort: "created_at",
+        sortBy: "asc",
+      });
+
+      if (response.flag !== Flag.Success || !response.data) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        throw new Error(
+          supabaseError?.message ||
+          response.error?.message ||
+          "Failed to fetch chapters"
+        );
+      }
+
+      const rows = Array.isArray(response.data)
+        ? (response.data as any[])
+        : ([response.data].filter(Boolean) as any[]);
+
+      // Hide deleted chapters if the schema supports soft-delete
+      return rows.filter(
+        (r) => !("is_deleted" in r) || r.is_deleted !== true
+      ) as Chapter[];
+    },
+  });
+
+  const createChapterMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await chaptersAPI.createOne(data);
+      if (res.flag !== Flag.Success || !res.data) {
+        const supabaseError = res.error?.output as
+          | { message?: string }
+          | undefined;
+        throw new Error(
+          supabaseError?.message ||
+          res.error?.message ||
+          "Failed to create chapter"
+        );
+      }
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["chapters-by-project", audiobookId],
+      });
+      setChapterDialogOpen(false);
+      setSelectedChapter(null);
+      toast.success("Chapter saved.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateChapterMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await chaptersAPI.updateOneByID(id, data);
+      if (res.flag !== Flag.Success || !res.data) {
+        const supabaseError = res.error?.output as
+          | { message?: string }
+          | undefined;
+        throw new Error(
+          supabaseError?.message ||
+          res.error?.message ||
+          "Failed to update chapter"
+        );
+      }
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["chapters-by-project", audiobookId],
+      });
+      setChapterDialogOpen(false);
+      setSelectedChapter(null);
+      toast.success("Chapter updated.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteChapterMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Soft-delete, so it goes to Archive (if you later expose it there)
+      const res = await chaptersAPI.toogleSoftDeleteOneByID(id, true);
+      if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+        const supabaseError = res.error?.output as
+          | { message?: string }
+          | undefined;
+        throw new Error(
+          supabaseError?.message ||
+          res.error?.message ||
+          "Failed to delete chapter"
+        );
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["chapters-by-project", audiobookId],
+      });
+      setDeleteChapterDialogOpen(false);
+      setChapterToDelete(null);
+      toast.success("Moved chapter to archive.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
   // Fetch projects to get field structure
   useEffect(() => {
@@ -54,16 +195,26 @@ export default function MediaDialog({
       try {
         setIsLoadingFields(true);
         const response = await projectsAPI.get({ eq: [], limit: 1 });
-        
-        if ((response.flag === Flag.Success || response.flag === Flag.UnknownOrSuccess) && response.data) {
-          const projects = Array.isArray(response.data) ? response.data : [response.data];
-          
+
+        if (
+          (response.flag === Flag.Success ||
+            response.flag === Flag.UnknownOrSuccess) &&
+          response.data
+        ) {
+          const projects = Array.isArray(response.data)
+            ? response.data
+            : [response.data];
+
           if (projects.length > 0) {
-            const fields = Object.keys(projects[0]).filter(
-              key => !["id", "created_at", "updated_at"].includes(key)
-            ).filter((key) => allowedFields ? allowedFields.includes(key) : true);
+            const fields = Object.keys(projects[0])
+              .filter(
+                (key) => !["id", "created_at", "updated_at"].includes(key)
+              )
+              .filter((key) =>
+                allowedFields ? allowedFields.includes(key) : true
+              );
             setAvailableFields(fields);
-            
+
             // Initialize form data
             if (media) {
               // Edit mode - populate with existing data
@@ -73,7 +224,8 @@ export default function MediaDialog({
                 if (key === "genres" && Array.isArray(value)) {
                   result["commaSeperatedGenres"] = value.join(", ");
                 } else {
-                  result[key] = value === null || value === undefined ? "" : value;
+                  result[key] =
+                    value === null || value === undefined ? "" : value;
                 }
               });
               setFormData(result as ProjectFormData);
@@ -82,7 +234,7 @@ export default function MediaDialog({
               const base: Record<string, any> = {};
               fields.forEach((key) => {
                 const sampleValue = (projects[0] as any)[key];
-                
+
                 if (typeof sampleValue === "boolean" || key.startsWith("in_")) {
                   base[key] = false;
                 } else if (key === "genres") {
@@ -113,7 +265,9 @@ export default function MediaDialog({
 
     // Validate required fields
     if (!formData.title || !formData.content_type || !formData.status) {
-      toast.error("Please fill in all required fields (Title, Content Type, Status)",);
+      toast.error(
+        "Please fill in all required fields (Title, Content Type, Status)"
+      );
       return;
     }
 
@@ -130,7 +284,15 @@ export default function MediaDialog({
       // Handle different value types
       if (value === "" || value === undefined) {
         submitData[key] = null;
-      } else if (["release_year", "runtime_minutes", "order_index", "total_episodes", "episode_runtime_minutes"].includes(key)) {
+      } else if (
+        [
+          "release_year",
+          "runtime_minutes",
+          "order_index",
+          "total_episodes",
+          "episode_runtime_minutes",
+        ].includes(key)
+      ) {
         // Convert numeric strings to integers
         submitData[key] = value ? parseInt(String(value)) : null;
       } else if (typeof value === "boolean") {
@@ -147,6 +309,36 @@ export default function MediaDialog({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const openAddChapter = () => {
+    setSelectedChapter(null);
+    setChapterDialogOpen(true);
+  };
+
+  const openEditChapter = (c: Chapter) => {
+    setSelectedChapter(c);
+    setChapterDialogOpen(true);
+  };
+
+  const openDeleteChapter = (c: Chapter) => {
+    setChapterToDelete(c);
+    setDeleteChapterDialogOpen(true);
+  };
+
+  const submitChapter = async (data: any) => {
+    const payload = {
+      ...data,
+      project_id: audiobookId,
+    };
+    if (selectedChapter?.id) {
+      await updateChapterMutation.mutateAsync({
+        id: selectedChapter.id,
+        data: payload,
+      });
+    } else {
+      await createChapterMutation.mutateAsync(payload);
+    }
+  };
+
   const renderField = (key: string, value: any) => {
     const label = key
       .replace(/_/g, " ")
@@ -159,7 +351,10 @@ export default function MediaDialog({
           <Label htmlFor={key} className="font-medium">
             {label} *
           </Label>
-          <Select value={value || ""} onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}>
+          <Select
+            value={value || ""}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
             <SelectTrigger className="mt-1.5 capitalize">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -167,7 +362,9 @@ export default function MediaDialog({
               <SelectItem value={ContentTypeEnum.Film}>Film</SelectItem>
               <SelectItem value={ContentTypeEnum.TvShow}>TV Show</SelectItem>
               <SelectItem value={ContentTypeEnum.Song}>Song</SelectItem>
-              <SelectItem value={ContentTypeEnum.Audiobook}>Audiobook</SelectItem>
+              <SelectItem value={ContentTypeEnum.Audiobook}>
+                Audiobook
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -181,7 +378,10 @@ export default function MediaDialog({
           <Label htmlFor={key} className="font-medium">
             {label} *
           </Label>
-          <Select value={value || ""} onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}>
+          <Select
+            value={value || ""}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
             <SelectTrigger className="mt-1.5 capitalize">
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
@@ -218,7 +418,11 @@ export default function MediaDialog({
     }
 
     // Special: Boolean / Checkbox
-    if (key.startsWith("in_") || key === "featured" || key === "is_downloadable") {
+    if (
+      key.startsWith("in_") ||
+      key === "featured" ||
+      key === "is_downloadable"
+    ) {
       return (
         <div
           key={key}
@@ -249,7 +453,9 @@ export default function MediaDialog({
             id={key}
             type="text"
             value={value || ""}
-            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            onChange={(e) =>
+              handleChange(key as keyof ProjectFormData, e.target.value)
+            }
             placeholder="e.g., Action, Drama, Comedy"
             className="mt-1.5"
           />
@@ -269,9 +475,9 @@ export default function MediaDialog({
       "order_index",
       "total_episodes",
       "episode_runtime_minutes",
-      "order"
+      "order",
     ].includes(key);
-    
+
     const isFullWidth = [
       "title",
       "notes",
@@ -292,13 +498,18 @@ export default function MediaDialog({
         </Label>
 
         {/* Special handling for image/video/audio URLs to allow uploads */}
-        {key === "poster_url" || key === "preview_url" || key === "audio_url" ? (
+        {key === "poster_url" ||
+          key === "preview_url" ||
+          key === "audio_url" ||
+          key === "audio_preview_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
               type="text"
               value={value ?? ""}
-              onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+              onChange={(e) =>
+                handleChange(key as keyof ProjectFormData, e.target.value)
+              }
               placeholder={`Enter or upload ${label.toLowerCase()}`}
               className="flex-1"
             />
@@ -307,7 +518,13 @@ export default function MediaDialog({
                 type="file"
                 className="hidden"
                 id={`file-${key}`}
-                accept={key === "poster_url" ? "image/*" : key === "preview_url" ? "video/*,image/*" : "audio/*"}
+                accept={
+                  key === "poster_url"
+                    ? "image/*"
+                    : key === "preview_url"
+                      ? "video/*,image/*"
+                      : "audio/*"
+                }
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
@@ -316,16 +533,17 @@ export default function MediaDialog({
                       const bucket = "Media";
                       const safeName = file.name.replace(/\s+/g, "_");
                       const path =
-                        key === "audio_url"
-                          ? `Audio/${formData.content_type ?? "generic"}/${Date.now()}-${safeName}`
+                        key === "audio_url" || key === "audio_preview_url"
+                          ? `Audio/${formData.content_type ?? "generic"
+                          }/${Date.now()}-${safeName}`
                           : createBucketPath(
-                              `${Date.now()}-${safeName}`,
-                              formData.content_type!,
-                            );
+                            `${Date.now()}-${safeName}`,
+                            formData.content_type!
+                          );
                       const publicUrl = await mediaService.uploadFile(
                         file,
                         bucket,
-                        path,
+                        path
                       );
                       handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded successfully!`);
@@ -358,7 +576,9 @@ export default function MediaDialog({
             id={key}
             type={isNumeric ? "number" : "text"}
             value={value ?? ""}
-            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            onChange={(e) =>
+              handleChange(key as keyof ProjectFormData, e.target.value)
+            }
             placeholder={`Enter ${label.toLowerCase()}`}
             required={key === "title"}
             className="mt-1.5"
@@ -385,7 +605,9 @@ export default function MediaDialog({
         {isLoadingFields ? (
           <div className="p-6 flex items-center justify-center min-h-[400px]">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            <p className="ml-2 text-sm text-slate-500">Loading form fields...</p>
+            <p className="ml-2 text-sm text-slate-500">
+              Loading form fields...
+            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6">
@@ -398,9 +620,7 @@ export default function MediaDialog({
                     k !== "is_downloadable" &&
                     k !== "genres"
                 )
-                .map((key) =>
-                  renderField(key, (formData as any)[key])
-                )}
+                .map((key) => renderField(key, (formData as any)[key]))}
 
               <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
                 {availableFields
@@ -410,11 +630,22 @@ export default function MediaDialog({
                       k === "featured" ||
                       k === "is_downloadable"
                   )
-                  .map((key) =>
-                    renderField(key, (formData as any)[key])
-                  )}
+                  .map((key) => renderField(key, (formData as any)[key]))}
               </div>
             </div>
+
+            {/* Chapters section (only for Audiobooks) */}
+            {isAudiobook && (
+              <ChaptersSection
+                audiobookId={audiobookId}
+                chapters={chapters}
+                chaptersLoading={chaptersLoading}
+                chaptersError={chaptersError as Error | null}
+                onAddChapter={openAddChapter}
+                onEditChapter={openEditChapter}
+                onDeleteChapter={openDeleteChapter}
+              />
+            )}
 
             <div className="flex justify-end gap-3 pb-2 pt-10">
               <Button
@@ -435,6 +666,42 @@ export default function MediaDialog({
                 {media ? "Update Content" : "Save Content"}
               </Button>
             </div>
+
+            <ChapterDialog
+              open={chapterDialogOpen}
+              onOpenChange={(v) => {
+                setChapterDialogOpen(v);
+                if (!v) setSelectedChapter(null);
+              }}
+              chapter={selectedChapter as any}
+              onSubmit={submitChapter}
+              isLoading={
+                createChapterMutation.isPending ||
+                updateChapterMutation.isPending
+              }
+              defaultProjectId={audiobookId ?? null}
+            />
+
+            <DeleteConfirmationDialog
+              open={deleteChapterDialogOpen}
+              onOpenChange={(v) => {
+                setDeleteChapterDialogOpen(v);
+                if (!v) setChapterToDelete(null);
+              }}
+              onConfirm={async () => {
+                if (chapterToDelete?.id) {
+                  await deleteChapterMutation.mutateAsync(chapterToDelete.id);
+                }
+              }}
+              itemName={chapterToDelete?.title}
+              isDeleting={deleteChapterMutation.isPending}
+              title="Move chapter to archive?"
+              description={
+                chapterToDelete?.title
+                  ? `Are you sure you want to move "${chapterToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+                  : "Are you sure you want to move this chapter to the bin?"
+              }
+            />
           </form>
         )}
       </DialogContent>

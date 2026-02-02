@@ -9,7 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Edit, Trash2 } from "lucide-react";
+import { Loader2, Edit, Trash2, List } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
@@ -23,6 +24,7 @@ const READ_TYPES = ["Comic", "Book", "Audiobook"] as const;
 const projectsAPI = Projects as Required<typeof Projects>;
 
 export default function Read() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
@@ -60,7 +62,7 @@ export default function Read() {
       if (search) {
         const pattern = `%${search}%`;
         query = query.or(
-          `title.ilike.${pattern},platform.ilike.${pattern},notes.ilike.${pattern}`,
+          `title.ilike.${pattern},platform.ilike.${pattern},notes.ilike.${pattern}`
         );
       }
 
@@ -70,7 +72,9 @@ export default function Read() {
         throw new Error(error.message || "Failed to fetch read content");
       }
 
-      return (data || []) as Project[];
+      return ((data || []) as Project[]).filter(
+        (item) => (item as any).is_deleted !== true
+      );
     },
   });
 
@@ -126,7 +130,7 @@ export default function Read() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -139,7 +143,7 @@ export default function Read() {
       queryClient.invalidateQueries({ queryKey: ["read-statuses"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
-      toast.success("Content deleted successfully!");
+      toast.success("Moved to archive.");
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete content: ${error.message}`);
@@ -179,7 +183,7 @@ export default function Read() {
               "created_at",
               "updated_at",
               "user_id",
-            ].includes(key),
+            ].includes(key)
         )
       : ["title", "content_type", "status", "platform_name"];
 
@@ -214,13 +218,13 @@ export default function Read() {
 
   const totalItems = items.length;
   const totalComics = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Comic,
+    (m) => m.content_type === ContentTypeEnum.Comic
   ).length;
   const totalBooks = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Book,
+    (m) => m.content_type === ContentTypeEnum.Book
   ).length;
   const totalAudiobooks = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Audiobook,
+    (m) => m.content_type === ContentTypeEnum.Audiobook
   ).length;
 
   if (error) {
@@ -251,97 +255,107 @@ export default function Read() {
       />
 
       {/* Search and Filter Section */}
-          <MediaFilters
-            searchPlaceholder="Search by title, platform or notes..."
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            contentTypeFilter={contentTypeFilter}
-            onContentTypeFilterChange={setContentTypeFilter}
-            availableStatuses={availableStatuses}
-            availableTypes={availableTypes}
-          />
+      <MediaFilters
+        searchPlaceholder="Search by title, platform or notes..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        contentTypeFilter={contentTypeFilter}
+        onContentTypeFilterChange={setContentTypeFilter}
+        availableStatuses={availableStatuses}
+        availableTypes={availableTypes}
+      />
 
-          {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {displayFields.map((key) => (
-                    <TableHead
-                      key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
-                    >
-                      {key.replace(/_/g, " ")}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center py-8"
-                    >
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ) : items.length ? (
-                  items.map((item) => (
-                    <TableRow key={item.id}>
-                      {displayFields.map((key) => {
-                        const value = (item as any)[key];
-                        return (
-                          <TableCell
-                            key={key}
-                            className="max-w-[220px] truncate"
-                          >
-                            {value === null || value === undefined ? (
-                              <span className="text-muted-foreground text-xs">
-                                —
-                              </span>
-                            ) : (
-                              <span title={String(value)}>{String(value)}</span>
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(item)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+      {/* Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {displayFields.map((key) => (
+                <TableHead
+                  key={key}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
+                >
+                  {key.replace(/_/g, " ")}
+                </TableHead>
+              ))}
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center py-8"
+                >
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : items.length ? (
+              items.map((item) => (
+                <TableRow key={item.id}>
+                  {displayFields.map((key) => {
+                    const value = (item as any)[key];
+                    return (
+                      <TableCell key={key} className="max-w-[220px] truncate">
+                        {value === null || value === undefined ? (
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
+                        ) : (
+                          <span title={String(value)}>{String(value)}</span>
+                        )}
                       </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      No read content found matching your filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                    );
+                  })}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      {(item.content_type === ContentTypeEnum.Audiobook ||
+                        (item as any).content_type === "AudioBook") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            navigate(`/chapters?projectId=${item.id}`)
+                          }
+                          title="Chapters"
+                        >
+                          <List className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(item)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(item)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center text-muted-foreground py-8"
+                >
+                  No read content found matching your filters.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Media Dialog */}
       <MediaDialog

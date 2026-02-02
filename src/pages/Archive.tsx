@@ -13,7 +13,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Flag, Project, Recipe } from "@/types";
+import { Flag, Project, Recipe, Footer } from "@/types";
 import {
   Card,
   CardContent,
@@ -29,18 +29,20 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { Footers } from "@/api/integrations/supabase/footer/footer";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 const projectsAPI = Projects as Required<typeof Projects>;
+const footersAPI = Footers as Required<typeof Footers>;
 
-export type ArchiveSource = "recipe" | "watch" | "listen" | "read";
+export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer";
 
 export interface ArchivedItem {
   source: ArchiveSource;
   id: string;
   title: string;
   subtitle?: string;
-  raw: Recipe | Project;
+  raw: Recipe | Project | Footer; // <- updated
 }
 
 function getProjectSource(contentType: string): ArchiveSource {
@@ -64,6 +66,7 @@ const SOURCE_LABELS: Record<ArchiveSource, string> = {
   watch: "Watch",
   listen: "Listen",
   read: "Read",
+  footer: "Footer", // <- new
 };
 
 const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
@@ -71,6 +74,7 @@ const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
   watch: Film,
   listen: Music,
   read: BookOpen,
+  footer: ArchiveIcon, // <- using archive icon
 };
 
 const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
@@ -78,6 +82,7 @@ const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
   watch: "bg-violet-100 text-violet-800 hover:bg-violet-100",
   listen: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
   read: "bg-sky-100 text-sky-800 hover:bg-sky-100",
+  footer: "bg-gray-100 text-gray-800 hover:bg-gray-100", // <- new
 };
 
 export default function Archive() {
@@ -91,6 +96,7 @@ export default function Archive() {
   const [
     { data: recipes = [], isLoading: recipesLoading, error: recipesError },
     { data: projects = [], isLoading: projectsLoading, error: projectsError },
+    { data: footers = [], isLoading: footersLoading, error: footersError },
   ] = useQueries({
     queries: [
       {
@@ -135,6 +141,24 @@ export default function Archive() {
             : [response.data].filter(Boolean);
         },
       },
+      {
+        queryKey: ["archived-footers", searchQuery],
+        queryFn: async () => {
+          const response = await footersAPI.get({
+            eq: [{ key: "is_deleted", value: true }],
+            sort: "created_at",
+            sortBy: "dec",
+            search: searchQuery || undefined,
+            searchFields: ["title"],
+          });
+          if (response.flag !== Flag.Success) {
+            throw new Error(
+              response.error?.message || "Failed to fetch footers"
+            );
+          }
+          return Array.isArray(response.data) ? response.data : [response.data];
+        },
+      },
     ],
   });
 
@@ -146,6 +170,7 @@ export default function Archive() {
       subtitle: r.category,
       raw: r,
     }));
+
     const projectItems: ArchivedItem[] = (projects as Project[]).map((p) => ({
       source: getProjectSource(p.content_type),
       id: p.id,
@@ -153,7 +178,15 @@ export default function Archive() {
       subtitle: p.content_type,
       raw: p,
     }));
-    const combined = [...recipeItems, ...projectItems];
+
+    const footerItems: ArchivedItem[] = (footers as Footer[]).map((f) => ({
+      source: "footer",
+      id: f.id,
+      title: f.title,
+      raw: f,
+    }));
+
+    const combined = [...recipeItems, ...projectItems, ...footerItems];
     combined.sort((a, b) => {
       const aDate =
         "deleted_at" in a.raw && a.raw.deleted_at
@@ -166,15 +199,20 @@ export default function Archive() {
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
     return combined;
-  }, [recipes, projects]);
+  }, [recipes, projects, footers]);
 
-  const isLoading = recipesLoading || projectsLoading;
-  const error = recipesError || projectsError;
+  const isLoading = recipesLoading || projectsLoading || footersLoading;
+  const error = recipesError || projectsError || footersError;
 
   const restoreMutation = useMutation({
     mutationFn: async (item: ArchivedItem) => {
       if (item.source === "recipe") {
         const res = await recipesAPI.toogleSoftDeleteOneByID(item.id, false);
+        if (res.flag !== Flag.Success) {
+          throw new Error(res.error?.message || "Failed to restore");
+        }
+      } else if (item.source === "footer") {
+        const res = await footersAPI.toogleSoftDeleteOneByID(item.id, false);
         if (res.flag !== Flag.Success) {
           throw new Error(res.error?.message || "Failed to restore");
         }
@@ -188,6 +226,7 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] }); // <- new
       toast.success(`"${item.title}" restored.`);
     },
     onError: (err: Error) => {
@@ -202,6 +241,11 @@ export default function Archive() {
         if (res.flag !== Flag.Success) {
           throw new Error(res.error?.message || "Failed to delete");
         }
+      } else if (item.source === "footer") {
+        const res = await footersAPI.deleteOneByIDPermanent(item.id);
+        if (res.flag !== Flag.Success) {
+          throw new Error(res.error?.message || "Failed to delete");
+        }
       } else {
         const res = await projectsAPI.deleteOneByIDPermanent(item.id);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -212,6 +256,7 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] }); // <- new
       toast.success(`"${item.title}" permanently deleted.`);
     },
     onError: (err: Error) => {
@@ -219,9 +264,7 @@ export default function Archive() {
     },
   });
 
-  const handleRestore = (item: ArchivedItem) => {
-    restoreMutation.mutate(item);
-  };
+  const handleRestore = (item: ArchivedItem) => restoreMutation.mutate(item);
 
   const handlePermanentDeleteClick = (item: ArchivedItem) => {
     setItemToPermanentDelete(item);

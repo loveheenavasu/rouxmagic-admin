@@ -29,7 +29,7 @@ export interface ChapterFormData extends Partial<Chapter> {}
 
 export type GetChaptersBy = keyof ChapterMetaData | "id";
 
-export type SortChaptersBy = "created_at" | "order_index";
+export type SortChaptersBy = "created_at";
 
 export interface GetChaptersOpts
   extends GetTableOpts<
