@@ -1,7 +1,7 @@
 import {
-  OnFailCallback,
+  // OnFailCallback,
   OnLoadingStateChangeCallback,
-  OnSuccessCallback,
+  // OnSuccessCallback,
 } from "./args";
 
 export type CommonCBArgs = {
@@ -17,7 +17,8 @@ export interface CBArgs {
   handleLoadingState: boolean;
 }
 
-export interface Callbacks<Args extends CBArgs = CBArgs>
-  extends OnSuccessCallback<Args["onSuccessArgs"]>,
-    OnFailCallback<Args["onFailArgs"]>,
-    OnLoadingStateChangeCallback {}
+// export interface Callbacks<Args extends CBArgs = CBArgs>
+//   extends OnSuccessCallback<Args["onSuccessArgs"]>,
+//     OnFailCallback<Args["onFailArgs"]>,
+//     OnLoadingStateChangeCallback {}
+export interface Callbacks extends OnLoadingStateChangeCallback {}
