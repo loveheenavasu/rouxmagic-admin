@@ -21,6 +21,7 @@ import {
   ImagePlay,
   Utensils,
   Archive,
+  PanelBottom,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -55,6 +56,7 @@ const navigation = [
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Archive", href: "/archive", icon: Archive },
+  { name: "Footer", href: "/footer", icon: PanelBottom },
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
