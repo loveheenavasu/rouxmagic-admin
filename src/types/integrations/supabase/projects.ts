@@ -32,13 +32,15 @@ export interface ProjectMetaData{
   in_latest_releases: boolean;
   order_index?:number;
   platform_name?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface ProjectFormData extends Partial<Project>{
   commaSeperatedGenres:string;
 }
 
-export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases" | "in_hero_carousel"
+export type GetProjectsBy = "content_type" | "status" | "in_now_playing" | "in_coming_soon" | "in_latest_releases" | "in_hero_carousel" | "is_deleted"
 
 export type SortProjectsBy = "created_at" | "order_index"
 

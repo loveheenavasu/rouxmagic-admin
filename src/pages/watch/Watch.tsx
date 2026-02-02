@@ -50,8 +50,6 @@ export default function Watch() {
       }
 
       const response = await projectsAPI.get({
-        // eq: eqFilters,
-        // or: "content_type.eq.TV Show,content_type.eq.Film",
         inValue: { key: "content_type", value: ["TV Show", "Film"] },
         sort: "created_at",
         sortBy: "dec",
@@ -72,9 +70,11 @@ export default function Watch() {
         throw new Error(errorMessage);
       }
 
-      return Array.isArray(response.data)
+      const data = Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
+      // Exclude items that have been moved to bin (soft-deleted)
+      return data.filter((item) => item.is_deleted !== true);
     },
   });
 
@@ -125,25 +125,26 @@ export default function Watch() {
     },
   });
 
-  // Delete mutation
+  // Soft delete (move to bin) – item will appear in Archive.
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
       ) {
-        throw new Error(response.error?.message || "Failed to delete media");
+        throw new Error(response.error?.message || "Failed to move to bin");
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
-      toast.success("Media deleted successfully!");
+      toast.success("Media moved to bin!");
     },
     onError: (error: Error) => {
-      toast.error(`Failed to delete media: ${error.message}`);
+      toast.error(`Failed to move media to bin: ${error.message}`);
     },
   });
 
@@ -159,7 +160,7 @@ export default function Watch() {
               "order_index",
               "created_at",
               "updated_at",
-            ].includes(key),
+            ].includes(key)
         )
       : ["title", "content_type", "status", "release_year", "platform"];
 
@@ -235,7 +236,7 @@ export default function Watch() {
   // Calculate stats
   const totalFilms = mediaList.filter((m) => m.content_type === "Film").length;
   const totalTVShows = mediaList.filter(
-    (m) => m.content_type === "TV Show",
+    (m) => m.content_type === "TV Show"
   ).length;
   const avgRuntime =
     mediaList.length > 0
@@ -243,7 +244,7 @@ export default function Watch() {
           mediaList
             .filter((m) => m.runtime_minutes)
             .reduce((acc, m) => acc + (m.runtime_minutes || 0), 0) /
-            (mediaList.filter((m) => m.runtime_minutes).length || 1),
+            (mediaList.filter((m) => m.runtime_minutes).length || 1)
         )
       : 0;
 
@@ -267,7 +268,7 @@ export default function Watch() {
     <div className="space-y-6">
       <StatsRow
         items={[
-          { label:"Total Items", value: mediaList?.length },
+          { label: "Total Items", value: mediaList?.length },
           { label: "Films", value: totalFilms },
           { label: "TV Shows", value: totalTVShows },
         ]}
@@ -357,7 +358,7 @@ export default function Watch() {
                       </TableCell>
                     </TableRow>
                   )
-                ),
+                )
               )
             ) : (
               <TableRow>
@@ -389,6 +390,11 @@ export default function Watch() {
         onConfirm={confirmDelete}
         itemName={mediaToDelete?.title}
         isDeleting={deleteMutation.isPending}
+        description={
+          mediaToDelete
+            ? `Are you sure you want to move "${mediaToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        }
       />
     </div>
   );

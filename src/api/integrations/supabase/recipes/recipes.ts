@@ -202,7 +202,7 @@ export const Recipes: RecipeCRUDWrapper = {
         .from(TABLE_NAME)
         .update({
           is_deleted: intent,
-          deleted_at: !!intent ? null : new Date().toISOString(),
+          deleted_at: !!intent ?  new Date().toISOString() : null ,
         })
         .eq("id", recipeId)
         .select("*")

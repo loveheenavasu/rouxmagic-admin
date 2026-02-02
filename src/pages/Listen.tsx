@@ -266,99 +266,92 @@ export default function Watch() {
 
       {/* Search and Filter Section */}
 
-          <MediaFilters
-            searchPlaceholder="Search by title..."
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            availableStatuses={availableStatuses}
-            availableTypes={availableTypes}
-          />
-          {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {displayFields.map((key) => (
-                    <TableHead
-                      key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
-                    >
-                      {key.replace(/_/g, " ")}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">Actions</TableHead>
+      <MediaFilters
+        searchPlaceholder="Search by title..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        availableStatuses={availableStatuses}
+        availableTypes={availableTypes}
+      />
+      {/* Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {displayFields.map((key) => (
+                <TableHead
+                  key={key}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
+                >
+                  {key.replace(/_/g, " ")}
+                </TableHead>
+              ))}
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center py-8"
+                >
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : !!filteredMedia?.length ? (
+              filteredMedia.map((media) => (
+                <TableRow key={media.id}>
+                  {displayFields.map((key) => {
+                    const value = media[key as keyof Project];
+                    return (
+                      <TableCell key={key} className="max-w-[200px] truncate">
+                        {value === null || value === undefined ? (
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
+                        ) : (
+                          <span title={String(value)}>{String(value)}</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(media)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(media)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-                  <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center py-8"
-                    >
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ) : !!filteredMedia?.length ? (
-                  filteredMedia.map(
-                    (media) => (
-                        <TableRow key={media.id}>
-                          {displayFields.map((key) => {
-                            const value = media[key as keyof Project];
-                            return (
-                              <TableCell
-                                key={key}
-                                className="max-w-[200px] truncate"
-                              >
-                                {value === null || value === undefined ? (
-                                  <span className="text-muted-foreground text-xs">
-                                    —
-                                  </span>
-                                ) : (
-                                  <span title={String(value)}>
-                                    {String(value)}
-                                  </span>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(media)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(media)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                  )
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      No media found matching your search.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-       
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={displayFields.length + 1}
+                  className="text-center text-muted-foreground py-8"
+                >
+                  No media found matching your search.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
       {/* Media Dialog */}
       <MediaDialog
         open={isMediaDialogOpen}
@@ -376,6 +369,11 @@ export default function Watch() {
         onConfirm={confirmDelete}
         itemName={mediaToDelete?.title}
         isDeleting={deleteMutation.isPending}
+        description={
+          mediaToDelete
+            ? `Are you sure you want to move "${mediaToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        }
       />
     </div>
   );

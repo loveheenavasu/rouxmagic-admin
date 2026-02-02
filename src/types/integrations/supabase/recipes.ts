@@ -18,12 +18,14 @@ export interface RecipeMetadata {
   suggested_pairings: string | null;
   cook_time_estimate: string | null;
   preview_url: string;
+  is_deleted: boolean;
+  deleted_at: string | null;
 }
 
 export type SortRecipesBy = "created_at"
 
 export type SearchableRecipeField = "title";
-export type GetRecipesBy = "category";
+export type GetRecipesBy = "category" | "is_deleted";
 
 export interface RecipeFormData extends RecipeMetadata {}
 

@@ -380,8 +380,8 @@ export default function WatchCarousel() {
                             item.status === "released"
                               ? "bg-green-100 text-green-700"
                               : item.status === "coming_soon"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-gray-100 text-gray-700"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-gray-100 text-gray-700"
                           }`}
                         >
                           {item.status || "—"}
@@ -518,7 +518,6 @@ export default function WatchCarousel() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        title="Delete Carousel Item?"
         description={`Are you sure you want to remove "${mediaToDelete?.title}" from the carousel? This action cannot be undone.`}
         isDeleting={deleteMutation.isPending}
       />

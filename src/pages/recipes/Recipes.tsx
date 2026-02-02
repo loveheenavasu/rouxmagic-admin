@@ -18,7 +18,6 @@ import RecipeDialog from "@/components/RecipeDialog";
 import { toast } from "sonner";
 import { Flag, Recipe } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
-import { MediaFilters } from "@/components/MediaFilters";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 
@@ -88,7 +87,6 @@ export default function RecipesPage() {
       return data;
     },
   });
-
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await recipesAPI.createOne(data);
@@ -144,7 +142,7 @@ export default function RecipesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await recipesAPI.deleteOneByIDPermanent(id);
+      const response = await recipesAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -211,7 +209,16 @@ export default function RecipesPage() {
     );
   }
 
-  const displayFields = ["title", "category", "slug", "preview_url"];
+  const displayFields = [
+    "title",
+    "category",
+    "slug",
+    "preview_url",
+    "ingredients",
+    "instructions",
+    "short_description",
+    "image_url",
+  ];
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <StatsRow
@@ -278,7 +285,7 @@ export default function RecipesPage() {
                     </TableCell>
                   </TableRow>
                 ) : recipes.length > 0 ? (
-                  recipes.map((recipe: Recipe) => (
+                  recipes?.filter((recipe: Recipe) => !recipe?.is_deleted)?.map((recipe: Recipe) => (
                     <TableRow
                       key={recipe.id}
                       className="hover:bg-slate-50/50 transition-colors"
@@ -353,9 +360,13 @@ export default function RecipesPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        title="Delete Recipe?"
         itemName={recipeToDelete?.title}
         isDeleting={deleteMutation.isPending}
+        description={
+          recipeToDelete
+            ? `Are you sure you want to move "${recipeToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        }
       />
     </div>
   );

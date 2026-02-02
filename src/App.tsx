@@ -1,21 +1,27 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuthStore } from './stores/authStore'
-import Layout from './components/Layout'
-import ProtectedRoute from './components/ProtectedRoute'
-import Login from './pages/Login'
-import Home from './pages/home'
-import HomeCarousel from './pages/home/HomeCarousel'
-import Watch from './pages/watch'
-import WatchCarousel from './pages/watch/WatchCarousal'
-import Recipes from './pages/recipes'
-import RecipesCarousel from './pages/recipes/RecipesCarousel'
-import Listen from './pages/Listen'
-import Read from './pages/Read'
-import Users from './pages/Users'
-import Settings from './pages/Settings'
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { useAuthStore } from "./stores/authStore";
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./pages/Login";
+import Home from "./pages/home";
+import HomeCarousel from "./pages/home/HomeCarousel";
+import Watch from "./pages/watch";
+import WatchCarousel from "./pages/watch/WatchCarousal";
+import Recipes from "./pages/recipes";
+import RecipesCarousel from "./pages/recipes/RecipesCarousel";
+import Listen from "./pages/Listen";
+import Read from "./pages/Read";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
+import Archive from "./pages/Archive";
 
 function App() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   return (
     <Router>
@@ -137,12 +143,22 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/archive"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Archive />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* 404 Redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;

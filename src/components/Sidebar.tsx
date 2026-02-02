@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   ImagePlay,
   Utensils,
+  Archive,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -53,6 +54,7 @@ const navigation = [
   },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
+  { name: "Archive", href: "/archive", icon: Archive },
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -145,7 +147,7 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className={cn("flex-1 p-4 space-y-1 overflow-y-auto overflow-x-visible", sidebarCollapsed ? "px-2" : "")}>
+          <nav className={cn("flex-1 p-4 space-y-1", sidebarCollapsed ? "px-2" : "")}>
             {navigation.map((item) => {
               const isParentActive = location.pathname.startsWith(item.href);
               const hasSubItems = item.subItems && item.subItems.length > 0;
@@ -194,7 +196,7 @@ export default function Sidebar() {
 
                   {/* Tooltip for collapsed state */}
                   {sidebarCollapsed && (
-                    <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[60] whitespace-nowrap shadow-xl translate-x-1 group-hover:translate-x-0">
+                    <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[9999] whitespace-nowrap shadow-xl translate-x-1 group-hover:translate-x-0">
                       {item.name}
                       <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-slate-900 rotate-45 -ml-1" />
                     </div>
@@ -249,7 +251,7 @@ export default function Sidebar() {
               {!sidebarCollapsed && <span className="font-medium">Logout</span>}
               
               {sidebarCollapsed && (
-                <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[60] whitespace-nowrap shadow-xl translate-x-1 group-hover:translate-x-0">
+                <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[9999] whitespace-nowrap shadow-xl translate-x-1 group-hover:translate-x-0">
                   Logout
                   <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-red-600 rotate-45 -ml-1" />
                 </div>

@@ -308,9 +308,13 @@ export default function RecipesCarousel() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        title="Delete Recipe?"
         itemName={recipeToDelete?.title}
         isDeleting={deleteMutation.isPending}
+        description={
+          recipeToDelete
+            ? `Are you sure you want to move "${recipeToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        } 
       />
     </div>
   );
