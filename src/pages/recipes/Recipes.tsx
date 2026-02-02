@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2 } from "lucide-react";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import RecipeDialog from "@/components/RecipeDialog";

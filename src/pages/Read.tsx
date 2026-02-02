@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Edit, Trash2 } from "lucide-react";
+import { Loader2, Edit, Trash2 } from "lucide-react";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";

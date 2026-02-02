@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeFormData } from "@/types";
+import { RecipeCategory, RecipeFormData } from "@/types";
 
 interface RecipeDialogProps {
   open: boolean;
@@ -31,12 +31,14 @@ const emptyForm: RecipeFormData = {
   ingredients: "",
   instructions: "",
   download_url: null,
-  category: "",
+  category: RecipeCategory.Snacks,
   paired_project_id: "",
   paired_type: null,
   suggested_pairings: null,
   cook_time_estimate: null,
   preview_url: "",
+  is_deleted: false,
+  deleted_at: null,
 };
 
 export default function RecipeDialog({

@@ -1,11 +1,13 @@
 import { ContentTypeEnum } from "@/types";
 
-const MediaPathStatic:Record<Partial<ContentTypeEnum>, string> = {
-Film:"Film Posters/",
-Song:"Song Posters/",
-"TV Show":"TV Show Posters/",
-Audiobook:"Audiobooks/"
-}
+const MediaPathStatic: Record<ContentTypeEnum, string> = {
+  [ContentTypeEnum.Film]: "Film Posters/",
+  [ContentTypeEnum.TvShow]: "TV Show Posters/",
+  [ContentTypeEnum.Song]: "Song Posters/",
+  [ContentTypeEnum.Audiobook]: "Audiobooks/",
+  [ContentTypeEnum.Comic]: "Comic Posters/",
+  [ContentTypeEnum.Book]: "Book Posters/",
+};
 
 export const createBucketPath=(fileName:string, fileType:ContentTypeEnum)=>{
     return MediaPathStatic[fileType] + fileName
