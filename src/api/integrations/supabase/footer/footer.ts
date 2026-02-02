@@ -1,33 +1,27 @@
 import { APIResponse } from "@/core";
 import { supabase } from "@/lib";
 import {
-  ProjectCRUDWrapper,
-  Project,
-  GetProjectsOpts,
+  FooterCRUDWrapper,
+  Footer,
+  GetFootersOpts,
   Flag,
   Response,
   Callbacks,
-  ProjectFormData,
-  Tables
+  FooterFormData
 } from "@/types";
 
-const TABLE_NAME = Tables.Projects;
+const TABLE_NAME = "";
 
-export const Projects: ProjectCRUDWrapper = {
+export const Projects: FooterCRUDWrapper = {
   async createOne(
-    data: ProjectFormData,
+    data: FooterFormData,
     cbs?: Callbacks
-  ): Promise<Response<Project>> {
+  ): Promise<Response<Footer>> {
     cbs?.onLoadingStateChange?.(true);
-    console.log("createOne projectMetadata:", data);
     try {
-      if (data.in_coming_soon && data.in_now_playing) {
-        return new APIResponse(null, Flag.ValidationError).build();
-      }
-      const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = data;
       const { data:ApiData, error } = await supabase
         .from(TABLE_NAME)
-        .insert({...projectMetadataWithoutGenres, genres:commaSeperatedGenres?.split(",")?.map((g)=>g?.trim())})
+        .insert({...data})
         .select("*")
         .maybeSingle();
       if (error) {
@@ -35,10 +29,7 @@ export const Projects: ProjectCRUDWrapper = {
           output: error,
         }).build();
       }
-      const res = new APIResponse(ApiData).build();
-      console.log("createOne response:", res);
-      return res;
-      // return new APIResponse(data).build();
+      return new APIResponse(ApiData).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -47,15 +38,13 @@ export const Projects: ProjectCRUDWrapper = {
       cbs?.onLoadingStateChange?.(false);
     }
   },
-
   async updateOneByID(
-    projectId: string,
-    update: Partial<ProjectFormData>,
+    footerId: string,
+    update: Partial<FooterFormData>,
     cbs?: Callbacks
-  ): Promise<Response<Project>> {
+  ): Promise<Response<Footer>> {
     cbs?.onLoadingStateChange?.(true);
     try {
-        const { commaSeperatedGenres, ...projectMetadataWithoutCommaGenres } = update;
       // Check if update object is empty or has no valid fields
       if (!update || Object.keys(update).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {
@@ -64,8 +53,8 @@ export const Projects: ProjectCRUDWrapper = {
       }
       const { data, error } = await supabase
         .from(TABLE_NAME)
-        .update({...projectMetadataWithoutCommaGenres, genres:commaSeperatedGenres?.split(",")?.map((g)=>g?.trim()) })
-        .eq("id", projectId)
+        .update({...update})
+        .eq("id", footerId)
         .select("*")
         .maybeSingle();
       if (error) {
@@ -82,9 +71,8 @@ export const Projects: ProjectCRUDWrapper = {
       cbs?.onLoadingStateChange?.(false);
     }
   },
-
   async deleteOneByIDPermanent(
-    projectId: string,
+    footerId: string,
     cbs?: Callbacks
   ): Promise<Response<null>> {
     cbs?.onLoadingStateChange?.(true);
@@ -92,7 +80,7 @@ export const Projects: ProjectCRUDWrapper = {
       const { error } = await supabase
         .from(TABLE_NAME)
         .delete()
-        .eq("id", projectId);
+        .eq("id", footerId);
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
@@ -107,13 +95,13 @@ export const Projects: ProjectCRUDWrapper = {
       cbs?.onLoadingStateChange?.(false);
     }
   },
-  async getByID(projectId: string, cbs?: Callbacks): Promise<Response> {
+  async getByID(footerId: string, cbs?: Callbacks): Promise<Response> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const { data, error } = await supabase
         .from(TABLE_NAME)
         .select("*")
-        .eq("id", projectId)
+        .eq("id", footerId)
         .maybeSingle();
       if (error) {
         return new APIResponse(null, Flag.APIError, {
@@ -131,9 +119,9 @@ export const Projects: ProjectCRUDWrapper = {
   },
 
   async get(
-    opts: GetProjectsOpts,
+    opts: GetFootersOpts,
     cbs?: Callbacks
-  ): Promise<Response<Project | Project[]>> {
+  ): Promise<Response<Footer | Footer[]>> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const {
@@ -215,7 +203,7 @@ export const Projects: ProjectCRUDWrapper = {
    * @function softDeleteOneByID is not built yet because of missing assistive key in projects table, and should not implemented untill properly defined.
    */
   async toogleSoftDeleteOneByID(
-      projectId?: string,
+      footerId?: string,
       intent?: boolean,
       cbs?: Callbacks
     ) {
@@ -227,7 +215,7 @@ export const Projects: ProjectCRUDWrapper = {
             is_deleted: intent,
             deleted_at: !!intent ? null : new Date().toISOString(),
           })
-          .eq("id", projectId)
+          .eq("id", footerId)
           .select("*")
           .maybeSingle();
         if (error) {

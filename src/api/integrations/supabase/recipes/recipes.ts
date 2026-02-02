@@ -6,9 +6,10 @@ import {
   Callbacks,
   GetRecipesOpts,
   Flag,
+  Tables,
 } from "@/types";
 
-const TABLE_NAME = "recipes";
+const TABLE_NAME = Tables.Recipes;
 
 export const Recipes: RecipeCRUDWrapper = {
   async createOne(data: RecipeFormData, cbs?: Callbacks) {

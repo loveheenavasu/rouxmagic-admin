@@ -1,29 +1,29 @@
 import { APIResponse } from "@/core";
 import { supabase } from "@/lib";
 import {
-  ProjectCRUDWrapper,
-  Project,
-  GetProjectsOpts,
+  ChapterCRUDWrapper,
+  Chapter,
+  GetChaptersOpts,
   Flag,
   Response,
   Callbacks,
-  ProjectFormData,
+  ChapterFormData,
   Tables
 } from "@/types";
 
-const TABLE_NAME = Tables.Projects;
+const TABLE_NAME = Tables.Chapters;
 
-export const Projects: ProjectCRUDWrapper = {
+export const Chapters: ChapterCRUDWrapper = {
   async createOne(
-    data: ProjectFormData,
+    data: ChapterFormData,
     cbs?: Callbacks
-  ): Promise<Response<Project>> {
+  ): Promise<Response<Chapter>> {
     cbs?.onLoadingStateChange?.(true);
     console.log("createOne projectMetadata:", data);
     try {
-      if (data.in_coming_soon && data.in_now_playing) {
-        return new APIResponse(null, Flag.ValidationError).build();
-      }
+    //   if (data.in_coming_soon && data.in_now_playing) {
+    //     return new APIResponse(null, Flag.ValidationError).build();
+    //   }
       const { commaSeperatedGenres, ...projectMetadataWithoutGenres } = data;
       const { data:ApiData, error } = await supabase
         .from(TABLE_NAME)
@@ -50,9 +50,9 @@ export const Projects: ProjectCRUDWrapper = {
 
   async updateOneByID(
     projectId: string,
-    update: Partial<ProjectFormData>,
+    update: Partial<ChapterFormData>,
     cbs?: Callbacks
-  ): Promise<Response<Project>> {
+  ): Promise<Response<Chapter>> {
     cbs?.onLoadingStateChange?.(true);
     try {
         const { commaSeperatedGenres, ...projectMetadataWithoutCommaGenres } = update;
@@ -131,9 +131,9 @@ export const Projects: ProjectCRUDWrapper = {
   },
 
   async get(
-    opts: GetProjectsOpts,
+    opts: GetChaptersOpts,
     cbs?: Callbacks
-  ): Promise<Response<Project | Project[]>> {
+  ): Promise<Response<Chapter | Chapter[]>> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const {
@@ -146,7 +146,7 @@ export const Projects: ProjectCRUDWrapper = {
         sortBy,
         sort,
         search,
-        searchFields,
+        // searchFields,
       } = opts;
 
       const query = supabase.from(TABLE_NAME).select("*");
@@ -180,21 +180,21 @@ export const Projects: ProjectCRUDWrapper = {
       }
 
       // Apply server-side search so filtering happens in the API, not the UI
-      if (search && search.trim()) {
-        const trimmed = search.trim();
-        const fields =
-          searchFields && searchFields.length > 0
-            ? searchFields
-            : (["title", "platform", "notes"] as const);
+    //   if (search && search.trim()) {
+    //     const trimmed = search.trim();
+    //     const fields =
+    //       searchFields && searchFields.length > 0
+    //         ? searchFields
+    //         : (["title", "platform", "notes"] as const);
 
-        const pattern = `%${trimmed}%`;
-        const orFilters = fields
-          .map((field) => `${field}.ilike.${pattern}`)
-          .join(",");
+    //     const pattern = `%${trimmed}%`;
+    //     const orFilters = fields
+    //       .map((field) => `${field}.ilike.${pattern}`)
+    //       .join(",");
 
-        // Supabase Postgrest: combine OR conditions across multiple columns
-        query.or(orFilters);
-      }
+    //     // Supabase Postgrest: combine OR conditions across multiple columns
+    //     query.or(orFilters);
+    //   }
 
       const { data, error } = await query;
       if (error) {
