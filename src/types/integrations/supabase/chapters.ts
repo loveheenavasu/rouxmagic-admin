@@ -6,13 +6,23 @@ export enum ChapterStatusEnum {
 }
 
 export enum ChapterContentTypeEnum {
-  Audio = "audio",
+  Audio = "AudioBook",
 }
 
 export interface ChapterMetaData {
   title: string;
   content_type: ChapterContentTypeEnum;
   content_url?: string;
+  project_id:string;
+  episode_number?:number;
+  season_number?:number;
+  release_year?:number;
+  description?:string;
+  id_deleted:boolean;
+  deleted_at?:Date;
+  thumbnail_url?:string;
+  runtime_minutes?:number;
+  youtube_id?:string;
 }
 
 export interface ChapterFormData extends Partial<Chapter> {}

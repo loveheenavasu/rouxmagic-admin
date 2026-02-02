@@ -21,5 +21,4 @@ export interface GetFootersOpts
     FooterMetaData,
     SearchableFooterField
   > {}
-
 export interface Footer extends CommonSchema, FooterMetaData {}

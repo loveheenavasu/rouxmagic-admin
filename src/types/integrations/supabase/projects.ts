@@ -1,4 +1,3 @@
-import { CRUDWrapperBase } from "@/types";
 import { CommonSchema, GetTableOpts } from "./common";
 
 export enum ProjectStatusEnum {

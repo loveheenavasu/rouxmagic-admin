@@ -1,9 +1,9 @@
 import { CRUDWrapper } from "@/core";
 import {
-  Chapter,
-  GetChaptersOpts,
   ChapterFormData,
-  Tables
+  Tables,
+  Chapter,
+  GetChaptersOpts
 } from "@/types";
 
 export const Chapters = new CRUDWrapper<Chapter, ChapterFormData, GetChaptersOpts>(Tables.Chapters)
