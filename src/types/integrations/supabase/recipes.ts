@@ -1,8 +1,8 @@
 import { CRUDWrapperBase } from "@/types/api/CRUDWrapper";
-import { CommonSchema } from "./common";
+import { CommonSchema, GetTableOpts } from "./common";
 
 export enum RecipeCategory {
-  Snacks = "snacks"
+  Snacks = "snacks",
 }
 export interface RecipeMetadata {
   title: string;
@@ -22,30 +22,19 @@ export interface RecipeMetadata {
   deleted_at: string | null;
 }
 
-export type SortRecipesBy = "created_at"
+export type SortRecipesBy = "created_at";
 
 export type SearchableRecipeField = "title";
 export type GetRecipesBy = "category" | "is_deleted";
 
 export interface RecipeFormData extends RecipeMetadata {}
 
-export type GetRecipesOpts = {
-   eq?: { key: GetRecipesBy; value: any }[];
-    sort?: SortRecipesBy;
-    sortBy?: "asc" | "dec";
-    limit?: number;
-    single?: boolean;
-    maybeSingle?: boolean;
-    or?: string;
-    inValue?:{key: keyof RecipeMetadata, value: any[]}
-    search?: string;
-    searchFields?: SearchableRecipeField[];
-}
+export interface GetRecipesOpts
+  extends GetTableOpts<
+    GetRecipesBy,
+    SortRecipesBy,
+    RecipeMetadata,
+    SearchableRecipeField
+  > {}
 
-/**
- * @wrapper projects api
- */
-
-export interface RecipeCRUDWrapper extends Partial<CRUDWrapperBase<Recipe | Recipe[], RecipeFormData, Partial<RecipeFormData> , any>>{}
-// ProjectFormData, ProjectFormData, GetProjectsOpts
 export interface Recipe extends CommonSchema, RecipeMetadata {}
