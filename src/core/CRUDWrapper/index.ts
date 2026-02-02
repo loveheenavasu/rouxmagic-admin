@@ -1,6 +1,7 @@
-import { Callbacks, Flag, GetTableOpts, Response } from "@/types";
+import { Callbacks, Flag, GetTableOpts, ProjectFormData, Response, Tables } from "@/types";
 import { APIResponse } from "../response";
 import { supabase } from "@/lib";
+import { deleteUnwantedValues } from "@/helpers/deleteUnwantedValues";
 
 export class CRUDWrapper<
   Table,
@@ -9,31 +10,57 @@ export class CRUDWrapper<
 > {
   constructor(private readonly table_name: string) {}
 
-  async createOne(
-    data: TableFormData,
-    cbs?: Callbacks
-  ): Promise<Response<Table>> {
-    cbs?.onLoadingStateChange?.(true);
-    try {
-      const { data: ApiData, error } = await supabase
-        .from(this.table_name)
-        .insert({ ...data })
-        .select("*")
-        .maybeSingle();
-      if (error) {
-        return new APIResponse(null, Flag.APIError, {
-          output: error,
-        }).build();
-      }
-      return new APIResponse(ApiData).build();
-    } catch (error) {
-      return new APIResponse(null, Flag.InternalError, {
-        output: error,
-      }).build();
-    } finally {
-      cbs?.onLoadingStateChange?.(false);
+  thisTable(){
+    return {
+      name:this.table_name
     }
   }
+
+  async createOne(
+  data: TableFormData,
+  cbs?: Callbacks
+): Promise<Response<Table>> {
+  cbs?.onLoadingStateChange?.(true);
+
+  try {
+    let payload: any = { ...data };
+
+    if (this.table_name === Tables.Projects) {
+      const {
+        commaSeperatedGenres,
+        ...rest
+      } = data as ProjectFormData;
+
+      payload = {
+        ...rest,
+        genres: commaSeperatedGenres
+          ? commaSeperatedGenres
+              .split(",")
+              .map((g) => g.trim())
+              .filter(Boolean)
+          : [],
+      };
+    }
+
+  const newPayload = deleteUnwantedValues(payload, ["undefined"])
+
+    const { data: apiData, error } = await supabase
+      .from(this.table_name)
+      .insert(newPayload)
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      return new APIResponse(null, Flag.APIError, { output: error }).build();
+    }
+
+    return new APIResponse(apiData, Flag.Success).build();
+  } catch (error) {
+    return new APIResponse(null, Flag.InternalError, { output: error }).build();
+  } finally {
+    cbs?.onLoadingStateChange?.(false);
+  }
+}
 
   async updateOneByID(
     tableId: string,
@@ -42,15 +69,36 @@ export class CRUDWrapper<
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
     try {
+
+      let payload: any = { ...update };
+
+ if (this.table_name === Tables.Projects) {
+      const {
+        commaSeperatedGenres,
+        ...rest
+      } = update as Partial<ProjectFormData>;
+
+      payload = {
+        ...rest,
+        genres: commaSeperatedGenres
+          ? commaSeperatedGenres
+              .split(",")
+              .map((g) => g.trim())
+              .filter(Boolean)
+          : [],
+      };
+    }
+    const newPayload = deleteUnwantedValues(payload, ["undefined"])
       // Check if update object is empty or has no valid fields
-      if (!update || Object.keys(update).length === 0) {
+      if (!newPayload || Object.keys(newPayload).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {
           message: "No updates found.",
         }).build();
       }
+      
       const { data, error } = await supabase
         .from(this.table_name)
-        .update({ ...update })
+        .update({ ...newPayload })
         .eq("id", tableId)
         .select("*")
         .maybeSingle();
@@ -59,7 +107,7 @@ export class CRUDWrapper<
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -82,7 +130,7 @@ export class CRUDWrapper<
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -197,30 +245,32 @@ export class CRUDWrapper<
     }
   }
 
-   async toogleSoftDeleteOneByID(
-      tableId?: string,
-      intent?: boolean,
-      cbs?: Callbacks
-    ) {
-      cbs?.onLoadingStateChange?.(true);
-      try {
-        const { data, error } = await supabase
-          .from(this.table_name)
-          .update({
-            is_deleted: intent,
-            deleted_at: !!intent ? null : new Date().toISOString(),
-          })
-          .eq("id", tableId)
-          .select("*")
-          .maybeSingle();
-        if (error) {
-          return new APIResponse(null, Flag.APIError, { output: error }).build();
-        }
-        return new APIResponse(data, Flag.Success).build();
-      } catch (error) {
-        return new APIResponse(null, Flag.InternalError).build();
-      } finally {
-        cbs?.onLoadingStateChange?.(false);
+  async toogleSoftDeleteOneByID(
+    tableId?: string,
+    intent?: boolean,
+    cbs?: Callbacks
+  ) {
+    cbs?.onLoadingStateChange?.(true);
+    try {
+      const { data, error } = await supabase
+        .from(this.table_name)
+        .update({
+          is_deleted: intent,
+          // When intent === true: soft-delete (set timestamp).
+          // When intent === false: restore (clear timestamp).
+          deleted_at: intent ? new Date().toISOString() : null,
+        })
+        .eq("id", tableId)
+        .select("*")
+        .maybeSingle();
+      if (error) {
+        return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
+      return new APIResponse(data, Flag.Success).build();
+    } catch (error) {
+      return new APIResponse(null, Flag.InternalError).build();
+    } finally {
+      cbs?.onLoadingStateChange?.(false);
     }
+  }
 }

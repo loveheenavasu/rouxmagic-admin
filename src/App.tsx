@@ -124,6 +124,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* <Route
+          path="/chapters"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Chapters />
+              </Layout>
+            </ProtectedRoute>
+          }
+        /> */}
         <Route
           path="/users"
           element={
@@ -145,21 +155,21 @@ function App() {
           }
         />
         <Route
-          path="/archive"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Archive />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/footer"
           element={
             <ProtectedRoute>
               <Layout>
                 <Footer />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/archive"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Archive />
               </Layout>
             </ProtectedRoute>
           }

@@ -13,6 +13,9 @@ export interface ChapterMetaData {
   title: string;
   content_type: ChapterContentTypeEnum;
   content_url?: string;
+  project_id?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface ChapterFormData extends Partial<Chapter> {}
@@ -25,7 +28,7 @@ export type GetChaptersBy =
   | "in_latest_releases"
   | "in_hero_carousel";
 
-export type SortChaptersBy = "created_at" | "order_index";
+export type SortChaptersBy = "created_at";
 
 export interface GetChaptersOpts
   extends GetTableOpts<

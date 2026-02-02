@@ -26,12 +26,12 @@ type WatchCarouselItem = Partial<Project> & { id: string };
 export default function WatchCarousel() {
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
-    null,
+    null
   );
   const [isLoadingEditItem, setIsLoadingEditItem] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<WatchCarouselItem | null>(
-    null,
+    null
   );
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderValue, setOrderValue] = useState<number | "">("");
@@ -57,7 +57,7 @@ export default function WatchCarousel() {
 
     // Find conflicting item
     const conflictingItem = carouselItems.find(
-      (i) => i.order_index === newIndex && i.id !== item.id,
+      (i) => i.order_index === newIndex && i.id !== item.id
     );
 
     try {
@@ -97,7 +97,7 @@ export default function WatchCarousel() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id, title, content_type, status, in_hero_carousel, poster_url, preview_url, rating, release_year, runtime_minutes, synopsis, notes, platform_name, audio_preview_url, order_index",
+          "id, title, content_type, status, in_hero_carousel, poster_url, preview_url, rating, release_year, runtime_minutes, synopsis, notes, platform_name, audio_preview_url, order_index, is_deleted"
         )
         .in("content_type", ["Film", "TV Show"])
         .eq("in_hero_carousel", true)
@@ -107,7 +107,9 @@ export default function WatchCarousel() {
         throw new Error(error.message || "Failed to fetch carousel items");
       }
 
-      return (data || []) as WatchCarouselItem[];
+      return ((data || []) as WatchCarouselItem[]).filter(
+        (item) => (item as any).is_deleted !== true
+      );
     },
   });
 
@@ -177,7 +179,7 @@ export default function WatchCarousel() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -197,7 +199,7 @@ export default function WatchCarousel() {
       queryClient.invalidateQueries({ queryKey: ["watch-carousel"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
-      toast.success("Carousel item deleted successfully!");
+      toast.success("Moved to archive.");
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete carousel item: ${error.message}`);
@@ -518,7 +520,13 @@ export default function WatchCarousel() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        description={`Are you sure you want to remove "${mediaToDelete?.title}" from the carousel? This action cannot be undone.`}
+        title="Move to archive?"
+        itemName={mediaToDelete?.title}
+        description={
+          mediaToDelete?.title
+            ? `Are you sure you want to move "${mediaToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+        }
         isDeleting={deleteMutation.isPending}
       />
     </div>

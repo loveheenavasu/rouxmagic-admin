@@ -50,7 +50,8 @@ export default function Watch() {
       }
 
       const response = await projectsAPI.get({
-        inValue: { key: "content_type", value: ["TV Show", "Film"] },
+        eq: eqFilters as any,
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] },
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
