@@ -6,7 +6,7 @@ export enum ChapterStatusEnum {
 }
 
 export enum ChapterContentTypeEnum {
-  Audio = "AudioBook",
+  Audio = "Audiobook",
 }
 
 export interface ChapterMetaData {
@@ -27,13 +27,7 @@ export interface ChapterMetaData {
 
 export interface ChapterFormData extends Partial<Chapter> {}
 
-export type GetChaptersBy =
-  | "content_type"
-  | "status"
-  | "in_now_playing"
-  | "in_coming_soon"
-  | "in_latest_releases"
-  | "in_hero_carousel";
+export type GetChaptersBy = keyof ChapterMetaData | "id";
 
 export type SortChaptersBy = "created_at" | "order_index";
 

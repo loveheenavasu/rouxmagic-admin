@@ -8,7 +8,8 @@ export enum Tables {
     Projects = "projects",
     Recipes = "recipes",
     Chapters = "chapters",
-    Footer = "footer"
+    Footer = "footer",
+    Pairings = "pairings"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {

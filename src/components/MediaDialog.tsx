@@ -22,7 +22,7 @@ import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { ContentTypeEnum, ProjectFormData, Flag } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
-import { Projects } from "@/api/integrations/supabase/projects/projects";
+import { Projects } from "@/api";
 
 interface MediaDialogProps {
   open: boolean;

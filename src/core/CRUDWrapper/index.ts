@@ -2,12 +2,28 @@ import { Callbacks, Flag, GetTableOpts, Response } from "@/types";
 import { APIResponse } from "../response";
 import { supabase } from "@/lib";
 
+interface TableBehaviour {
+  supports_soft_deletion?: boolean;
+}
+
 export class CRUDWrapper<
   Table,
   TableFormData,
   GetOptions extends GetTableOpts<any, any, any, any> = any
 > {
-  constructor(private readonly table_name: string) {}
+  constructor(
+    private readonly table_name: string,
+    private readonly behaviour: TableBehaviour = {
+      supports_soft_deletion: true,
+    }
+  ) {}
+
+  thisTable() {
+    return {
+      table_name: this.table_name,
+      table_behaviour: this.behaviour,
+    };
+  }
 
   async createOne(
     data: TableFormData,
@@ -25,7 +41,7 @@ export class CRUDWrapper<
           output: error,
         }).build();
       }
-      return new APIResponse(ApiData).build();
+      return new APIResponse(ApiData, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -59,7 +75,7 @@ export class CRUDWrapper<
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -69,20 +85,20 @@ export class CRUDWrapper<
     }
   }
 
-  async getByID(footerId: string, cbs?: Callbacks): Promise<Response> {
+  async getByID(tableId: string, cbs?: Callbacks): Promise<Response> {
     cbs?.onLoadingStateChange?.(true);
     try {
       const { data, error } = await supabase
         .from(this.table_name)
         .select("*")
-        .eq("id", footerId)
+        .eq("id", tableId)
         .maybeSingle();
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-      return new APIResponse(data).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -197,30 +213,35 @@ export class CRUDWrapper<
     }
   }
 
-   async toogleSoftDeleteOneByID(
-      tableId?: string,
-      intent?: boolean,
-      cbs?: Callbacks
-    ) {
-      cbs?.onLoadingStateChange?.(true);
-      try {
-        const { data, error } = await supabase
-          .from(this.table_name)
-          .update({
-            is_deleted: intent,
-            deleted_at: !!intent ? null : new Date().toISOString(),
-          })
-          .eq("id", tableId)
-          .select("*")
-          .maybeSingle();
-        if (error) {
-          return new APIResponse(null, Flag.APIError, { output: error }).build();
-        }
-        return new APIResponse(data, Flag.Success).build();
-      } catch (error) {
-        return new APIResponse(null, Flag.InternalError).build();
-      } finally {
-        cbs?.onLoadingStateChange?.(false);
-      }
+  async toogleSoftDeleteOneByID(
+    tableId: string,
+    intent: boolean,
+    cbs?: Callbacks
+  ) {
+    if (!this.behaviour.supports_soft_deletion) {
+      throw new Error(
+        `Table '${this.table_name}' doesn't support soft deletion.`
+      );
     }
+    cbs?.onLoadingStateChange?.(true);
+    try {
+      const { data, error } = await supabase
+        .from(this.table_name)
+        .update({
+          is_deleted: intent,
+          deleted_at: !!intent ? null : new Date().toISOString(),
+        })
+        .eq("id", tableId)
+        .select("*")
+        .maybeSingle();
+      if (error) {
+        return new APIResponse(null, Flag.APIError, { output: error }).build();
+      }
+      return new APIResponse(data, Flag.Success).build();
+    } catch (error) {
+      return new APIResponse(null, Flag.InternalError).build();
+    } finally {
+      cbs?.onLoadingStateChange?.(false);
+    }
+  }
 }
