@@ -238,15 +238,6 @@ export default function Watch() {
   const totalTVShows = mediaList.filter(
     (m) => m.content_type === "TV Show"
   ).length;
-  const avgRuntime =
-    mediaList.length > 0
-      ? Math.round(
-          mediaList
-            .filter((m) => m.runtime_minutes)
-            .reduce((acc, m) => acc + (m.runtime_minutes || 0), 0) /
-            (mediaList.filter((m) => m.runtime_minutes).length || 1)
-        )
-      : 0;
 
   if (error) {
     return (
