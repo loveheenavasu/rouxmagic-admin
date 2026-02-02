@@ -34,7 +34,10 @@ export default function RecipesPage() {
   const { data: categories = [] } = useQuery<string[]>({
     queryKey: ["recipe-categories"],
     queryFn: async () => {
-      const response = await recipesAPI.get({ eq: [], limit: 200 });
+      const response = await recipesAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        limit: 200,
+      });
 
       if (response.flag !== Flag.Success || !response.data) {
         return [];
@@ -56,10 +59,12 @@ export default function RecipesPage() {
   } = useQuery<Recipe[]>({
     queryKey: ["recipes", searchQuery, categoryFilter],
     queryFn: async () => {
-      const eqFilters =
-        categoryFilter !== "all"
+      const eqFilters = [
+        ...(categoryFilter !== "all"
           ? [{ key: "category" as const, value: categoryFilter }]
-          : [];
+          : []),
+        { key: "is_deleted" as any, value: false },
+      ];
 
       const response = await recipesAPI.get({
         eq: eqFilters,
@@ -286,7 +291,8 @@ export default function RecipesPage() {
                     </TableCell>
                   </TableRow>
                 ) : recipes.length > 0 ? (
-                  recipes?.filter((recipe: Recipe) => !recipe?.is_deleted)?.map((recipe: Recipe) => (
+                  recipes.map((recipe: Recipe) => (
+
                     <TableRow
                       key={recipe.id}
                       className="hover:bg-slate-50/50 transition-colors"

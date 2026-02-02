@@ -7,11 +7,11 @@ export enum ProjectStatusEnum {
 
 export enum ContentTypeEnum {
   Film = "Film",
-  TvShow = "TV Show",
   Song = "Song",
-  Audiobook = "Audiobook",
   Comic = "Comic",
   Book = "Book",
+  TvShow = "TV Show",
+  Audiobook = "Audiobook",
 }
 
 export interface ProjectMetaData {

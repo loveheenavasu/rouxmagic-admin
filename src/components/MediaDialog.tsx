@@ -23,15 +23,11 @@ import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { Chapter, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
 import { createBucketPath } from "@/helpers/constants/supabase";
-<<<<<<< HEAD
-import { Projects } from "@/api";
-=======
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { Chapters } from "@/api/integrations/supabase/chapters/chapters";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
->>>>>>> 80c549835055e7731d0062d0166b3f535cfc575d
 
 interface MediaDialogProps {
   open: boolean;
@@ -84,7 +80,10 @@ export default function MediaDialog({
     enabled: open && !!projectId && showChapters,
     queryFn: async () => {
       const response = await chaptersAPI.get({
-        eq: [{ key: "project_id" as any, value: audiobookId }],
+        eq: [
+          { key: "project_id" as any, value: projectId },
+          { key: "is_deleted" as any, value: false },
+        ],
         sort: "created_at",
         sortBy: "asc",
       });
@@ -93,6 +92,7 @@ export default function MediaDialog({
         const supabaseError = response.error?.output as
           | { message?: string }
           | undefined;
+
         throw new Error(
           supabaseError?.message ||
           response.error?.message ||
@@ -100,16 +100,12 @@ export default function MediaDialog({
         );
       }
 
-      const rows = Array.isArray(response.data)
-        ? (response.data as any[])
-        : ([response.data].filter(Boolean) as any[]);
-
-      // Hide deleted chapters if the schema supports soft-delete
-      return rows.filter(
-        (r) => !("is_deleted" in r) || r.is_deleted !== true
-      ) as Chapter[];
+      return Array.isArray(response.data)
+        ? response.data
+        : [response.data];
     },
   });
+
 
   const createChapterMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -128,7 +124,7 @@ export default function MediaDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["chapters-by-project", audiobookId],
+        queryKey: ["chapters-by-project", projectId],
       });
       setChapterDialogOpen(false);
       setSelectedChapter(null);
@@ -154,7 +150,7 @@ export default function MediaDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["chapters-by-project", audiobookId],
+        queryKey: ["chapters-by-project", projectId],
       });
       setChapterDialogOpen(false);
       setSelectedChapter(null);
@@ -180,7 +176,7 @@ export default function MediaDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["chapters-by-project", audiobookId],
+        queryKey: ["chapters-by-project", projectId],
       });
       setDeleteChapterDialogOpen(false);
       setChapterToDelete(null);
@@ -327,8 +323,9 @@ export default function MediaDialog({
   const submitChapter = async (data: any) => {
     const payload = {
       ...data,
-      project_id: audiobookId,
+      project_id: projectId,
     };
+
     if (selectedChapter?.id) {
       await updateChapterMutation.mutateAsync({
         id: selectedChapter.id,
@@ -338,6 +335,7 @@ export default function MediaDialog({
       await createChapterMutation.mutateAsync(payload);
     }
   };
+
 
   const renderField = (key: string, value: any) => {
     const label = key
@@ -634,18 +632,20 @@ export default function MediaDialog({
               </div>
             </div>
 
-            {/* Chapters section (only for Audiobooks) */}
-            {isAudiobook && (
+            {/* Chapters section (for Audiobooks & TV Shows) */}
+            {showChapters && (
               <ChaptersSection
-                audiobookId={audiobookId}
+                projectId={projectId}
                 chapters={chapters}
                 chaptersLoading={chaptersLoading}
                 chaptersError={chaptersError as Error | null}
                 onAddChapter={openAddChapter}
                 onEditChapter={openEditChapter}
                 onDeleteChapter={openDeleteChapter}
+                parentContentType={formData.content_type}
               />
             )}
+
 
             <div className="flex justify-end gap-3 pb-2 pt-10">
               <Button
@@ -679,7 +679,8 @@ export default function MediaDialog({
                 createChapterMutation.isPending ||
                 updateChapterMutation.isPending
               }
-              defaultProjectId={audiobookId ?? null}
+              defaultProjectId={projectId ?? null}
+              parentContentType={formData.content_type}
             />
 
             <DeleteConfirmationDialog

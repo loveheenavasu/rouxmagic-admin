@@ -48,7 +48,10 @@ export default function Watch() {
       }
 
       const response = await projectsAPI.get({
-        eq: eqFilters,
+        eq: [
+          ...eqFilters,
+          { key: "is_deleted" as any, value: false }
+        ] as any,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -146,7 +149,7 @@ export default function Watch() {
     },
   });
 
-  const filteredMedia = mediaList.filter((item) => item.is_deleted !== true);
+  const filteredMedia = mediaList;
 
   const displayFields =
     mediaList.length > 0

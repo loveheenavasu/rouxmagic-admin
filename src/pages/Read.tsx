@@ -49,6 +49,7 @@ export default function Read() {
         .from("projects")
         .select("*")
         .in("content_type", READ_TYPES as any)
+        .eq("is_deleted", false)
         .order("order_index", { ascending: true });
 
       if (statusFilter !== "all") {
@@ -72,9 +73,7 @@ export default function Read() {
         throw new Error(error.message || "Failed to fetch read content");
       }
 
-      return ((data || []) as Project[]).filter(
-        (item) => (item as any).is_deleted !== true
-      );
+      return (data || []) as Project[];
     },
   });
 
@@ -173,18 +172,18 @@ export default function Read() {
   const displayFields =
     items.length > 0
       ? Object.keys(items[0]).filter(
-          (key) =>
-            ![
-              "id",
-              "poster_url",
-              "preview_url",
-              "platform_url",
-              "order_index",
-              "created_at",
-              "updated_at",
-              "user_id",
-            ].includes(key)
-        )
+        (key) =>
+          ![
+            "id",
+            "poster_url",
+            "preview_url",
+            "platform_url",
+            "order_index",
+            "created_at",
+            "updated_at",
+            "user_id",
+          ].includes(key)
+      )
       : ["title", "content_type", "status", "platform_name"];
 
   const handleAddNew = () => {
@@ -314,17 +313,17 @@ export default function Read() {
                     <div className="flex justify-end gap-2">
                       {(item.content_type === ContentTypeEnum.Audiobook ||
                         (item as any).content_type === "AudioBook") && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            navigate(`/chapters?projectId=${item.id}`)
-                          }
-                          title="Chapters"
-                        >
-                          <List className="h-4 w-4" />
-                        </Button>
-                      )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              navigate(`/chapters?projectId=${item.id}`)
+                            }
+                            title="Chapters"
+                          >
+                            <List className="h-4 w-4" />
+                          </Button>
+                        )}
                       <Button
                         variant="ghost"
                         size="icon"

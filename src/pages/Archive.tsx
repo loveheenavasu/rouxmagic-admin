@@ -13,7 +13,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Flag, Project, Recipe, Footer } from "@/types";
+import { Flag, Project, Recipe, Footer, Chapter } from "@/types";
 import {
   Card,
   CardContent,
@@ -30,19 +30,21 @@ import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Footers } from "@/api/integrations/supabase/footer/footer";
+import { Chapters } from "@/api/integrations/supabase/chapters/chapters";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 const projectsAPI = Projects as Required<typeof Projects>;
 const footersAPI = Footers as Required<typeof Footers>;
+const chaptersAPI = Chapters as Required<typeof Chapters>;
 
-export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer";
+export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer" | "chapter";
 
 export interface ArchivedItem {
   source: ArchiveSource;
   id: string;
   title: string;
   subtitle?: string;
-  raw: Recipe | Project | Footer; // <- updated
+  raw: Recipe | Project | Footer | Chapter;
 }
 
 function getProjectSource(contentType: string): ArchiveSource {
@@ -66,7 +68,8 @@ const SOURCE_LABELS: Record<ArchiveSource, string> = {
   watch: "Watch",
   listen: "Listen",
   read: "Read",
-  footer: "Footer", // <- new
+  footer: "Footer",
+  chapter: "Chapter",
 };
 
 const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
@@ -74,7 +77,8 @@ const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
   watch: Film,
   listen: Music,
   read: BookOpen,
-  footer: ArchiveIcon, // <- using archive icon
+  footer: ArchiveIcon,
+  chapter: BookOpen,
 };
 
 const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
@@ -82,7 +86,8 @@ const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
   watch: "bg-violet-100 text-violet-800 hover:bg-violet-100",
   listen: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
   read: "bg-sky-100 text-sky-800 hover:bg-sky-100",
-  footer: "bg-gray-100 text-gray-800 hover:bg-gray-100", // <- new
+  footer: "bg-gray-100 text-gray-800 hover:bg-gray-100",
+  chapter: "bg-amber-100 text-amber-800 hover:bg-amber-100",
 };
 
 export default function Archive() {
@@ -97,6 +102,7 @@ export default function Archive() {
     { data: recipes = [], isLoading: recipesLoading, error: recipesError },
     { data: projects = [], isLoading: projectsLoading, error: projectsError },
     { data: footers = [], isLoading: footersLoading, error: footersError },
+    { data: chapters = [], isLoading: chaptersLoading, error: chaptersError },
   ] = useQueries({
     queries: [
       {
@@ -159,11 +165,29 @@ export default function Archive() {
           return Array.isArray(response.data) ? response.data : [response.data];
         },
       },
+      {
+        queryKey: ["archived-chapters", searchQuery],
+        queryFn: async () => {
+          const response = await chaptersAPI.get({
+            eq: [{ key: "is_deleted", value: true }],
+            sort: "created_at",
+            sortBy: "dec",
+            search: searchQuery || undefined,
+            searchFields: ["title"],
+          });
+          if (response.flag !== Flag.Success) {
+            throw new Error(
+              response.error?.message || "Failed to fetch chapters"
+            );
+          }
+          return Array.isArray(response.data) ? response.data : [response.data];
+        },
+      },
     ],
   });
 
   const archivedItems = useMemo((): ArchivedItem[] => {
-    const recipeItems: ArchivedItem[] = recipes.map((r) => ({
+    const recipeItems: ArchivedItem[] = (recipes as Recipe[]).map((r) => ({
       source: "recipe",
       id: r.id,
       title: r.title,
@@ -186,7 +210,15 @@ export default function Archive() {
       raw: f,
     }));
 
-    const combined = [...recipeItems, ...projectItems, ...footerItems];
+    const chapterItems: ArchivedItem[] = (chapters as Chapter[]).map((c) => ({
+      source: "chapter",
+      id: c.id,
+      title: c.title,
+      subtitle: (c as any).content_type,
+      raw: c,
+    }));
+
+    const combined = [...recipeItems, ...projectItems, ...footerItems, ...chapterItems];
     combined.sort((a, b) => {
       const aDate =
         "deleted_at" in a.raw && a.raw.deleted_at
@@ -199,10 +231,10 @@ export default function Archive() {
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
     return combined;
-  }, [recipes, projects, footers]);
+  }, [recipes, projects, footers, chapters]);
 
-  const isLoading = recipesLoading || projectsLoading || footersLoading;
-  const error = recipesError || projectsError || footersError;
+  const isLoading = recipesLoading || projectsLoading || footersLoading || chaptersLoading;
+  const error = recipesError || projectsError || footersError || chaptersError;
 
   const restoreMutation = useMutation({
     mutationFn: async (item: ArchivedItem) => {
@@ -216,6 +248,11 @@ export default function Archive() {
         if (res.flag !== Flag.Success) {
           throw new Error(res.error?.message || "Failed to restore");
         }
+      } else if (item.source === "chapter") {
+        const res = await chaptersAPI.toogleSoftDeleteOneByID(item.id, false);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+          throw new Error(res.error?.message || "Failed to restore");
+        }
       } else {
         const res = await projectsAPI.toogleSoftDeleteOneByID(item.id, false);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -226,7 +263,8 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
-      queryClient.invalidateQueries({ queryKey: ["archived-footers"] }); // <- new
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
       toast.success(`"${item.title}" restored.`);
     },
     onError: (err: Error) => {
@@ -246,6 +284,11 @@ export default function Archive() {
         if (res.flag !== Flag.Success) {
           throw new Error(res.error?.message || "Failed to delete");
         }
+      } else if (item.source === "chapter") {
+        const res = await chaptersAPI.deleteOneByIDPermanent(item.id);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+          throw new Error(res.error?.message || "Failed to delete");
+        }
       } else {
         const res = await projectsAPI.deleteOneByIDPermanent(item.id);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -256,7 +299,8 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
-      queryClient.invalidateQueries({ queryKey: ["archived-footers"] }); // <- new
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
       toast.success(`"${item.title}" permanently deleted.`);
     },
     onError: (err: Error) => {
@@ -295,7 +339,7 @@ export default function Archive() {
               Archive
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Items moved to the bin from Recipe, Watch, Listen, and Read.
+              Items moved to the bin from Recipe, Watch, Listen, Read, and Chapters.
               Restore or delete permanently.
             </p>
           </div>

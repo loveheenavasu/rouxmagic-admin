@@ -109,7 +109,7 @@ export default function FooterDialog({
             <Input
               id="icon_url"
               type="text"
-              value={formData.icon_url ?? ""}
+              value={formData?.icon_url?.toUpperCase() ?? ""}
               onChange={(e) => handleChange("icon_url", e.target.value)}
               placeholder="https://... (optional)"
               className="mt-1.5"
