@@ -40,7 +40,7 @@ const emptyForm: ContentFormData = {
   runtime_minutes: undefined,
   release_year: undefined,
   youtube_id: "",
-  order_index: undefined,
+
 };
 
 export default function ChapterDialog({
@@ -120,23 +120,7 @@ export default function ChapterDialog({
               />
             </div>
 
-            {isAudiobook && (
-              <div>
-                <Label htmlFor="order_index" className="font-medium">
-                  Order Index
-                </Label>
-                <Input
-                  id="order_index"
-                  type="number"
-                  value={formData.order_index ?? ""}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, order_index: parseInt(e.target.value) || undefined }))
-                  }
-                  placeholder="1"
-                  className="mt-1.5"
-                />
-              </div>
-            )}
+
 
             {isTvShow && (
               <>
