@@ -16,8 +16,6 @@ import Recipes from "./pages/recipes";
 import RecipesCarousel from "./pages/recipes/RecipesCarousel";
 import Listen from "./pages/Listen";
 import Read from "./pages/Read";
-import Users from "./pages/Users";
-import Settings from "./pages/Settings";
 import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
 
