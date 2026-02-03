@@ -19,6 +19,7 @@ import Read from "./pages/Read";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Archive from "./pages/Archive";
+import Footer from "./pages/Footer";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -119,6 +120,26 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Read />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* <Route
+          path="/chapters"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Chapters />
+              </Layout>
+            </ProtectedRoute>
+          }
+        /> */}
+        <Route
+          path="/footer"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Footer />
               </Layout>
             </ProtectedRoute>
           }

@@ -29,7 +29,7 @@ const HomePage = () => {
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
-    null,
+    null
   );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
@@ -131,7 +131,10 @@ const HomePage = () => {
         return [];
       }
 
-      return Array.isArray(response.data) ? (response.data as Project[]) : [];
+      const rows = Array.isArray(response.data)
+        ? (response.data as Project[])
+        : [];
+      return rows.filter((item) => (item as any).is_deleted !== true);
     },
   });
 
@@ -173,6 +176,7 @@ const HomePage = () => {
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       console.log("Update payload:", { id, data });
       const response = await projectsAPI.updateOneByID(id, data);
+
       console.log("Update response:", response);
       if (
         (response.flag !== Flag.Success &&
@@ -207,7 +211,7 @@ const HomePage = () => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -229,7 +233,7 @@ const HomePage = () => {
       queryClient.invalidateQueries({ queryKey: ["unique-types"] });
       setDeleteDialogOpen(false);
       setMediaToDelete(null);
-      toast.success("Content deleted successfully!");
+      toast.success("Moved to archive.");
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete content: ${error.message}`);
@@ -239,17 +243,17 @@ const HomePage = () => {
   const displayFields =
     projects.length > 0
       ? Object.keys(projects[0]).filter(
-          (key) =>
-            ![
-              "id",
-              "poster_url",
-              "preview_url",
-              "platform_url",
-              "order_index",
-              "created_at",
-              "updated_at",
-            ].includes(key),
-        )
+        (key) =>
+          ![
+            "id",
+            "poster_url",
+            "preview_url",
+            "platform_url",
+            "order_index",
+            "created_at",
+            "updated_at",
+          ].includes(key)
+      )
       : ["title", "content_type", "status", "release_year", "platform"];
 
   const handleAddNew = () => {
@@ -292,10 +296,10 @@ const HomePage = () => {
     );
   }
 
-   const totalFilms = projects.filter((m) => m.content_type === "Film").length;
-   const totalTVShows = projects.filter(
-     (m) => m.content_type === "TV Show",
-   ).length;
+  const totalFilms = projects.filter((m) => m.content_type === "Film").length;
+  const totalTVShows = projects.filter(
+    (m) => m.content_type === "TV Show"
+  ).length;
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <StatsRow

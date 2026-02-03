@@ -48,7 +48,10 @@ export default function Watch() {
       }
 
       const response = await projectsAPI.get({
-        eq: eqFilters,
+        eq: [
+          ...eqFilters,
+          { key: "is_deleted" as any, value: false }
+        ] as any,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -127,7 +130,7 @@ export default function Watch() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.deleteOneByIDPermanent(id);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -211,7 +214,6 @@ export default function Watch() {
     "preview_type",
     "audio_url",
     "audio_path",
-    "youtube_id",
 
     // Metadata / feeds
     "slug",
@@ -235,7 +237,7 @@ export default function Watch() {
   // Calculate stats
   const totalFilms = mediaList.filter((m) => m.content_type === "Film").length;
   const totalTVShows = mediaList.filter(
-    (m) => m.content_type === "TV Show",
+    (m) => m.content_type === "TV Show"
   ).length;
 
   if (error) {

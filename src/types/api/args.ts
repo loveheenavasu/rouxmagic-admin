@@ -1,9 +1,20 @@
-export interface OnSuccessCallback<Args = unknown>{
-    onSuccess?:(data: Args) => void | Promise<void>
+import { OnLoadingStateChangeCallback, ValidatorCallback } from "./cb";
+
+export type CommonCBArgs = {
+  error?: unknown;
+  data?: any;
+  message?: string;
+  flag?: any;
+};
+
+export interface CBArgs {
+  onSuccessArgs: CommonCBArgs;
+  onFailArgs: CommonCBArgs;
+  handleLoadingState: boolean;
 }
-export interface OnFailCallback<Args = unknown>{
-    onFail?:(err: Args) => void | Promise<void>
-}
-export interface OnLoadingStateChangeCallback{
-    onLoadingStateChange?:(state:boolean) => void
-}
+
+// export interface Callbacks<Args extends CBArgs = CBArgs>
+//   extends OnSuccessCallback<Args["onSuccessArgs"]>,
+//     OnFailCallback<Args["onFailArgs"]>,
+//     OnLoadingStateChangeCallback {}
+export interface Callbacks extends OnLoadingStateChangeCallback, ValidatorCallback {}
