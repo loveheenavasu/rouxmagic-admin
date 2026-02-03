@@ -27,6 +27,8 @@ import { Projects,Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
+import PairingsSection from "@/components/PairingsSection";
+import { PairingSourceEnum } from "@/types";
 
 interface MediaDialogProps {
   open: boolean;
@@ -648,6 +650,15 @@ export default function MediaDialog({
                 onEditChapter={openEditChapter}
                 onDeleteChapter={openDeleteChapter}
                 parentContentType={formData.content_type}
+              />
+            )}
+
+
+            {/* Pairings section */}
+            {projectId && (
+              <PairingsSection
+                sourceId={projectId}
+                sourceRef={formData.content_type as unknown as PairingSourceEnum}
               />
             )}
 

@@ -1,7 +1,7 @@
 import { CommonSchema, GetTableOpts } from "./common";
 
 export enum PairingSourceEnum {
- Film = "Film",
+  Film = "Film",
   TvShow = "TV Show",
   Song = "Song",
   Audiobook = "Audiobook",
@@ -11,10 +11,12 @@ export enum PairingSourceEnum {
 }
 
 export interface PairingsMetaData {
-source_id:string;
-source_type:PairingSourceEnum;
-target_id:string;
-target_type:PairingSourceEnum
+  source_id: string;
+  source_ref: PairingSourceEnum;
+  target_id: string;
+  target_ref: PairingSourceEnum;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface PairingFormData extends PairingsMetaData {

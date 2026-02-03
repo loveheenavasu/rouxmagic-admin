@@ -13,12 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeCategory, RecipeFormData } from "@/types";
+import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe } from "@/types";
+import PairingsSection from "@/components/PairingsSection";
 
 interface RecipeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  recipe?: RecipeFormData | null;
+  recipe?: Recipe | null;
   onSubmit: (data: RecipeFormData) => Promise<void>;
   isLoading?: boolean;
 }
@@ -171,8 +172,7 @@ export default function RecipeDialog({
                         toast.success("Image uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Image upload failed: ${
-                            error?.message || "Unknown error"
+                          `Image upload failed: ${error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -382,6 +382,14 @@ export default function RecipeDialog({
               />
             </div>
           </div>
+
+          {/* Pairings section */}
+          {recipe?.id && (
+            <PairingsSection
+              sourceId={recipe.id}
+              sourceRef={PairingSourceEnum.Recipe}
+            />
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button
