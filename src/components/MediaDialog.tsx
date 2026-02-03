@@ -21,10 +21,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { Chapter, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
-import { createBucketPath } from "@/helpers/constants/supabase";
-import { Projects } from "@/api/integrations/supabase/projects/projects";
-import { Chapters } from "@/api/integrations/supabase/chapters/chapters";
+import { Content, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
+import { createBucketPath } from "@/helpers";
+import { Projects,Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
@@ -39,7 +38,7 @@ interface MediaDialogProps {
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
-const chaptersAPI = Chapters as Required<typeof Chapters>;
+const chaptersAPI = Contents as Required<typeof Contents>;
 
 export default function MediaDialog({
   open,
@@ -59,9 +58,9 @@ export default function MediaDialog({
 
   // Chapters UI state (only relevant for Audiobooks)
   const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
-  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<Content | null>(null);
   const [deleteChapterDialogOpen, setDeleteChapterDialogOpen] = useState(false);
-  const [chapterToDelete, setChapterToDelete] = useState<Chapter | null>(null);
+  const [chapterToDelete, setChapterToDelete] = useState<Content | null>(null);
 
   const projectId = (media as any)?.id as string | undefined;
   const showChapters =
@@ -75,7 +74,7 @@ export default function MediaDialog({
     data: chapters = [],
     isLoading: chaptersLoading,
     error: chaptersError,
-  } = useQuery<Chapter[]>({
+  } = useQuery<Content[]>({
     queryKey: ["chapters-by-project", projectId],
     enabled: open && !!projectId && showChapters,
     queryFn: async () => {
@@ -100,9 +99,15 @@ export default function MediaDialog({
         );
       }
 
-      return Array.isArray(response.data)
-        ? response.data
-        : [response.data];
+
+      const rows = Array.isArray(response.data)
+        ? (response.data as any[])
+        : ([response.data].filter(Boolean) as any[]);
+
+      // Hide deleted chapters if the schema supports soft-delete
+      return rows.filter(
+        (r) => !("is_deleted" in r) || r.is_deleted !== true
+      ) as Content[];
     },
   });
 
@@ -310,12 +315,12 @@ export default function MediaDialog({
     setChapterDialogOpen(true);
   };
 
-  const openEditChapter = (c: Chapter) => {
+  const openEditChapter = (c: Content) => {
     setSelectedChapter(c);
     setChapterDialogOpen(true);
   };
 
-  const openDeleteChapter = (c: Chapter) => {
+  const openDeleteChapter = (c: Content) => {
     setChapterToDelete(c);
     setDeleteChapterDialogOpen(true);
   };

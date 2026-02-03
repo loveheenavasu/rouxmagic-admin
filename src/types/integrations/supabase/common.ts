@@ -7,7 +7,7 @@ export interface CommonSchema {
 export enum Tables {
     Projects = "projects",
     Recipes = "recipes",
-    Chapters = "chapters",
+    Contents = "contents",
     Footer = "footer",
     Pairings = "pairings"
 }

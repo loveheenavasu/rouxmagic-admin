@@ -13,7 +13,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Flag, Project, Recipe, Footer, Chapter } from "@/types";
+import { Flag, Project, Recipe, Footer, Content } from "@/types";
 import {
   Card,
   CardContent,
@@ -30,12 +30,12 @@ import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Footers } from "@/api/integrations/supabase/footer/footer";
-import { Chapters } from "@/api/integrations/supabase/chapters/chapters";
+import { Contents } from "@/api";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 const projectsAPI = Projects as Required<typeof Projects>;
 const footersAPI = Footers as Required<typeof Footers>;
-const chaptersAPI = Chapters as Required<typeof Chapters>;
+const chaptersAPI = Contents as Required<typeof Contents>;
 
 export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer" | "chapter";
 
@@ -44,7 +44,7 @@ export interface ArchivedItem {
   id: string;
   title: string;
   subtitle?: string;
-  raw: Recipe | Project | Footer | Chapter;
+  raw: Recipe | Project | Footer | Content;
 }
 
 function getProjectSource(contentType: string): ArchiveSource {
@@ -210,7 +210,7 @@ export default function Archive() {
       raw: f,
     }));
 
-    const chapterItems: ArchivedItem[] = (chapters as Chapter[]).map((c) => ({
+    const chapterItems: ArchivedItem[] = (chapters as Content[]).map((c) => ({
       source: "chapter",
       id: c.id,
       title: c.title,

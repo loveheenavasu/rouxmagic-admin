@@ -5,13 +5,13 @@ export enum ChapterStatusEnum {
   ComingSoon = "coming_soon",
 }
 
-export enum ChapterContentTypeEnum {
+export enum ContentContentTypeEnum {
   Audio = "Audiobook",
 }
 
-export interface ChapterMetaData {
+export interface ContentMetaData {
   title: string;
-  content_type: ChapterContentTypeEnum;
+  content_type: ContentContentTypeEnum;
   content_url?: string;
   project_id?: string;
   poster_url?: string;
@@ -28,18 +28,18 @@ export interface ChapterMetaData {
   deleted_at?: string | null;
 }
 
-export interface ChapterFormData extends Partial<Chapter> {}
+export interface ContentFormData extends Partial<Content> {}
 
-export type GetChaptersBy = keyof ChapterMetaData | "id";
+export type GetContentsBy = keyof ContentMetaData | "id";
 
-export type SortChaptersBy = "created_at";
+export type SortContentsBy = "created_at";
 
-export interface GetChaptersOpts
+export interface GetContentsOpts
   extends GetTableOpts<
-    GetChaptersBy,
-    SortChaptersBy,
-    ChapterMetaData,
+    GetContentsBy,
+    SortContentsBy,
+    ContentMetaData,
     unknown
   > {}
 
-export interface Chapter extends CommonSchema, ChapterMetaData {}
+export interface Content extends CommonSchema, ContentMetaData {}

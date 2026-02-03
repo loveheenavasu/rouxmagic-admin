@@ -7,17 +7,17 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Chapter } from "@/types";
+import { Content } from "@/types";
 import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
 
 interface ChaptersSectionProps {
     projectId?: string;
-    chapters: Chapter[];
+    chapters: Content[];
     chaptersLoading: boolean;
     chaptersError: Error | null;
     onAddChapter: () => void;
-    onEditChapter: (chapter: Chapter) => void;
-    onDeleteChapter: (chapter: Chapter) => void;
+    onEditChapter: (chapter: Content) => void;
+    onDeleteChapter: (chapter: Content) => void;
     parentContentType?: string;
 }
 

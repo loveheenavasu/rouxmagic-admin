@@ -60,7 +60,7 @@ export class CRUDWrapper<
         };
       }
 
-      const newPayload = deleteUnwantedValues(payload, ["undefined"]);
+      const newPayload = deleteUnwantedValues(payload, ["undefined","emptystrings"]);
 
       const { data: apiData, error } = await supabase
         .from(this.table_name)

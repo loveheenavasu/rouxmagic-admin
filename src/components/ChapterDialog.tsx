@@ -9,26 +9,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
-import { ChapterContentTypeEnum, ChapterFormData, ContentTypeEnum } from "@/types";
+import { ContentContentTypeEnum, ContentFormData, ContentTypeEnum } from "@/types";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
+
 
 interface ChapterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter?: ChapterFormData | null;
-  onSubmit: (data: ChapterFormData) => Promise<void>;
+  chapter?: ContentFormData | null;
+  onSubmit: (data: ContentFormData) => Promise<void>;
   isLoading?: boolean;
   defaultProjectId?: string | null;
   parentContentType?: string;
 }
 
-const emptyForm: ChapterFormData = {
+const emptyForm: ContentFormData = {
   title: "",
-  content_type: ChapterContentTypeEnum.Audio,
+  content_type: ContentContentTypeEnum.Audio,
   content_url: "",
   project_id: "",
   poster_url: "",
@@ -52,9 +52,10 @@ export default function ChapterDialog({
   defaultProjectId,
   parentContentType,
 }: ChapterDialogProps) {
-  const [formData, setFormData] = useState<ChapterFormData>(emptyForm);
+  const [formData, setFormData] = useState<ContentFormData>(emptyForm);
   const [isUploading, setIsUploading] = useState(false);
   const [isThumbnailUploading, setIsThumbnailUploading] = useState(false);
+
 
   useEffect(() => {
     if (!open) return;
@@ -154,7 +155,6 @@ export default function ChapterDialog({
                 </div>
               </>
             )}
-
             {isAudiobook && (
               <div>
                 <Label htmlFor="platform" className="font-medium">
