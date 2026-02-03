@@ -5,8 +5,6 @@ export enum PairingSourceEnum {
   TvShow = "TV Show",
   Song = "Song",
   Audiobook = "Audiobook",
-  Comic = "Comic",
-  Book = "Book",
   Recipe = "Recipe"
 }
 

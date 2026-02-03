@@ -17,11 +17,12 @@ export interface RecipeMetadata {
   suggested_pairings: string | null;
   cook_time_estimate: string | null;
   preview_url: string;
+  order_index?: number;
   is_deleted: boolean;
   deleted_at: string | null;
 }
 
-export type SortRecipesBy = "created_at";
+export type SortRecipesBy = "created_at" | "order_index";
 
 export type SearchableRecipeField = "title";
 export type GetRecipesBy = "category" | "is_deleted";

@@ -14,7 +14,6 @@ export interface ContentMetaData {
   content_type: ContentContentTypeEnum;
   content_url?: string;
   project_id?: string;
-  poster_url?: string;
   platform?: string;
   episode_number?: number;
   season_number?: number;
@@ -24,6 +23,7 @@ export interface ContentMetaData {
   runtime_minutes?: number;
   release_year?: number;
   youtube_id?: string;
+  order_index?: number;
   is_deleted?: boolean;
   deleted_at?: string | null;
 }

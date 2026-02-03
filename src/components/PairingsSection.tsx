@@ -37,6 +37,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
     const [targetRef, setTargetRef] = useState<PairingSourceEnum>(PairingSourceEnum.Recipe);
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     // 1. Fetch existing pairings
     const { data: existingPairings = [], isLoading: pairingsLoading } = useQuery<Pairing[]>({
@@ -44,10 +45,9 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
         queryFn: async () => {
             const response = await pairingsAPI.get({
                 eq: [
-                    { key: "source_id" as any, value: sourceId },
-                    { key: "source_ref" as any, value: sourceRef },
                     { key: "is_deleted" as any, value: false },
                 ],
+                or: `source_id.eq.${sourceId},target_id.eq.${sourceId}`
             });
             if (response.flag !== Flag.Success || !response.data) return [] as Pairing[];
             const data = Array.isArray(response.data) ? response.data : [response.data];
@@ -65,13 +65,21 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
             const results: any[] = [];
 
             // Group by target type to minimize API calls
-            const projectIds = existingPairings
-                .filter((p: Pairing) => p.target_ref !== PairingSourceEnum.Recipe)
-                .map((p: Pairing) => p.target_id);
+            const pairedItemData = existingPairings.map(p => {
+                const isCurrentSource = p.source_id === sourceId;
+                return {
+                    id: isCurrentSource ? p.target_id : p.source_id,
+                    ref: isCurrentSource ? p.target_ref : p.source_ref
+                };
+            });
 
-            const recipeIds = existingPairings
-                .filter((p: Pairing) => p.target_ref === PairingSourceEnum.Recipe)
-                .map((p: Pairing) => p.target_id);
+            const projectIds = pairedItemData
+                .filter(p => p.ref !== PairingSourceEnum.Recipe)
+                .map(p => p.id);
+
+            const recipeIds = pairedItemData
+                .filter(p => p.ref === PairingSourceEnum.Recipe)
+                .map(p => p.id);
 
             if (projectIds.length > 0) {
                 const res = await projectsAPI.get({
@@ -102,15 +110,14 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
     const { data: searchResults = [] } = useQuery({
         queryKey: ["pairing-search", targetRef, searchQuery],
         queryFn: async () => {
-            if (!searchQuery || searchQuery.length < 2) return [];
-
             setIsSearching(true);
             try {
                 if (targetRef === PairingSourceEnum.Recipe) {
                     const res = await recipesAPI.get({
-                        search: searchQuery,
-                        searchFields: ["title"],
-                        eq: [{ key: "is_deleted" as any, value: false }]
+                        search: searchQuery || undefined,
+                        searchFields: searchQuery ? ["title"] : undefined,
+                        eq: [{ key: "is_deleted" as any, value: false }],
+                        limit: 50
                     });
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
@@ -118,12 +125,13 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     }
                 } else {
                     const res = await projectsAPI.get({
-                        search: searchQuery,
-                        searchFields: ["title"],
+                        search: searchQuery || undefined,
+                        searchFields: searchQuery ? ["title"] : undefined,
                         eq: [
                             { key: "content_type" as any, value: targetRef as any },
                             { key: "is_deleted" as any, value: false }
-                        ]
+                        ],
+                        limit: 50
                     } as any);
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
@@ -135,13 +143,16 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                 setIsSearching(false);
             }
         },
-        enabled: searchQuery.length >= 2,
+        enabled: isDropdownOpen,
     });
 
     const createPairingMutation = useMutation({
         mutationFn: async (targetId: string) => {
             // Prevent duplicate pairings
-            if (existingPairings && existingPairings.some((p: Pairing) => p.target_id === targetId)) {
+            if (existingPairings && existingPairings.some((p: Pairing) =>
+                (p.source_id === sourceId && p.target_id === targetId) ||
+                (p.source_id === targetId && p.target_id === sourceId)
+            )) {
                 throw new Error("Already paired");
             }
 
@@ -181,8 +192,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
             case PairingSourceEnum.TvShow: return <Film className="h-4 w-4" />;
             case PairingSourceEnum.Song: return <Music className="h-4 w-4" />;
             case PairingSourceEnum.Audiobook:
-            case PairingSourceEnum.Book:
-            case PairingSourceEnum.Comic: return <BookOpen className="h-4 w-4" />;
             default: return <Film className="h-4 w-4" />;
         }
     };
@@ -194,8 +203,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
             case PairingSourceEnum.TvShow: return "bg-violet-100 text-violet-800";
             case PairingSourceEnum.Song: return "bg-emerald-100 text-emerald-800";
             case PairingSourceEnum.Audiobook:
-            case PairingSourceEnum.Book:
-            case PairingSourceEnum.Comic: return "bg-sky-100 text-sky-800";
             default: return "bg-slate-100 text-slate-800";
         }
     };
@@ -223,7 +230,10 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     </div>
                 ) : (
                     existingPairings.map((pairing: Pairing) => {
-                        const item = pairedItems.find((i: any) => i.id === pairing.target_id);
+                        const isCurrentSource = pairing.source_id === sourceId;
+                        const pairedItemId = isCurrentSource ? pairing.target_id : pairing.source_id;
+                        const pairedItemRef = isCurrentSource ? pairing.target_ref : pairing.source_ref;
+                        const item = pairedItems.find((i: any) => i.id === pairedItemId);
                         return (
                             <Card key={pairing.id} className="overflow-hidden border-slate-200 hover:shadow-sm transition-shadow">
                                 <CardContent className="p-3">
@@ -232,9 +242,9 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                             <p className="font-semibold text-sm truncate" title={item?.title || "Unknown"}>
                                                 {item?.title || "Unknown Item"}
                                             </p>
-                                            <Badge variant="secondary" className={cn("mt-1.5 text-[10px] h-5", getBadgeClass(pairing.target_ref))}>
-                                                {getSourceIcon(pairing.target_ref)}
-                                                <span className="ml-1">{pairing.target_ref}</span>
+                                            <Badge variant="secondary" className={cn("mt-1.5 text-[10px] h-5", getBadgeClass(pairedItemRef))}>
+                                                {getSourceIcon(pairedItemRef)}
+                                                <span className="ml-1">{pairedItemRef}</span>
                                             </Badge>
                                         </div>
                                         <Button
@@ -286,6 +296,8 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                 placeholder={`Search ${targetRef.toLowerCase()}s...`}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => setIsDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
                                 className="pl-10 h-10 bg-white"
                             />
                             {isSearching && (
@@ -296,7 +308,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                         </div>
 
                         {/* Search Results Dropdown */}
-                        {searchQuery.length >= 2 && (
+                        {isDropdownOpen && (
                             <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
                                 {searchResults.length === 0 ? (
                                     <div className="p-4 text-center text-sm text-slate-500">

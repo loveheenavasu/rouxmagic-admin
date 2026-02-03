@@ -214,7 +214,6 @@ export default function Watch() {
     "preview_type",
     "audio_url",
     "audio_path",
-    "youtube_id",
 
     // Metadata / feeds
     "slug",

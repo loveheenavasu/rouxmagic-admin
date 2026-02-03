@@ -24,6 +24,55 @@ export default function RecipesCarousel() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [orderValue, setOrderValue] = useState<number | "">("");
+
+  const startEditOrder = (item: Recipe) => {
+    setEditingOrderId(item.id);
+    setOrderValue(item.order_index ?? "");
+  };
+
+  const cancelEditOrder = () => {
+    setEditingOrderId(null);
+    setOrderValue("");
+  };
+
+  const saveOrderIndex = async (item: Recipe) => {
+    if (orderValue === "" || orderValue === item.order_index) {
+      cancelEditOrder();
+      return;
+    }
+
+    const newIndex = Number(orderValue);
+    const oldIndex = item?.order_index;
+
+    // Find conflicting item
+    const conflictingItem = recipes.find(
+      (i) => i.order_index === newIndex && i.id !== item.id
+    );
+
+    try {
+      // If conflict exists → swap its order_index
+      if (conflictingItem) {
+        await createOrUpdateMutation.mutateAsync({
+          id: conflictingItem.id,
+          data: { order_index: oldIndex },
+        });
+      }
+
+      // Update current item
+      await createOrUpdateMutation.mutateAsync({
+        id: item.id,
+        data: { order_index: newIndex },
+      });
+
+      toast.success("Order index updated");
+      cancelEditOrder();
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to update order index");
+    }
+  };
 
   const queryClient = useQueryClient();
 
@@ -36,7 +85,7 @@ export default function RecipesCarousel() {
     queryFn: async () => {
       const response = await recipesAPI.get({
         eq: [],
-        sort: "created_at",
+        sort: "order_index",
         sortBy: "asc",
       });
 
@@ -176,6 +225,7 @@ export default function RecipesCarousel() {
     { key: "category", label: "Category" },
     { key: "slug", label: "Slug" },
     { key: "preview_url", label: "Preview URL" },
+    { key: "order_index", label: "Order Index" },
   ];
 
   return (
@@ -240,6 +290,57 @@ export default function RecipesCarousel() {
                     >
                       {columns.map((col) => {
                         const value = (recipe as any)[col.key];
+
+                        // Custom rendering for order_index
+                        if (col.key === "order_index") {
+                          return (
+                            <TableCell key={col.key} className="text-slate-600 font-medium px-4 whitespace-nowrap">
+                              {editingOrderId === recipe.id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={orderValue}
+                                    onChange={(e) =>
+                                      setOrderValue(Number(e.target.value))
+                                    }
+                                    className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => saveOrderIndex(recipe)}
+                                    className="text-green-600 hover:bg-green-50"
+                                  >
+                                    ✔
+                                  </Button>
+
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={cancelEditOrder}
+                                    className="text-slate-400 hover:bg-slate-100"
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{recipe.order_index ?? "—"}</span>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => startEditOrder(recipe)}
+                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          );
+                        }
+
                         return (
                           <TableCell
                             key={col.key}

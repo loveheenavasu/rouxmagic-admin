@@ -31,7 +31,6 @@ const emptyForm: ContentFormData = {
   content_type: ContentContentTypeEnum.Audio,
   content_url: "",
   project_id: "",
-  poster_url: "",
   platform: "",
   episode_number: undefined,
   season_number: undefined,
@@ -41,6 +40,7 @@ const emptyForm: ContentFormData = {
   runtime_minutes: undefined,
   release_year: undefined,
   youtube_id: "",
+  order_index: undefined,
 };
 
 export default function ChapterDialog({
@@ -80,7 +80,6 @@ export default function ChapterDialog({
     const submissionData = { ...formData };
     if (!submissionData.content_url) delete submissionData.content_url;
     if (!submissionData.project_id) delete submissionData.project_id;
-    if (!submissionData.poster_url) delete submissionData.poster_url;
     if (!submissionData.platform) delete submissionData.platform;
     if (!submissionData.description) delete submissionData.description;
     if (!submissionData.thumbnail_url) delete submissionData.thumbnail_url;
@@ -121,6 +120,24 @@ export default function ChapterDialog({
               />
             </div>
 
+            {isAudiobook && (
+              <div>
+                <Label htmlFor="order_index" className="font-medium">
+                  Order Index
+                </Label>
+                <Input
+                  id="order_index"
+                  type="number"
+                  value={formData.order_index ?? ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, order_index: parseInt(e.target.value) || undefined }))
+                  }
+                  placeholder="1"
+                  className="mt-1.5"
+                />
+              </div>
+            )}
+
             {isTvShow && (
               <>
                 <div>
@@ -154,22 +171,6 @@ export default function ChapterDialog({
                   />
                 </div>
               </>
-            )}
-            {isAudiobook && (
-              <div>
-                <Label htmlFor="platform" className="font-medium">
-                  Platform
-                </Label>
-                <Input
-                  id="platform"
-                  value={formData.platform ?? ""}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, platform: e.target.value }))
-                  }
-                  placeholder="e.g. Audible"
-                  className="mt-1.5"
-                />
-              </div>
             )}
 
             {(isTvShow || isAudiobook) && (
@@ -224,37 +225,38 @@ export default function ChapterDialog({
               </>
             )}
 
-            <div className={isTvShow ? "md:col-span-2" : ""}>
-              <Label htmlFor="youtube_id" className="font-medium">
-                {isTvShow ? "YouTube ID / Video ID" : "Online Video ID (Optional)"}
-              </Label>
-              <Input
-                id="youtube_id"
-                value={formData.youtube_id ?? ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, youtube_id: e.target.value }))
-                }
-                placeholder="e.g. dQw4w9WgXcQ"
-                className="mt-1.5"
-              />
-            </div>
-
             {isTvShow && (
-              <div className="md:col-span-2">
-                <Label htmlFor="description" className="font-medium">
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  value={formData.description ?? ""}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, description: e.target.value }))
-                  }
-                  placeholder="Describe the episode..."
-                  className="mt-1.5"
-                  rows={3}
-                />
-              </div>
+              <>
+                <div className="md:col-span-2">
+                  <Label htmlFor="description" className="font-medium">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description ?? ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, description: e.target.value }))
+                    }
+                    placeholder="Describe the episode..."
+                    className="mt-1.5"
+                    rows={3}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="youtube_id" className="font-medium">
+                    YouTube ID (optional)
+                  </Label>
+                  <Input
+                    id="youtube_id"
+                    value={formData.youtube_id ?? ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, youtube_id: e.target.value }))
+                    }
+                    placeholder="e.g. dQw4w9WgXcQ"
+                    className="mt-1.5"
+                  />
+                </div>
+              </>
             )}
 
             {/* Content URL / Audio URL */}
@@ -330,13 +332,11 @@ export default function ChapterDialog({
                 <div className="mt-1.5 flex gap-2">
                   <Input
                     id="thumbnail_url"
-                    value={(isTvShow ? formData.thumbnail_url : formData.poster_url) ?? ""}
+                    value={
+                      formData.thumbnail_url
+                      ?? ""}
                     onChange={(e) =>
-                      setFormData((p) =>
-                        isTvShow
-                          ? { ...p, thumbnail_url: e.target.value }
-                          : { ...p, poster_url: e.target.value }
-                      )
+                      setFormData((p) => ({ ...p, thumbnail_url: e.target.value }))
                     }
                     placeholder="https://..."
                     className="flex-1"
@@ -361,11 +361,7 @@ export default function ChapterDialog({
                               bucket,
                               path
                             );
-                            setFormData((p) =>
-                              isTvShow
-                                ? { ...p, thumbnail_url: publicUrl }
-                                : { ...p, poster_url: publicUrl }
-                            );
+                            setFormData((p) => ({ ...p, thumbnail_url: publicUrl }));
                             toast.success("Image uploaded successfully!");
                           } catch (error: any) {
                             toast.error(`Upload failed: ${error.message}`);

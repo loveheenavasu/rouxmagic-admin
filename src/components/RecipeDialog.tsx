@@ -38,6 +38,7 @@ const emptyForm: RecipeFormData = {
   suggested_pairings: null,
   cook_time_estimate: null,
   preview_url: "",
+  order_index: undefined,
   is_deleted: false,
   deleted_at: null,
 };
@@ -134,6 +135,22 @@ export default function RecipeDialog({
                 placeholder="e.g. Dessert, Cocktail"
                 className="mt-1.5"
                 required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="order_index" className="font-medium">
+                Order Index
+              </Label>
+              <Input
+                id="order_index"
+                type="number"
+                value={formData.order_index ?? ""}
+                onChange={(e) =>
+                  handleChange("order_index", parseInt(e.target.value) || undefined)
+                }
+                placeholder="e.g. 1"
+                className="mt-1.5"
               />
             </div>
 

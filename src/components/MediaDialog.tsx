@@ -267,9 +267,31 @@ export default function MediaDialog({
     e.preventDefault();
 
     // Validate required fields
-    if (!formData.title || !formData.content_type || !formData.status) {
+    const isReadCase = [ContentTypeEnum.Audiobook as any].includes(formData.content_type as any);
+
+    const requiredFields = [
+      "title",
+      "content_type",
+      "status",
+      "poster_url",
+      "notes",
+      "platform",
+      "release_year",
+      ...(isReadCase ? ["audio_url"] : ["preview_url"])
+    ];
+
+    const missingFields = requiredFields.filter(field => {
+      if (availableFields.includes(field) || ["content_type", "status", "audio_url", "preview_url"].includes(field)) {
+        const value = (formData as any)[field];
+        return value === undefined || value === null || value === "";
+      }
+      return false;
+    });
+
+    if (missingFields.length > 0) {
+      const fieldLabels = missingFields.map(f => f.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
       toast.error(
-        "Please fill in all required fields (Title, Content Type, Status)"
+        `Please fill in all required fields: ${fieldLabels.join(", ")}`
       );
       return;
     }
@@ -345,6 +367,20 @@ export default function MediaDialog({
 
 
   const renderField = (key: string, value: any) => {
+    const isReadCase = formData.content_type === ContentTypeEnum.Audiobook;
+
+    const requiredFields = [
+      "title",
+      "content_type",
+      "status",
+      "poster_url",
+      "notes",
+      "platform",
+      "release_year",
+      ...(isReadCase ? ["audio_url"] : ["preview_url"])
+    ];
+    const isRequired = requiredFields.includes(key);
+
     const label = key
       .replace(/_/g, " ")
       .replace(/\b\w/g, (l) => l.toUpperCase());
@@ -354,7 +390,7 @@ export default function MediaDialog({
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
-            {label} *
+            {label} {isRequired ? "*" : ""}
           </Label>
           <Select
             value={value || ""}
@@ -381,7 +417,7 @@ export default function MediaDialog({
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
-            {label} *
+            {label} {isRequired ? "*" : ""}
           </Label>
           <Select
             value={value || ""}
@@ -499,7 +535,7 @@ export default function MediaDialog({
     return (
       <div key={key} className={isFullWidth ? "col-span-2" : ""}>
         <Label htmlFor={key} className="font-medium">
-          {label} {key === "title" ? "*" : ""}
+          {label} {isRequired ? "*" : ""}
         </Label>
 
         {/* Special handling for image/video/audio URLs to allow uploads */}
@@ -585,7 +621,7 @@ export default function MediaDialog({
               handleChange(key as keyof ProjectFormData, e.target.value)
             }
             placeholder={`Enter ${label.toLowerCase()}`}
-            required={key === "title"}
+            required={isRequired}
             className="mt-1.5"
           />
         )}

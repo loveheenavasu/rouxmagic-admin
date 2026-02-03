@@ -85,11 +85,6 @@ export default function ChaptersSection({
                                             S/E
                                         </TableHead>
                                     )}
-                                    {isAudiobook && (
-                                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
-                                            Platform
-                                        </TableHead>
-                                    )}
                                     <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
                                         {isAudiobook ? "Audio URL" : "Content URL"}
                                     </TableHead>
@@ -119,11 +114,6 @@ export default function ChaptersSection({
                                             {isTvShow && (
                                                 <TableCell className="px-4 py-3 whitespace-nowrap text-slate-600">
                                                     S{c.season_number ?? "-"} E{c.episode_number ?? "-"}
-                                                </TableCell>
-                                            )}
-                                            {isAudiobook && (
-                                                <TableCell className="px-4 py-3 whitespace-nowrap text-slate-600">
-                                                    {c.platform ?? <span className="text-slate-300 text-xs">—</span>}
                                                 </TableCell>
                                             )}
                                             <TableCell className="px-4 py-3 max-w-[260px] truncate">
