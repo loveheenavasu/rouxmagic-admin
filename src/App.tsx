@@ -124,26 +124,6 @@ function App() {
           }
         />
         <Route
-          path="/users"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Users />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Settings />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/archive"
           element={
             <ProtectedRoute>

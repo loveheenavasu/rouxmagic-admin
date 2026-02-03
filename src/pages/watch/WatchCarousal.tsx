@@ -101,6 +101,7 @@ export default function WatchCarousel() {
         )
         .in("content_type", ["Film", "TV Show"])
         .eq("in_hero_carousel", true)
+        .eq("is_deleted", false)
         .order("order_index", { ascending: true });
 
       if (error) {

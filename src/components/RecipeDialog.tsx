@@ -279,35 +279,6 @@ export default function RecipeDialog({
               />
             </div>
 
-            <div>
-              <Label htmlFor="paired_project_id" className="font-medium">
-                Paired Project ID
-              </Label>
-              <Input
-                id="paired_project_id"
-                value={formData.paired_project_id}
-                onChange={(e) =>
-                  handleChange("paired_project_id", e.target.value)
-                }
-                placeholder="Optional related project id"
-                className="mt-1.5"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="paired_type" className="font-medium">
-                Paired Type
-              </Label>
-              <Input
-                id="paired_type"
-                value={formData.paired_type ?? ""}
-                onChange={(e) =>
-                  handleChange("paired_type", e.target.value || null)
-                }
-                placeholder="e.g. Film, Episode"
-                className="mt-1.5"
-              />
-            </div>
 
             <div>
               <Label htmlFor="cook_time_estimate" className="font-medium">
@@ -324,20 +295,6 @@ export default function RecipeDialog({
               />
             </div>
 
-            <div>
-              <Label htmlFor="suggested_pairings" className="font-medium">
-                Suggested Pairings
-              </Label>
-              <Input
-                id="suggested_pairings"
-                value={formData.suggested_pairings ?? ""}
-                onChange={(e) =>
-                  handleChange("suggested_pairings", e.target.value || null)
-                }
-                placeholder="e.g. Pairs well with..."
-                className="mt-1.5"
-              />
-            </div>
           </div>
 
           <div className="space-y-4">
