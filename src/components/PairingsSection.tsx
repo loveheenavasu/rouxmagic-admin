@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, BookOpen, AlertCircle } from "lucide-react";
+import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
