@@ -23,7 +23,7 @@ export interface ContentMetaData {
   runtime_minutes?: number;
   release_year?: number;
   youtube_id?: string;
-  order_index?: number;
+
   is_deleted?: boolean;
   deleted_at?: string | null;
 }
