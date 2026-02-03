@@ -50,7 +50,11 @@ export default function Watch() {
       }
 
       const response = await projectsAPI.get({
-        inValue: { key: "content_type", value: ["TV Show", "Film"] },
+        eq: [
+          ...eqFilters,
+          { key: "is_deleted" as any, value: false }
+        ] as any,
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] },
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -70,11 +74,9 @@ export default function Watch() {
         throw new Error(errorMessage);
       }
 
-      const data = Array.isArray(response.data)
+      return Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
-      // Exclude items that have been moved to bin (soft-deleted)
-      return data.filter((item) => item.is_deleted !== true);
     },
   });
 
@@ -151,17 +153,17 @@ export default function Watch() {
   const displayFields =
     mediaList.length > 0
       ? Object.keys(mediaList[0]).filter(
-          (key) =>
-            ![
-              "id",
-              "poster_url",
-              "preview_url",
-              "platform_url",
-              "order_index",
-              "created_at",
-              "updated_at",
-            ].includes(key)
-        )
+        (key) =>
+          ![
+            "id",
+            "poster_url",
+            "preview_url",
+            "platform_url",
+            "order_index",
+            "created_at",
+            "updated_at",
+          ].includes(key)
+      )
       : ["title", "content_type", "status", "release_year", "platform"];
 
   // Fetch unique statuses for filters (global, not affected by current filter)
@@ -309,7 +311,6 @@ export default function Watch() {
             ) : !!mediaList?.length ? (
               mediaList.map(
                 (media) => (
-                  console.log("media::::", media),
                   (
                     <TableRow key={media.id}>
                       {displayFields.map((key) => {

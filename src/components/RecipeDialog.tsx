@@ -13,12 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeCategory, RecipeFormData } from "@/types";
+import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe } from "@/types";
+import PairingsSection from "@/components/PairingsSection";
 
 interface RecipeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  recipe?: RecipeFormData | null;
+  recipe?: Recipe | null;
   onSubmit: (data: RecipeFormData) => Promise<void>;
   isLoading?: boolean;
 }
@@ -37,6 +38,7 @@ const emptyForm: RecipeFormData = {
   suggested_pairings: null,
   cook_time_estimate: null,
   preview_url: "",
+  order_index: undefined,
   is_deleted: false,
   deleted_at: null,
 };
@@ -136,6 +138,22 @@ export default function RecipeDialog({
               />
             </div>
 
+            <div>
+              <Label htmlFor="order_index" className="font-medium">
+                Order Index
+              </Label>
+              <Input
+                id="order_index"
+                type="number"
+                value={formData.order_index ?? ""}
+                onChange={(e) =>
+                  handleChange("order_index", parseInt(e.target.value) || undefined)
+                }
+                placeholder="e.g. 1"
+                className="mt-1.5"
+              />
+            </div>
+
             <div className="md:col-span-2">
               <Label htmlFor="image_url" className="font-medium">
                 Image URL
@@ -171,8 +189,7 @@ export default function RecipeDialog({
                         toast.success("Image uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Image upload failed: ${
-                            error?.message || "Unknown error"
+                          `Image upload failed: ${error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -382,6 +399,14 @@ export default function RecipeDialog({
               />
             </div>
           </div>
+
+          {/* Pairings section */}
+          {recipe?.id && (
+            <PairingsSection
+              sourceId={recipe.id}
+              sourceRef={PairingSourceEnum.Recipe}
+            />
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button

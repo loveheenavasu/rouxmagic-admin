@@ -12,66 +12,38 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Edit, Trash2, Loader2 } from "lucide-react";
-import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
+import { format } from "date-fns";
+import { Footers } from "@/api/integrations/supabase/footer/footer";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import RecipeDialog from "@/components/RecipeDialog";
+import FooterDialog from "@/components/FooterDialog";
 import { toast } from "sonner";
-import { Flag, Recipe } from "@/types";
+import { Flag, Footer } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 
-const recipesAPI = Recipes as Required<typeof Recipes>;
+const footersAPI = Footers as Required<typeof Footers>;
 
-export default function RecipesPage() {
+export default function FooterPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [selectedFooter, setSelectedFooter] = useState<Footer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
+  const [footerToDelete, setFooterToDelete] = useState<Footer | null>(null);
 
   const queryClient = useQueryClient();
 
-  const { data: categories = [] } = useQuery<string[]>({
-    queryKey: ["recipe-categories"],
-    queryFn: async () => {
-      const response = await recipesAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        limit: 200,
-      });
-
-      if (response.flag !== Flag.Success || !response.data) {
-        return [];
-      }
-
-      const data = Array.isArray(response.data)
-        ? (response.data as Recipe[])
-        : ([response.data] as Recipe[]);
-
-      const cats = data.map((r) => r.category).filter(Boolean);
-      return Array.from(new Set(cats)).sort();
-    },
-  });
-
   const {
-    data: recipes = [],
+    data: footerLinks = [],
     isLoading,
     error,
-  } = useQuery<Recipe[]>({
-    queryKey: ["recipes", searchQuery, categoryFilter],
+  } = useQuery<Footer[]>({
+    queryKey: ["footer", searchQuery],
     queryFn: async () => {
-      const eqFilters = [
-        ...(categoryFilter !== "all"
-          ? [{ key: "category" as const, value: categoryFilter }]
-          : []),
-        { key: "is_deleted" as any, value: false },
-      ];
-
-      const response = await recipesAPI.get({
-        eq: eqFilters,
+      const response = await footersAPI.get({
+        eq: [],
         sort: "created_at",
-        sortBy: "dec",
+        sortBy: "asc",
         search: searchQuery || undefined,
-        searchFields: ["title"],
+        searchFields: ["title", "url"],
       });
 
       if (response.flag !== Flag.Success || !response.data) {
@@ -81,74 +53,72 @@ export default function RecipesPage() {
         const errorMessage =
           supabaseError?.message ||
           response.error?.message ||
-          "Failed to fetch recipes";
+          "Failed to fetch footer links";
         throw new Error(errorMessage);
       }
 
       const data = Array.isArray(response.data)
-        ? (response.data as Recipe[])
-        : ([response.data] as Recipe[]);
+        ? (response.data as Footer[])
+        : ([response.data].filter(Boolean) as Footer[]);
 
-      return data;
+      return data.filter((item) => (item as any).is_deleted !== true);
     },
   });
+
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await recipesAPI.createOne(data);
+      const response = await footersAPI.createOne(data);
       if (response.flag !== Flag.Success || !response.data) {
         const supabaseError = response.error?.output as
           | { message?: string }
           | undefined;
-        const errorMessage =
+        throw new Error(
           supabaseError?.message ||
-          response.error?.message ||
-          "Failed to create recipe";
-        throw new Error(errorMessage);
+            response.error?.message ||
+            "Failed to create"
+        );
       }
-      console.log("RESPONSE HERE: ", response)
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      queryClient.invalidateQueries({ queryKey: ["recipe-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["footer"] });
       setIsDialogOpen(false);
-      toast.success("Recipe created successfully!");
+      toast.success("Footer link added successfully!");
     },
     onError: (err: Error) => {
-      toast.error(`Failed to create recipe: ${err.message}`);
+      toast.error(`Failed to add: ${err.message}`);
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await recipesAPI.updateOneByID(id, data);
+      const response = await footersAPI.updateOneByID(id, data);
       if (response.flag !== Flag.Success || !response.data) {
         const supabaseError = response.error?.output as
           | { message?: string }
           | undefined;
-        const errorMessage =
+        throw new Error(
           supabaseError?.message ||
-          response.error?.message ||
-          "Failed to update recipe";
-        throw new Error(errorMessage);
+            response.error?.message ||
+            "Failed to update"
+        );
       }
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      queryClient.invalidateQueries({ queryKey: ["recipe-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["footer"] });
       setIsDialogOpen(false);
-      setSelectedRecipe(null);
-      toast.success("Recipe updated successfully!");
+      setSelectedFooter(null);
+      toast.success("Footer link updated successfully!");
     },
     onError: (err: Error) => {
-      toast.error(`Failed to update recipe: ${err.message}`);
+      toast.error(`Failed to update: ${err.message}`);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await recipesAPI.toogleSoftDeleteOneByID(id, true);
+      const response = await footersAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -156,51 +126,50 @@ export default function RecipesPage() {
         const supabaseError = response.error?.output as
           | { message?: string }
           | undefined;
-        const errorMessage =
+        throw new Error(
           supabaseError?.message ||
-          response.error?.message ||
-          "Failed to delete recipe";
-        throw new Error(errorMessage);
+            response.error?.message ||
+            "Failed to delete footer link"
+        );
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      queryClient.invalidateQueries({ queryKey: ["recipe-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["footer"] });
       setDeleteDialogOpen(false);
-      setRecipeToDelete(null);
-      toast.success("Recipe deleted successfully!");
+      setFooterToDelete(null);
+      toast.success("Moved to archive.");
     },
     onError: (err: Error) => {
-      toast.error(`Failed to delete recipe: ${err.message}`);
+      toast.error(`Failed to delete footer link: ${err.message}`);
     },
   });
 
   const handleAddNew = () => {
-    setSelectedRecipe(null);
+    setSelectedFooter(null);
     setIsDialogOpen(true);
   };
 
-  const handleEdit = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
+  const handleEdit = (footer: Footer) => {
+    setSelectedFooter(footer);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (recipe: Recipe) => {
-    setRecipeToDelete(recipe);
+  const handleDelete = (footer: Footer) => {
+    setFooterToDelete(footer);
     setDeleteDialogOpen(true);
   };
 
   const handleSubmit = async (data: any) => {
-    if (selectedRecipe) {
-      await updateMutation.mutateAsync({ id: selectedRecipe.id, data });
+    if (selectedFooter?.id) {
+      await updateMutation.mutateAsync({ id: selectedFooter.id, data });
     } else {
       await createMutation.mutateAsync(data);
     }
   };
 
   const confirmDelete = async () => {
-    if (recipeToDelete) {
-      await deleteMutation.mutateAsync(recipeToDelete.id);
+    if (footerToDelete?.id) {
+      await deleteMutation.mutateAsync(footerToDelete.id);
     }
   };
 
@@ -208,56 +177,33 @@ export default function RecipesPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center text-red-500">
-          <h2 className="text-2xl font-bold mb-2">Error Loading Recipes</h2>
+          <h2 className="text-2xl font-bold mb-2">Error Loading Footer</h2>
           <p>{(error as Error).message}</p>
         </div>
       </div>
     );
   }
 
-  const displayFields = [
-    "title",
-    "category",
-    "slug",
-    "preview_url",
-    "ingredients",
-    "instructions",
-    "short_description",
-    "image_url",
-  ];
+  const displayFields = ["title", "url", "icon_url", "created_at"];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <StatsRow
-        title="Recipes Library"
-        description="Manage recipes and pairings used across the app."
+        items={[{ label: "Total Links", value: footerLinks.length }]}
+        title="Footer"
+        description="Manage footer social links and connect links shown on the frontend."
         handleNew={handleAddNew}
       />
 
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <div className="p-6 space-y-4">
           <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-            <div className="flex-1">
-              <Input
-                placeholder="Search recipes by title..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10"
-              />
-            </div>
-            <div className="w-full md:w-56">
-              <select
-                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <option value="all">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Input
+              placeholder="Search by title or URL..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-10 max-w-sm"
+            />
           </div>
 
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
@@ -286,19 +232,18 @@ export default function RecipesPage() {
                     >
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
                       <p className="mt-2 text-sm text-slate-500 font-medium">
-                        Loading recipes...
+                        Loading footer links...
                       </p>
                     </TableCell>
                   </TableRow>
-                ) : recipes.length > 0 ? (
-                  recipes.map((recipe: Recipe) => (
-
+                ) : footerLinks.length > 0 ? (
+                  footerLinks.map((link) => (
                     <TableRow
-                      key={recipe.id}
+                      key={link.id}
                       className="hover:bg-slate-50/50 transition-colors"
                     >
                       {displayFields.map((key) => {
-                        const value = (recipe as any)[key];
+                        const value = (link as any)[key];
                         return (
                           <TableCell
                             key={key}
@@ -306,6 +251,25 @@ export default function RecipesPage() {
                           >
                             {value === null || value === undefined ? (
                               <span className="text-slate-300 text-xs">—</span>
+                            ) : key === "url" ? (
+                              <a
+                                href={String(value)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 hover:underline truncate block"
+                              >
+                                {String(value)}
+                              </a>
+                            ) : key === "created_at" ? (
+                              <span
+                                className="truncate block text-slate-600"
+                                title={value}
+                              >
+                                {format(
+                                  new Date(value),
+                                  "MMM d, yyyy 'at' h:mm a"
+                                )}
+                              </span>
                             ) : (
                               <span
                                 className="truncate block"
@@ -322,7 +286,7 @@ export default function RecipesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleEdit(recipe)}
+                            onClick={() => handleEdit(link)}
                             className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                           >
                             <Edit className="h-4 w-4" />
@@ -330,7 +294,7 @@ export default function RecipesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(recipe)}
+                            onClick={() => handleDelete(link)}
                             className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -345,7 +309,7 @@ export default function RecipesPage() {
                       colSpan={displayFields.length + 1}
                       className="h-32 text-center text-slate-500 font-medium"
                     >
-                      No recipes found.
+                      No footer links found.
                     </TableCell>
                   </TableRow>
                 )}
@@ -355,10 +319,10 @@ export default function RecipesPage() {
         </div>
       </Card>
 
-      <RecipeDialog
+      <FooterDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        recipe={selectedRecipe as any}
+        footer={selectedFooter}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
@@ -367,12 +331,12 @@ export default function RecipesPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
-        itemName={recipeToDelete?.title}
+        itemName={footerToDelete?.title}
         isDeleting={deleteMutation.isPending}
         description={
-          recipeToDelete
-            ? `Are you sure you want to move "${recipeToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
-            : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
+          footerToDelete
+            ? `Are you sure you want to move "${footerToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
+            : "Are you sure you want to move this footer link to the bin? You’ll be able to permanently delete it later from the Archive."
         }
       />
     </div>

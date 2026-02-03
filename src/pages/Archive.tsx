@@ -13,7 +13,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Flag, Project, Recipe } from "@/types";
+import { Flag, Project, Recipe, Footer, Content } from "@/types";
 import {
   Card,
   CardContent,
@@ -25,22 +25,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { Footers } from "@/api/integrations/supabase/footer/footer";
+import { Contents } from "@/api";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 const projectsAPI = Projects as Required<typeof Projects>;
+const footersAPI = Footers as Required<typeof Footers>;
+const chaptersAPI = Contents as Required<typeof Contents>;
 
-export type ArchiveSource = "recipe" | "watch" | "listen" | "read";
+export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer" | "chapter";
 
 export interface ArchivedItem {
   source: ArchiveSource;
   id: string;
   title: string;
   subtitle?: string;
-  raw: Recipe | Project;
+  raw: Recipe | Project | Footer | Content;
 }
 
 function getProjectSource(contentType: string): ArchiveSource {
@@ -64,6 +70,8 @@ const SOURCE_LABELS: Record<ArchiveSource, string> = {
   watch: "Watch",
   listen: "Listen",
   read: "Read",
+  footer: "Footer",
+  chapter: "Chapter",
 };
 
 const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
@@ -71,6 +79,8 @@ const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
   watch: Film,
   listen: Music,
   read: BookOpen,
+  footer: ArchiveIcon,
+  chapter: BookOpen,
 };
 
 const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
@@ -78,6 +88,8 @@ const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
   watch: "bg-violet-100 text-violet-800 hover:bg-violet-100",
   listen: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
   read: "bg-sky-100 text-sky-800 hover:bg-sky-100",
+  footer: "bg-gray-100 text-gray-800 hover:bg-gray-100",
+  chapter: "bg-amber-100 text-amber-800 hover:bg-amber-100",
 };
 
 export default function Archive() {
@@ -86,11 +98,14 @@ export default function Archive() {
     useState(false);
   const [itemToPermanentDelete, setItemToPermanentDelete] =
     useState<ArchivedItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   const [
     { data: recipes = [], isLoading: recipesLoading, error: recipesError },
     { data: projects = [], isLoading: projectsLoading, error: projectsError },
+    { data: footers = [], isLoading: footersLoading, error: footersError },
+    { data: chapters = [], isLoading: chaptersLoading, error: chaptersError },
   ] = useQueries({
     queries: [
       {
@@ -135,17 +150,54 @@ export default function Archive() {
             : [response.data].filter(Boolean);
         },
       },
+      {
+        queryKey: ["archived-footers", searchQuery],
+        queryFn: async () => {
+          const response = await footersAPI.get({
+            eq: [{ key: "is_deleted", value: true }],
+            sort: "created_at",
+            sortBy: "dec",
+            search: searchQuery || undefined,
+            searchFields: ["title"],
+          });
+          if (response.flag !== Flag.Success) {
+            throw new Error(
+              response.error?.message || "Failed to fetch footers"
+            );
+          }
+          return Array.isArray(response.data) ? response.data : [response.data];
+        },
+      },
+      {
+        queryKey: ["archived-chapters", searchQuery],
+        queryFn: async () => {
+          const response = await chaptersAPI.get({
+            eq: [{ key: "is_deleted", value: true }],
+            sort: "created_at",
+            sortBy: "dec",
+            search: searchQuery || undefined,
+            searchFields: ["title"],
+          });
+          if (response.flag !== Flag.Success) {
+            throw new Error(
+              response.error?.message || "Failed to fetch chapters"
+            );
+          }
+          return Array.isArray(response.data) ? response.data : [response.data];
+        },
+      },
     ],
   });
 
   const archivedItems = useMemo((): ArchivedItem[] => {
-    const recipeItems: ArchivedItem[] = recipes.map((r) => ({
+    const recipeItems: ArchivedItem[] = (recipes as Recipe[]).map((r) => ({
       source: "recipe",
       id: r.id,
       title: r.title,
       subtitle: r.category,
       raw: r,
     }));
+
     const projectItems: ArchivedItem[] = (projects as Project[]).map((p) => ({
       source: getProjectSource(p.content_type),
       id: p.id,
@@ -153,7 +205,23 @@ export default function Archive() {
       subtitle: p.content_type,
       raw: p,
     }));
-    const combined = [...recipeItems, ...projectItems];
+
+    const footerItems: ArchivedItem[] = (footers as Footer[]).map((f) => ({
+      source: "footer",
+      id: f.id,
+      title: f.title,
+      raw: f,
+    }));
+
+    const chapterItems: ArchivedItem[] = (chapters as Content[]).map((c) => ({
+      source: "chapter",
+      id: c.id,
+      title: c.title,
+      subtitle: (c as any).content_type,
+      raw: c,
+    }));
+
+    const combined = [...recipeItems, ...projectItems, ...footerItems, ...chapterItems];
     combined.sort((a, b) => {
       const aDate =
         "deleted_at" in a.raw && a.raw.deleted_at
@@ -166,16 +234,26 @@ export default function Archive() {
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
     return combined;
-  }, [recipes, projects]);
+  }, [recipes, projects, footers, chapters]);
 
-  const isLoading = recipesLoading || projectsLoading;
-  const error = recipesError || projectsError;
+  const isLoading = recipesLoading || projectsLoading || footersLoading || chaptersLoading;
+  const error = recipesError || projectsError || footersError || chaptersError;
 
   const restoreMutation = useMutation({
     mutationFn: async (item: ArchivedItem) => {
       if (item.source === "recipe") {
         const res = await recipesAPI.toogleSoftDeleteOneByID(item.id, false);
         if (res.flag !== Flag.Success) {
+          throw new Error(res.error?.message || "Failed to restore");
+        }
+      } else if (item.source === "footer") {
+        const res = await footersAPI.toogleSoftDeleteOneByID(item.id, false);
+        if (res.flag !== Flag.Success) {
+          throw new Error(res.error?.message || "Failed to restore");
+        }
+      } else if (item.source === "chapter") {
+        const res = await chaptersAPI.toogleSoftDeleteOneByID(item.id, false);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
           throw new Error(res.error?.message || "Failed to restore");
         }
       } else {
@@ -188,7 +266,10 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
       toast.success(`"${item.title}" restored.`);
+      setSelectedIds(prev => prev.filter(id => id !== item.id));
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -202,6 +283,16 @@ export default function Archive() {
         if (res.flag !== Flag.Success) {
           throw new Error(res.error?.message || "Failed to delete");
         }
+      } else if (item.source === "footer") {
+        const res = await footersAPI.deleteOneByIDPermanent(item.id);
+        if (res.flag !== Flag.Success) {
+          throw new Error(res.error?.message || "Failed to delete");
+        }
+      } else if (item.source === "chapter") {
+        const res = await chaptersAPI.deleteOneByIDPermanent(item.id);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+          throw new Error(res.error?.message || "Failed to delete");
+        }
       } else {
         const res = await projectsAPI.deleteOneByIDPermanent(item.id);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -212,23 +303,24 @@ export default function Archive() {
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["archived-recipes"] });
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
       toast.success(`"${item.title}" permanently deleted.`);
+      setSelectedIds(prev => prev.filter(id => id !== item.id));
     },
     onError: (err: Error) => {
       toast.error(err.message);
     },
   });
 
-  const handleRestore = (item: ArchivedItem) => {
-    restoreMutation.mutate(item);
-  };
+  const handleRestore = (item: ArchivedItem) => restoreMutation.mutate(item);
 
   const handlePermanentDeleteClick = (item: ArchivedItem) => {
     setItemToPermanentDelete(item);
     setPermanentDeleteDialogOpen(true);
   };
 
-  const confirmPermanentDelete = () => {
+  const confirmPermanentDelete = async () => {
     if (itemToPermanentDelete) {
       deletePermanentMutation.mutate(itemToPermanentDelete, {
         onSettled: () => {
@@ -236,7 +328,32 @@ export default function Archive() {
           setItemToPermanentDelete(null);
         },
       });
+    } else if (selectedIds.length > 0) {
+      const itemsToDelete = archivedItems.filter(item => selectedIds.includes(item.id));
+
+      try {
+        await Promise.all(itemsToDelete.map(item => deletePermanentMutation.mutateAsync(item)));
+        toast.success(`${itemsToDelete.length} items permanently deleted.`);
+        setSelectedIds([]);
+        setPermanentDeleteDialogOpen(false);
+      } catch (err: any) {
+        toast.error("Some items failed to delete.");
+      }
     }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === archivedItems.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(archivedItems.map(item => item.id));
+    }
+  };
+
+  const toggleSelectItem = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   return (
@@ -252,7 +369,7 @@ export default function Archive() {
               Archive
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Items moved to the bin from Recipe, Watch, Listen, and Read.
+              Items moved to the bin from Recipe, Watch, Listen, Read, and Chapters.
               Restore or delete permanently.
             </p>
           </div>
@@ -267,16 +384,44 @@ export default function Archive() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder="Search archived items…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-11 rounded-xl border-slate-200 pl-10 focus-visible:ring-2 focus-visible:ring-amber-200"
-        />
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search archived items…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-11 rounded-xl border-slate-200 pl-10 focus-visible:ring-2 focus-visible:ring-amber-200"
+          />
+        </div>
+
+        {!isLoading && archivedItems.length > 0 && (
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2 mr-2">
+              <Checkbox
+                id="select-all"
+                checked={selectedIds.length === archivedItems.length && archivedItems.length > 0}
+                onCheckedChange={toggleSelectAll}
+              />
+              <Label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+                Select All
+              </Label>
+            </div>
+
+            {selectedIds.length > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="rounded-xl h-10 px-4"
+                onClick={() => setPermanentDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Selected ({selectedIds.length})
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error state */}
@@ -338,9 +483,17 @@ export default function Archive() {
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="line-clamp-2 text-lg leading-tight">
-                      {item.title}
-                    </CardTitle>
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <Checkbox
+                        checked={selectedIds.includes(item.id)}
+                        onCheckedChange={() => toggleSelectItem(item.id)}
+                        className="mt-1"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <CardTitle className="line-clamp-2 text-lg leading-tight">
+                        {item.title}
+                      </CardTitle>
+                    </div>
                     <Badge
                       variant="secondary"
                       className={cn(
@@ -421,15 +574,15 @@ export default function Archive() {
           if (!open) setItemToPermanentDelete(null);
         }}
         onConfirm={confirmPermanentDelete}
-        title="Permanently delete?"
+        title={itemToPermanentDelete ? "Permanently delete?" : `Delete ${selectedIds.length} items?`}
         description={
           itemToPermanentDelete
             ? `"${itemToPermanentDelete.title}" will be removed forever. This cannot be undone.`
-            : "This item will be removed forever. This cannot be undone."
+            : `Are you sure you want to permanently delete these ${selectedIds.length} items? This action cannot be undone.`
         }
         itemName={itemToPermanentDelete?.title}
         isDeleting={deletePermanentMutation.isPending}
-        confirmLabel="Delete permanently"
+        confirmLabel={itemToPermanentDelete ? "Delete permanently" : "Delete selected items"}
       />
     </div>
   );
