@@ -9,7 +9,8 @@ export enum Tables {
     Recipes = "recipes",
     Contents = "contents",
     Footer = "footer",
-    Pairings = "pairings"
+    Pairings = "pairings",
+    Shop = "shop"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {

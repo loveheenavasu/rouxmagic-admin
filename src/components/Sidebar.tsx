@@ -20,6 +20,7 @@ import {
   Utensils,
   Archive,
   PanelBottom,
+  ShoppingBag,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -53,6 +54,7 @@ const navigation = [
   },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
+  { name: "Shop", href: "/shop", icon: ShoppingBag },
   { name: "Archive", href: "/archive", icon: Archive },
   { name: "Footer", href: "/footer", icon: PanelBottom },
 ];
@@ -172,7 +174,7 @@ export default function Sidebar() {
           <nav
             className={cn(
               "flex-1 p-4 space-y-1",
-              sidebarCollapsed ? "px-2" : ""
+              sidebarCollapsed ? "px-2" : "overflow-y-auto"
             )}
           >
             {navigation.map((item) => {
@@ -313,15 +315,17 @@ export default function Sidebar() {
             </Button>
           </div>
         </div>
-      </aside>
+      </aside >
 
       {/* Mobile overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
+      {
+        isMobileOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+            onClick={() => setIsMobileOpen(false)}
+          />
+        )
+      }
     </>
   );
 }
