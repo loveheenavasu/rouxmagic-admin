@@ -14,6 +14,7 @@ import Watch from "./pages/watch";
 import WatchCarousel from "./pages/watch/WatchCarousal";
 import Recipes from "./pages/recipes";
 import RecipesCarousel from "./pages/recipes/RecipesCarousel";
+import Shop from "./pages/Shop";
 import Listen from "./pages/Listen";
 import Read from "./pages/Read";
 import Archive from "./pages/Archive";
@@ -118,6 +119,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Read />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shop"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Shop />
               </Layout>
             </ProtectedRoute>
           }
