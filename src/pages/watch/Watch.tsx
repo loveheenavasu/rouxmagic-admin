@@ -29,6 +29,7 @@ export default function Watch() {
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -213,6 +214,7 @@ export default function Watch() {
 
   const handleEdit = (media: Project) => {
     setSelectedMedia(media);
+    setSelectedRowId(media.id);
     setIsMediaDialogOpen(true);
   };
 
@@ -269,6 +271,7 @@ export default function Watch() {
         description="Manage films and TV shows in your catalog"
         handleNew={handleAddNew}
       />
+
       <MediaFilters
         searchPlaceholder="Search by title..."
         searchQuery={searchQuery}
@@ -280,22 +283,23 @@ export default function Watch() {
         availableStatuses={availableStatuses}
         availableTypes={availableTypes}
       />
-      {/* Search and Filter Section / Table */}
 
       {/* Table */}
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
+              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                Actions
+              </TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
                 >
                   {key.replace(/_/g, " ")}
                 </TableHead>
               ))}
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -309,16 +313,57 @@ export default function Watch() {
                 </TableCell>
               </TableRow>
             ) : !!mediaList?.length ? (
-              mediaList.map(
-                (media) => (
-                  (
-                    <TableRow key={media.id}>
+              [...mediaList].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map(
+                (media) => {
+                  const isSelected = selectedRowId === media.id;
+                  return (
+                    <TableRow
+                      key={media.id}
+                      className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
+                        }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedRowId(null);
+                        } else {
+                          setSelectedRowId(media.id);
+                        }
+                      }}
+                      data-state={isSelected ? "selected" : undefined}
+                    >
+                      <TableCell
+                        className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
+                          }`}
+                      >
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(media);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(media);
+                            }}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                       {displayFields.map((key) => {
                         const value = media[key as keyof Project];
                         return (
                           <TableCell
                             key={key}
-                            className="max-w-[200px] truncate"
+                            className="max-w-[200px] truncate px-4"
                           >
                             {value === null || value === undefined ? (
                               <span className="text-muted-foreground text-xs">
@@ -330,27 +375,9 @@ export default function Watch() {
                           </TableCell>
                         );
                       })}
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(media)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(media)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
-                  )
-                )
+                  );
+                }
               )
             ) : (
               <TableRow>

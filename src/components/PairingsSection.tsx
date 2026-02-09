@@ -108,7 +108,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
 
     // 3. Search for new items to pair
     const { data: searchResults = [] } = useQuery({
-        queryKey: ["pairing-search", targetRef, searchQuery],
+        queryKey: ["pairing-search", targetRef, searchQuery, sourceId],
         queryFn: async () => {
             setIsSearching(true);
             try {
@@ -121,7 +121,10 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     });
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
-                        return data.map((r: any) => ({ id: r.id, title: r.title, type: PairingSourceEnum.Recipe }));
+                        // Filter out the current item (sourceId) to prevent self-pairing
+                        return data
+                            .filter((r: any) => r.id !== sourceId)
+                            .map((r: any) => ({ id: r.id, title: r.title, type: PairingSourceEnum.Recipe }));
                     }
                 } else {
                     const res = await projectsAPI.get({
@@ -135,7 +138,10 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     } as any);
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
-                        return data.map((p: any) => ({ id: p.id, title: (p as Project).title, type: targetRef }));
+                        // Filter out the current item (sourceId) to prevent self-pairing
+                        return data
+                            .filter((p: any) => p.id !== sourceId)
+                            .map((p: any) => ({ id: p.id, title: (p as Project).title, type: targetRef }));
                     }
                 }
                 return [];
