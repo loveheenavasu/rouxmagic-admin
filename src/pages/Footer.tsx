@@ -28,6 +28,7 @@ export default function FooterPage() {
   const [selectedFooter, setSelectedFooter] = useState<Footer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [footerToDelete, setFooterToDelete] = useState<Footer | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -151,6 +152,7 @@ export default function FooterPage() {
 
   const handleEdit = (footer: Footer) => {
     setSelectedFooter(footer);
+    setSelectedRowId(footer.id);
     setIsDialogOpen(true);
   };
 
@@ -208,19 +210,19 @@ export default function FooterPage() {
 
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
             <Table>
-              <TableHeader className="bg-slate-50/50">
+              <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                    Actions
+                  </TableHead>
                   {displayFields.map((key) => (
                     <TableHead
                       key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4"
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
                     >
                       {key.replace(/_/g, " ")}
                     </TableHead>
                   ))}
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 text-right px-4">
-                    Actions
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -237,72 +239,87 @@ export default function FooterPage() {
                     </TableCell>
                   </TableRow>
                 ) : footerLinks.length > 0 ? (
-                  footerLinks.map((link) => (
-                    <TableRow
-                      key={link.id}
-                      className="hover:bg-slate-50/50 transition-colors"
-                    >
-                      {displayFields.map((key) => {
-                        const value = (link as any)[key];
-                        return (
-                          <TableCell
-                            key={key}
-                            className="text-slate-600 font-medium px-4 max-w-[260px] truncate"
-                          >
-                            {value === null || value === undefined ? (
-                              <span className="text-slate-300 text-xs">—</span>
-                            ) : key === "url" ? (
-                              <a
-                                href={String(value)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-600 hover:underline truncate block"
-                              >
-                                {String(value)}
-                              </a>
-                            ) : key === "created_at" ? (
-                              <span
-                                className="truncate block text-slate-600"
-                                title={value}
-                              >
-                                {format(
-                                  new Date(value),
-                                  "MMM d, yyyy 'at' h:mm a"
-                                )}
-                              </span>
-                            ) : (
-                              <span
-                                className="truncate block"
-                                title={String(value)}
-                              >
-                                {String(value)}
-                              </span>
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                      <TableCell className="text-right px-4 whitespace-nowrap">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(link)}
-                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(link)}
-                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  [...footerLinks].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((link) => {
+                    const isSelected = selectedRowId === link.id;
+                    return (
+                      <TableRow
+                        key={link.id}
+                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
+                          }`}
+                        onClick={() => setSelectedRowId(isSelected ? null : link.id)}
+                        data-state={isSelected ? "selected" : undefined}
+                      >
+                        <TableCell
+                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
+                            }`}
+                        >
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(link);
+                              }}
+                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(link);
+                              }}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        {displayFields.map((key) => {
+                          const value = (link as any)[key];
+                          return (
+                            <TableCell
+                              key={key}
+                              className="text-slate-600 font-medium px-4 max-w-[260px] truncate"
+                            >
+                              {value === null || value === undefined ? (
+                                <span className="text-slate-300 text-xs">—</span>
+                              ) : key === "url" ? (
+                                <a
+                                  href={String(value)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 hover:underline truncate block"
+                                >
+                                  {String(value)}
+                                </a>
+                              ) : key === "created_at" ? (
+                                <span
+                                  className="truncate block text-slate-600"
+                                  title={value}
+                                >
+                                  {format(
+                                    new Date(value),
+                                    "MMM d, yyyy 'at' h:mm a"
+                                  )}
+                                </span>
+                              ) : (
+                                <span
+                                  className="truncate block"
+                                  title={String(value)}
+                                >
+                                  {String(value)}
+                                </span>
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell

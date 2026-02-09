@@ -26,6 +26,7 @@ export default function RecipesCarousel() {
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderValue, setOrderValue] = useState<number | "">("");
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const startEditOrder = (item: Recipe) => {
     setEditingOrderId(item.id);
@@ -187,6 +188,7 @@ export default function RecipesCarousel() {
 
   const handleEdit = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
+    setSelectedRowId(recipe.id);
     setIsDialogOpen(true);
   };
 
@@ -254,19 +256,19 @@ export default function RecipesCarousel() {
         <div className="p-6">
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
             <Table>
-              <TableHeader className="bg-slate-50/50">
+              <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                    Actions
+                  </TableHead>
                   {columns.map((col) => (
                     <TableHead
                       key={col.key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4"
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
                     >
                       {col.label}
                     </TableHead>
                   ))}
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 text-right whitespace-nowrap px-4">
-                    Actions
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -283,11 +285,45 @@ export default function RecipesCarousel() {
                     </TableCell>
                   </TableRow>
                 ) : recipes.length > 0 ? (
-                  recipes.map((recipe: Recipe) => (
-                    <TableRow
-                      key={recipe.id}
-                      className="hover:bg-slate-50/50 transition-colors"
-                    >
+                  [...recipes].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((recipe: Recipe) => {
+                    const isSelected = selectedRowId === recipe.id;
+                    return (
+                      <TableRow
+                        key={recipe.id}
+                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
+                          }`}
+                        onClick={() => setSelectedRowId(isSelected ? null : recipe.id)}
+                        data-state={isSelected ? "selected" : undefined}
+                      >
+                        <TableCell
+                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
+                            }`}
+                        >
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(recipe);
+                              }}
+                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(recipe);
+                              }}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       {columns.map((col) => {
                         const value = (recipe as any)[col.key];
 
@@ -296,7 +332,7 @@ export default function RecipesCarousel() {
                           return (
                             <TableCell key={col.key} className="text-slate-600 font-medium px-4 whitespace-nowrap">
                               {editingOrderId === recipe.id ? (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                   <input
                                     type="number"
                                     value={orderValue}
@@ -330,7 +366,10 @@ export default function RecipesCarousel() {
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    onClick={() => startEditOrder(recipe)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditOrder(recipe);
+                                    }}
                                     className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                                   >
                                     <Edit className="h-4 w-4" />
@@ -359,28 +398,9 @@ export default function RecipesCarousel() {
                           </TableCell>
                         );
                       })}
-                      <TableCell className="text-right px-4 whitespace-nowrap">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(recipe)}
-                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(recipe)}
-                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
-                  ))
+                  );
+                })
                 ) : (
                   <TableRow>
                     <TableCell

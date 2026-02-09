@@ -35,6 +35,7 @@ export default function WatchCarousel() {
   );
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderValue, setOrderValue] = useState<number | "">("");
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const startEditOrder = (item: WatchCarouselItem) => {
     setEditingOrderId(item.id);
@@ -213,6 +214,7 @@ export default function WatchCarousel() {
   };
 
   const handleEdit = async (media: WatchCarouselItem) => {
+    setSelectedRowId(media.id);
     try {
       setIsLoadingEditItem(true);
 
@@ -283,6 +285,7 @@ export default function WatchCarousel() {
   }
 
   const columns = [
+    { key: "actions", label: "Actions", align: "left" as const },
     { key: "title", label: "Title" },
     { key: "content_type", label: "Content Type" },
     { key: "status", label: "Status" },
@@ -295,7 +298,6 @@ export default function WatchCarousel() {
       align: "right" as const,
     },
     { key: "notes", label: "Notes" },
-    { key: "actions", label: "Actions", align: "right" as const },
   ];
 
   return (
@@ -324,14 +326,15 @@ export default function WatchCarousel() {
         <div className="p-6">
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
             <Table>
-              <TableHeader className="bg-slate-50/50">
+              <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  {columns.map((col) => (
+                  {columns.map((col, index) => (
                     <TableHead
                       key={col.key}
                       className={[
-                        "text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4",
+                        "text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50",
                         col.align === "right" ? "text-right" : "",
+                        index === 0 ? "sticky left-0 z-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
@@ -352,141 +355,163 @@ export default function WatchCarousel() {
                     </TableCell>
                   </TableRow>
                 ) : carouselItems.length > 0 ? (
-                  carouselItems.map((item: WatchCarouselItem) => (
-                    <TableRow
-                      key={item.id}
-                      className="hover:bg-slate-50/50 transition-colors"
-                    >
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.title || ""}
-                        >
-                          {item.title || (
-                            <span className="text-slate-300 text-xs">—</span>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.content_type || ""}
-                        >
-                          {item.content_type || (
-                            <span className="text-slate-300 text-xs">—</span>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            item.status === "released"
-                              ? "bg-green-100 text-green-700"
-                              : item.status === "coming_soon"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700"
+                  [...carouselItems].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((item: WatchCarouselItem) => {
+                    const isSelected = selectedRowId === item.id;
+                    return (
+                      <TableRow
+                        key={item.id}
+                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
                           }`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedRowId(null);
+                          } else {
+                            setSelectedRowId(item.id);
+                          }
+                        }}
+                        data-state={isSelected ? "selected" : undefined}
+                      >
+                        <TableCell
+                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
+                            }`}
                         >
-                          {item.status || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.platform_name || ""}
-                        >
-                          {item.platform_name || (
-                            <span className="text-slate-300 text-xs">—</span>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
-                        {editingOrderId === item.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={orderValue}
-                              onChange={(e) =>
-                                setOrderValue(Number(e.target.value))
-                              }
-                              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-
+                          <div className="flex justify-start gap-1">
                             <Button
-                              size="icon"
                               variant="ghost"
-                              onClick={() => saveOrderIndex(item)}
-                              className="text-green-600 hover:bg-green-50"
-                            >
-                              ✔
-                            </Button>
-
-                            <Button
                               size="icon"
-                              variant="ghost"
-                              onClick={cancelEditOrder}
-                              className="text-slate-400 hover:bg-slate-100"
-                            >
-                              ✕
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{item.order_index}</span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => startEditOrder(item)}
-                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(item);
+                              }}
+                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(item);
+                              }}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
-                        {item.release_year || (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
-                        {item.runtime_minutes || (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.notes || ""}
-                        >
-                          {item.notes || (
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.title || ""}
+                          >
+                            {item.title || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.content_type || ""}
+                          >
+                            {item.content_type || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${item.status === "released"
+                              ? "bg-green-100 text-green-700"
+                              : item.status === "coming_soon"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-700"
+                              }`}
+                          >
+                            {item.status || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.platform_name || ""}
+                          >
+                            {item.platform_name || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
+                          {editingOrderId === item.id ? (
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="number"
+                                value={orderValue}
+                                onChange={(e) =>
+                                  setOrderValue(Number(e.target.value))
+                                }
+                                className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => saveOrderIndex(item)}
+                                className="text-green-600 hover:bg-green-50"
+                              >
+                                ✔
+                              </Button>
+
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={cancelEditOrder}
+                                className="text-slate-400 hover:bg-slate-100"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span>{item.order_index}</span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditOrder(item);
+                                }}
+                                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
+                          {item.release_year || (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="text-right px-4 whitespace-nowrap">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(item)}
-                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
+                          {item.runtime_minutes || (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.notes || ""}
                           >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            {item.notes || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell
