@@ -314,16 +314,16 @@ export default function HomeCarousel() {
             <Table>
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  {columns.map((col, index) => (
+                  {columns.map((col) => (
                     <TableHead
                       key={col.key}
                       className={[
                         "text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50",
                         col.align === "right" ? "text-right" : "",
-                        index === 0 ? "sticky left-0 z-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
+                      sticky={col.key === "title" ? "left" : undefined}
                     >
                       {col.label}
                     </TableHead>
@@ -357,10 +357,7 @@ export default function HomeCarousel() {
                         }}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell
-                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
-                            }`}
-                        >
+                        <TableCell className="px-4 whitespace-nowrap">
                           <div className="flex justify-start gap-1">
                             <Button
                               variant="ghost"
@@ -386,7 +383,10 @@ export default function HomeCarousel() {
                             </Button>
                           </div>
                         </TableCell>
-                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                        <TableCell
+                          className="text-slate-600 font-medium px-4 max-w-[200px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                          sticky="left"
+                        >
                           <span
                             className="truncate block"
                             title={item.title || ""}

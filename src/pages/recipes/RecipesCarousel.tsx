@@ -258,13 +258,14 @@ export default function RecipesCarousel() {
             <Table>
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50">
                     Actions
                   </TableHead>
                   {columns.map((col) => (
                     <TableHead
                       key={col.key}
                       className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
+                      sticky={col.key === "title" ? "left" : undefined}
                     >
                       {col.label}
                     </TableHead>
@@ -295,10 +296,7 @@ export default function RecipesCarousel() {
                         onClick={() => setSelectedRowId(isSelected ? null : recipe.id)}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell
-                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
-                            }`}
-                        >
+                        <TableCell className="px-4 whitespace-nowrap">
                           <div className="flex gap-1">
                             <Button
                               variant="ghost"
@@ -324,83 +322,84 @@ export default function RecipesCarousel() {
                             </Button>
                           </div>
                         </TableCell>
-                      {columns.map((col) => {
-                        const value = (recipe as any)[col.key];
+                        {columns.map((col) => {
+                          const value = (recipe as any)[col.key];
 
-                        // Custom rendering for order_index
-                        if (col.key === "order_index") {
+                          // Custom rendering for order_index
+                          if (col.key === "order_index") {
+                            return (
+                              <TableCell key={col.key} className="text-slate-600 font-medium px-4 whitespace-nowrap">
+                                {editingOrderId === recipe.id ? (
+                                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="number"
+                                      value={orderValue}
+                                      onChange={(e) =>
+                                        setOrderValue(Number(e.target.value))
+                                      }
+                                      className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => saveOrderIndex(recipe)}
+                                      className="text-green-600 hover:bg-green-50"
+                                    >
+                                      ✔
+                                    </Button>
+
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={cancelEditOrder}
+                                      className="text-slate-400 hover:bg-slate-100"
+                                    >
+                                      ✕
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span>{recipe.order_index ?? "—"}</span>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEditOrder(recipe);
+                                      }}
+                                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </TableCell>
+                            );
+                          }
+
                           return (
-                            <TableCell key={col.key} className="text-slate-600 font-medium px-4 whitespace-nowrap">
-                              {editingOrderId === recipe.id ? (
-                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="number"
-                                    value={orderValue}
-                                    onChange={(e) =>
-                                      setOrderValue(Number(e.target.value))
-                                    }
-                                    className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                  />
-
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => saveOrderIndex(recipe)}
-                                    className="text-green-600 hover:bg-green-50"
-                                  >
-                                    ✔
-                                  </Button>
-
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={cancelEditOrder}
-                                    className="text-slate-400 hover:bg-slate-100"
-                                  >
-                                    ✕
-                                  </Button>
-                                </div>
+                            <TableCell
+                              key={col.key}
+                              className="text-slate-600 font-medium px-4 max-w-[260px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                              sticky={col.key === "title" ? "left" : undefined}
+                            >
+                              {value === null || value === undefined ? (
+                                <span className="text-slate-300 text-xs">—</span>
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{recipe.order_index ?? "—"}</span>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startEditOrder(recipe);
-                                    }}
-                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                <span
+                                  className="truncate block"
+                                  title={String(value)}
+                                >
+                                  {String(value)}
+                                </span>
                               )}
                             </TableCell>
                           );
-                        }
-
-                        return (
-                          <TableCell
-                            key={col.key}
-                            className="text-slate-600 font-medium px-4 max-w-[260px] truncate"
-                          >
-                            {value === null || value === undefined ? (
-                              <span className="text-slate-300 text-xs">—</span>
-                            ) : (
-                              <span
-                                className="truncate block"
-                                title={String(value)}
-                              >
-                                {String(value)}
-                              </span>
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })
+                        })}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell
@@ -415,7 +414,7 @@ export default function RecipesCarousel() {
             </Table>
           </div>
         </div>
-      </Card>
+      </Card >
 
       <RecipeDialog
         open={isDialogOpen}
@@ -437,6 +436,6 @@ export default function RecipesCarousel() {
             : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
         }
       />
-    </div>
+    </div >
   );
 }

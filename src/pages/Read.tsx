@@ -273,11 +273,12 @@ export default function Read() {
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Actions</TableHead>
+              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50">Actions</TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
                   className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
+                  sticky={key === "title" ? "left" : undefined}
                 >
                   {key.replace(/_/g, " ")}
                 </TableHead>
@@ -309,9 +310,7 @@ export default function Read() {
                     data-state={isSelected ? "selected" : undefined}
                   >
                     <TableCell
-                      className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
-                        }`}
-                    >
+                      className="px-4 whitespace-nowrap">
                       <div className="flex gap-2">
                         {(item.content_type === ContentTypeEnum.Audiobook ||
                           (item as any).content_type === "AudioBook") && (
@@ -353,7 +352,11 @@ export default function Read() {
                     {displayFields.map((key) => {
                       const value = (item as any)[key];
                       return (
-                        <TableCell key={key} className="max-w-[220px] truncate px-4">
+                        <TableCell
+                          key={key}
+                          className="max-w-[220px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                          sticky={key === "title" ? "left" : undefined}
+                        >
                           {value === null || value === undefined ? (
                             <span className="text-muted-foreground text-xs">
                               —
