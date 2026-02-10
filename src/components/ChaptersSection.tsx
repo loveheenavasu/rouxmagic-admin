@@ -77,7 +77,7 @@ export default function ChaptersSection({
                         <Table>
                             <TableHeader className="bg-slate-50/50">
                                 <TableRow>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
+                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4" sticky="left">
                                         Title
                                     </TableHead>
                                     {isTvShow && (
@@ -103,7 +103,7 @@ export default function ChaptersSection({
                                 ) : chapters.length ? (
                                     chapters.map((c) => (
                                         <TableRow key={c.id} className="hover:bg-slate-50/50">
-                                            <TableCell className="px-4 py-3 max-w-[260px] truncate">
+                                            <TableCell className="px-4 py-3 max-w-[260px] truncate" sticky="left">
                                                 <span
                                                     className="font-medium text-slate-800"
                                                     title={c.title}

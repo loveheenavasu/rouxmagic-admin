@@ -333,13 +333,14 @@ const HomePage = () => {
             <Table>
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 sticky left-0 z-50 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
                     Actions
                   </TableHead>
                   {displayFields.map((key) => (
                     <TableHead
                       key={key}
                       className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
+                      sticky={key === "title" ? "left" : undefined}
                     >
                       {key.replace(/_/g, " ")}
                     </TableHead>
@@ -370,10 +371,7 @@ const HomePage = () => {
                         onClick={() => setSelectedRowId(isSelected ? null : project.id)}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell
-                          className={`px-4 whitespace-nowrap sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isSelected ? "bg-indigo-50 z-30" : "bg-white group-hover:bg-slate-50 z-10"
-                            }`}
-                        >
+                        <TableCell className="px-4 whitespace-nowrap">
                           <div className="flex gap-1">
                             <Button
                               variant="ghost"
@@ -402,27 +400,28 @@ const HomePage = () => {
                         {displayFields.map((key) => {
                           const value = project[key as keyof Project];
 
-                        return (
-                          <TableCell
-                            key={key}
-                            className="text-slate-600 font-medium px-4 max-w-[200px] truncate"
-                          >
-                            {value === null || value === undefined ? (
-                              <span className="text-slate-300 text-xs">—</span>
-                            ) : (
-                              <span
-                                className="truncate block"
-                                title={String(value)}
-                              >
-                                {String(value)}
-                              </span>
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })
+                          return (
+                            <TableCell
+                              key={key}
+                              className="text-slate-600 font-medium px-4 max-w-[200px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                              sticky={key === "title" ? "left" : undefined}
+                            >
+                              {value === null || value === undefined ? (
+                                <span className="text-slate-300 text-xs">—</span>
+                              ) : (
+                                <span
+                                  className="truncate block"
+                                  title={String(value)}
+                                >
+                                  {String(value)}
+                                </span>
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell

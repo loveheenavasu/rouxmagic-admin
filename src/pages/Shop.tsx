@@ -118,7 +118,7 @@ const Shop = () => {
                 <Table>
                     <TableHeader className="bg-slate-50/50">
                         <TableRow>
-                            <TableHead className="w-1/4 text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-6">
+                            <TableHead className="w-1/4 text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-6" sticky="left">
                                 Field Key
                             </TableHead>
                             <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-6">
@@ -128,7 +128,7 @@ const Shop = () => {
                     </TableHeader>
                     <TableBody>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50" sticky="left">
                                 Page Title
                             </TableCell>
                             <TableCell className="p-6 text-slate-900 font-medium">
@@ -136,7 +136,7 @@ const Shop = () => {
                             </TableCell>
                         </TableRow>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50" sticky="left">
                                 Page Subtitle
                             </TableCell>
                             <TableCell className="p-6 text-slate-600 line-clamp-2">
@@ -144,7 +144,7 @@ const Shop = () => {
                             </TableCell>
                         </TableRow>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50" sticky="left">
                                 Coming Soon Title
                             </TableCell>
                             <TableCell className="p-6 text-slate-900 font-medium">
@@ -152,7 +152,7 @@ const Shop = () => {
                             </TableCell>
                         </TableRow>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50" sticky="left">
                                 Coming Soon Description
                             </TableCell>
                             <TableCell className="p-6 text-slate-600 line-clamp-2">
@@ -160,7 +160,7 @@ const Shop = () => {
                             </TableCell>
                         </TableRow>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50" sticky="left">
                                 CTA Text
                             </TableCell>
                             <TableCell className="p-6 text-slate-900 font-medium">
@@ -168,7 +168,7 @@ const Shop = () => {
                             </TableCell>
                         </TableRow>
                         <TableRow className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50 align-top">
+                            <TableCell className="p-6 font-medium text-slate-600 border-r border-slate-50 align-top" sticky="left">
                                 Shop Tags
                             </TableCell>
                             <TableCell className="p-6">
