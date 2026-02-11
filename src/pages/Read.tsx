@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Edit, Trash2, List } from "lucide-react";
+import { Loader2, Edit, Trash2, List, Pin, PinOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -33,6 +33,15 @@ export default function Read() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) =>
+      prev.includes(key)
+        ? prev.filter((col) => col !== key)
+        : [...prev, key]
+    );
+  };
 
   const queryClient = useQueryClient();
 
@@ -273,14 +282,47 @@ export default function Read() {
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50">Actions</TableHead>
+              <TableHead
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+              >
+                <div className="flex items-center gap-2">
+                  Actions
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-4 w-4 transition-opacity ${stickyColumns.includes("actions") ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    onClick={() => toggleSticky("actions")}
+                  >
+                    {stickyColumns.includes("actions") ? (
+                      <PinOff className="h-3 w-3" />
+                    ) : (
+                      <Pin className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
-                  sticky={key === "title" ? "left" : undefined}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                  sticky={stickyColumns.includes(key) ? "left" : undefined}
                 >
-                  {key.replace(/_/g, " ")}
+                  <div className="flex items-center gap-2">
+                    {key.replace(/_/g, " ")}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      onClick={() => toggleSticky(key)}
+                    >
+                      {stickyColumns.includes(key) ? (
+                        <PinOff className="h-3 w-3" />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -298,8 +340,8 @@ export default function Read() {
             ) : items.length ? (
               [...items].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((item) => {
                 const isSelected = selectedRowId === item.id;
-                    return (
-                      <TableRow key={item.id} className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"}`}
+                return (
+                  <TableRow key={item.id} className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"}`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedRowId(null);
@@ -310,7 +352,9 @@ export default function Read() {
                     data-state={isSelected ? "selected" : undefined}
                   >
                     <TableCell
-                      className="px-4 whitespace-nowrap">
+                      className="px-4 whitespace-nowrap"
+                      sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                    >
                       <div className="flex gap-2">
                         {(item.content_type === ContentTypeEnum.Audiobook ||
                           (item as any).content_type === "AudioBook") && (
@@ -355,7 +399,7 @@ export default function Read() {
                         <TableCell
                           key={key}
                           className="max-w-[220px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
-                          sticky={key === "title" ? "left" : undefined}
+                          sticky={stickyColumns.includes(key) ? "left" : undefined}
                         >
                           {value === null || value === undefined ? (
                             <span className="text-muted-foreground text-xs">
@@ -391,6 +435,11 @@ export default function Read() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        defaultValues={{
+          status: statusFilter !== "all" ? (statusFilter as any) : undefined,
+          content_type:
+            contentTypeFilter !== "all" ? (contentTypeFilter as any) : undefined,
+        }}
       />
 
       {/* Delete Confirmation Dialog */}

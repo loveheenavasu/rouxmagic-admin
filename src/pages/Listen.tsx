@@ -9,14 +9,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { ContentTypeEnum, Flag, Project } from "@/types";
+import { ContentTypeEnum, Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -29,6 +36,25 @@ export default function Watch() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
+  const [activeShelfId, setActiveShelfId] = useState<string>("all");
+
+  const { data: shelves = [] } = useQuery({
+    queryKey: ["content-rows", "listen"],
+    queryFn: async () => {
+      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "listen" }, { key: "is_active", value: true }] });
+      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
+    }
+  });
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) =>
+      prev.includes(key)
+        ? prev.filter((col) => col !== key)
+        : [...prev, key]
+    );
+  };
 
   const queryClient = useQueryClient();
 
@@ -38,9 +64,9 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter],
+    queryKey: ["media", searchQuery, statusFilter, activeShelfId],
     queryFn: async () => {
-      const eqFilters: { key: "status" | "content_type"; value: any }[] = [
+      const eqFilters: any[] = [
         { key: "content_type", value: ContentTypeEnum.Song },
       ];
 
@@ -48,11 +74,33 @@ export default function Watch() {
         eqFilters.push({ key: "status", value: statusFilter });
       }
 
+      let inValueFilter: any = undefined;
+
+      // Apply shelf filter logic
+      if (activeShelfId !== "all") {
+        const shelf = shelves.find(s => s.id === activeShelfId);
+        if (shelf) {
+          if (shelf.filter_type === FilterTypeEnum.Flag) {
+            eqFilters.push({ key: shelf.filter_value, value: true });
+          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+            if (shelf.filter_value.includes(",")) {
+              inValueFilter = {
+                key: shelf.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
+                value: shelf.filter_value.split(",").map(v => v.trim())
+              };
+            } else {
+              eqFilters.push({ key: shelf.filter_type, value: shelf.filter_value });
+            }
+          }
+        }
+      }
+
       const response = await projectsAPI.get({
         eq: [
           ...eqFilters,
           { key: "is_deleted" as any, value: false }
         ] as any,
+        inValue: inValueFilter,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -270,28 +318,76 @@ export default function Watch() {
 
       {/* Search and Filter Section */}
 
-      <MediaFilters
-        searchPlaceholder="Search by title..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        availableStatuses={availableStatuses}
-        availableTypes={availableTypes}
-      />
+      <div className="flex flex-col lg:flex-row gap-4">
+        <MediaFilters
+          searchPlaceholder="Search by title..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          availableStatuses={availableStatuses}
+          availableTypes={availableTypes}
+        />
+        <div className="w-full lg:w-64">
+          <Select value={activeShelfId} onValueChange={setActiveShelfId}>
+            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30">
+              <SelectValue placeholder="Filter by Shelf" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Items (No Shelf)</SelectItem>
+              {shelves.map(shelf => (
+                <SelectItem key={shelf.id} value={shelf.id}>{shelf.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50">Actions</TableHead>
+              <TableHead
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+              >
+                <div className="flex items-center gap-2">
+                  Actions
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-4 w-4 transition-opacity ${stickyColumns.includes("actions") ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    onClick={() => toggleSticky("actions")}
+                  >
+                    {stickyColumns.includes("actions") ? (
+                      <PinOff className="h-3 w-3" />
+                    ) : (
+                      <Pin className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
-                  sticky={key === "title" ? "left" : undefined}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                  sticky={stickyColumns.includes(key) ? "left" : undefined}
                 >
-                  {key.replace(/_/g, " ")}
+                  <div className="flex items-center gap-2">
+                    {key.replace(/_/g, " ")}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      onClick={() => toggleSticky(key)}
+                    >
+                      {stickyColumns.includes(key) ? (
+                        <PinOff className="h-3 w-3" />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -324,7 +420,9 @@ export default function Watch() {
                     data-state={isSelected ? "selected" : undefined}
                   >
                     <TableCell
-                     className="px-4 whitespace-nowrap">
+                      className="px-4 whitespace-nowrap"
+                      sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                    >
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
@@ -352,7 +450,11 @@ export default function Watch() {
                     {displayFields.map((key) => {
                       const value = media[key as keyof Project];
                       return (
-                        <TableCell key={key} className="max-w-[200px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50" sticky={key === "title" ? "left" : undefined}>
+                        <TableCell
+                          key={key}
+                          className="max-w-[200px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                          sticky={stickyColumns.includes(key) ? "left" : undefined}
+                        >
                           {value === null || value === undefined ? (
                             <span className="text-muted-foreground text-xs">
                               —
@@ -386,6 +488,34 @@ export default function Watch() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
+        defaultValues={(() => {
+          const defaults: any = {
+            content_type: ContentTypeEnum.Song, // Default for Listen page
+          };
+
+          // Apply manual filters
+          if (statusFilter !== "all") defaults.status = statusFilter;
+
+          // Apply shelf filters (overriding manual if specific)
+          if (activeShelfId !== "all") {
+            const shelf = shelves.find((s) => s.id === activeShelfId);
+            if (shelf) {
+              if (shelf.filter_type === FilterTypeEnum.ContentType) {
+                const type = shelf.filter_value.split(",")[0].trim();
+                defaults.content_type = type;
+              }
+              if (shelf.filter_type === FilterTypeEnum.Status) {
+                const status = shelf.filter_value.split(",")[0].trim();
+                defaults.status = status;
+              }
+              if (shelf.filter_type === FilterTypeEnum.Flag) {
+                defaults[shelf.filter_value] = true;
+              }
+            }
+          }
+
+          return defaults;
+        })()}
         isLoading={createMutation.isPending || updateMutation.isPending}
         allowedFields={carouselAllowedFields}
       />

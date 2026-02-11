@@ -23,7 +23,7 @@ import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { Content, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
 import { createBucketPath } from "@/helpers";
-import { Projects,Contents } from "@/api";
+import { Projects, Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
@@ -37,6 +37,7 @@ interface MediaDialogProps {
   onSubmit: (data: any) => Promise<void>;
   isLoading?: boolean;
   allowedFields?: string[];
+  defaultValues?: Partial<ProjectFormData>;
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -49,6 +50,7 @@ export default function MediaDialog({
   onSubmit,
   isLoading = false,
   allowedFields,
+  defaultValues,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>(
@@ -111,6 +113,24 @@ export default function MediaDialog({
         (r) => !("is_deleted" in r) || r.is_deleted !== true
       ) as Content[];
     },
+  });
+
+  // Fetch dynamic content type filters
+  const { data: contentRowFilters = [] } = useQuery({
+    queryKey: ["content-row-filters"],
+    queryFn: async () => {
+      const { ContentRows } = await import(
+        "@/api/integrations/supabase/content_rows/content_rows"
+      );
+      const resp = await (ContentRows as any).get({
+        eq: [{ key: "filter_type", value: "content_type" }],
+      });
+      console.log("resp.data====>", resp.data)
+      return Array.isArray(resp.data)
+        ? resp.data
+        : [resp.data].filter(Boolean);
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
 
@@ -209,7 +229,12 @@ export default function MediaDialog({
             : [response.data];
 
           if (projects.length > 0) {
-            const fields = Object.keys(projects[0])
+            const KNOWN_FLAGS = ["in_now_playing", "in_coming_soon", "in_latest_releases", "in_hero_carousel"];
+
+            const fields = Array.from(new Set([
+              ...Object.keys(projects[0]),
+              ...KNOWN_FLAGS
+            ]))
               .filter(
                 (key) => !["id", "created_at", "updated_at"].includes(key)
               )
@@ -246,6 +271,12 @@ export default function MediaDialog({
                   base[key] = "";
                 }
               });
+
+              // Apply default values if provided
+              if (defaultValues) {
+                Object.assign(base, defaultValues);
+              }
+
               setFormData(base as ProjectFormData);
             }
           }
@@ -387,6 +418,44 @@ export default function MediaDialog({
 
     // Special: Content Type Select
     if (key === "content_type") {
+      const standardTypes = [
+        { value: ContentTypeEnum.Film, label: "Film" },
+        { value: ContentTypeEnum.TvShow, label: "TV Show" },
+        { value: ContentTypeEnum.Song, label: "Song" },
+        { value: ContentTypeEnum.Audiobook, label: "Audiobook" },
+      ];
+
+      // Helper function to normalize known plural types to singular
+      const normalizeType = (type: string) => {
+        const typeMap: Record<string, string> = {
+          "Films": "Film",
+          "TV Shows": "TV Show",
+          "Audiobooks": "Audiobook",
+          "Books": "Book",
+          "Comics": "Comic",
+          "Songs": "Song"
+        };
+        return typeMap[type] || type;
+      };
+
+      // Merge with dynamic types from content_rows if available
+      const dynamicTypes = (contentRowFilters || [])
+        .flatMap((row: any) => {
+          const values = row.filter_value
+            ? row.filter_value.split(",").map((v: string) => v.trim())
+            : [];
+          return values;
+        })
+        .map((v: string) => normalizeType(v.trim()))
+        .filter((v: string) => v) // filter out empty
+        .filter(
+          (v: string) =>
+            !standardTypes.some((st) => st.value.toLowerCase() === v.toLowerCase())
+        );
+
+      // Unique dynamic types
+      const uniqueDynamicTypes = [...new Set(dynamicTypes)];
+
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
@@ -400,12 +469,16 @@ export default function MediaDialog({
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ContentTypeEnum.Film}>Film</SelectItem>
-              <SelectItem value={ContentTypeEnum.TvShow}>TV Show</SelectItem>
-              <SelectItem value={ContentTypeEnum.Song}>Song</SelectItem>
-              <SelectItem value={ContentTypeEnum.Audiobook}>
-                Audiobook
-              </SelectItem>
+              {standardTypes.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  {type.label}
+                </SelectItem>
+              ))}
+              {(uniqueDynamicTypes as string[]).map((type: string) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
