@@ -540,6 +540,7 @@ export default function WatchCarousel() {
           updateMutation.isPending
         }
         allowedFields={carouselAllowedFields}
+        defaultValues={{ in_hero_carousel: true }}
       />
 
       <DeleteConfirmationDialog

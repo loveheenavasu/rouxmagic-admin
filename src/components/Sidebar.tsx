@@ -56,6 +56,7 @@ const navigation = [
   { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Shop", href: "/shop", icon: ShoppingBag },
   { name: "Archive", href: "/archive", icon: Archive },
+  { name: "Content Rows", href: "/content-rows", icon: PanelBottom },
   { name: "Footer", href: "/footer", icon: PanelBottom },
 ];
 

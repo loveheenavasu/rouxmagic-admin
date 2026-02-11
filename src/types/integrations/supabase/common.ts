@@ -10,7 +10,8 @@ export enum Tables {
     Contents = "contents",
     Footer = "footer",
     Pairings = "pairings",
-    Shop = "shop"
+    Shop = "shop",
+    ContentRows = "content_rows"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {

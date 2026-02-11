@@ -19,6 +19,7 @@ import Listen from "./pages/Listen";
 import Read from "./pages/Read";
 import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
+import ContentRows from "./pages/ContentRows";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -149,6 +150,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Footer />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/content-rows"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ContentRows />
               </Layout>
             </ProtectedRoute>
           }
