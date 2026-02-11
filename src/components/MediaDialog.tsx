@@ -115,21 +115,34 @@ export default function MediaDialog({
     },
   });
 
-  // Fetch dynamic content type filters
+  // Fetch ALL content_rows to get all filter_values (not just content_type)
   const { data: contentRowFilters = [] } = useQuery({
-    queryKey: ["content-row-filters"],
+    queryKey: ["content-row-filters", "all"],
     queryFn: async () => {
       const { ContentRows } = await import(
         "@/api/integrations/supabase/content_rows/content_rows"
       );
+      // Fetch ALL content_rows - no filter on filter_type
       const resp = await (ContentRows as any).get({
-        eq: [{ key: "filter_type", value: "content_type" }],
+        eq: [], // No filter - get all rows
+        sort: "order_index",
+        sortBy: "asc",
       });
-      console.log("resp.data====>", resp.data)
-      return Array.isArray(resp.data)
+      
+      if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
+        console.error("Failed to fetch content row filters:", resp.error);
+        return [];
+      }
+      
+      const rows = Array.isArray(resp.data)
         ? resp.data
-        : [resp.data].filter(Boolean);
+        : resp.data 
+          ? [resp.data].filter(Boolean)
+          : [];
+      
+      return rows;
     },
+    enabled: open, // Only fetch when dialog is open
     staleTime: 5 * 60 * 1000,
   });
 
@@ -438,24 +451,41 @@ export default function MediaDialog({
         return typeMap[type] || type;
       };
 
-      // Merge with dynamic types from content_rows if available
-      const dynamicTypes = (contentRowFilters || [])
+      // Extract and merge ALL filter_values from ALL content_rows (regardless of filter_type)
+      const allFilterValues: string[] = (contentRowFilters || [])
         .flatMap((row: any) => {
-          const values = row.filter_value
-            ? row.filter_value.split(",").map((v: string) => v.trim())
-            : [];
+          if (!row?.filter_value) {
+            return [];
+          }
+          // Split by comma and clean up each value
+          const values = String(row.filter_value)
+            .split(",")
+            .map((v: string) => v.trim())
+            .filter((v: string) => v.length > 0); // Remove empty strings
           return values;
-        })
-        .map((v: string) => normalizeType(v.trim()))
-        .filter((v: string) => v) // filter out empty
-        .filter(
-          (v: string) =>
-            !standardTypes.some((st) => st.value.toLowerCase() === v.toLowerCase())
-        );
+        });
 
-      // Unique dynamic types
-      const uniqueDynamicTypes = [...new Set(dynamicTypes)];
-
+      // Normalize types (convert plurals to singular, etc.)
+      const normalizedValues = allFilterValues.map((v: string) => normalizeType(v));
+      
+      // Get all unique normalized values first (case-insensitive deduplication)
+      const uniqueNormalized = Array.from(
+        new Map(
+          normalizedValues
+            .filter((v: string) => v.length > 0)
+            .map((v: string) => [v.toLowerCase(), v])
+        ).values()
+      );
+      
+      // Filter out types that already exist in standardTypes (case-insensitive)
+      // This ensures we only show additional types, not duplicates
+      const standardTypeValues = standardTypes.map(st => st.value.toLowerCase());
+      const dynamicTypes: string[] = uniqueNormalized.filter(
+        (v: string) => !standardTypeValues.includes(v.toLowerCase())
+      );
+      
+      // Final unique dynamic types sorted alphabetically
+      const uniqueDynamicTypes: string[] = dynamicTypes.sort();
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
