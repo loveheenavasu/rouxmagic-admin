@@ -12,18 +12,11 @@ import {
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { ContentTypeEnum, Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
+import { ContentTypeEnum, Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -37,16 +30,8 @@ export default function Watch() {
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
-  const [activeShelfId, setActiveShelfId] = useState<string>("all");
 
-  const { data: shelves = [] } = useQuery({
-    queryKey: ["content-rows", "listen"],
-    queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "listen" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
-  });
+
 
   const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
@@ -69,7 +54,7 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, activeShelfId],
+    queryKey: ["media", searchQuery, statusFilter],
     queryFn: async () => {
       const eqFilters: any[] = [];
       let inValueFilter: any = {
@@ -81,33 +66,6 @@ export default function Watch() {
         eqFilters.push({ key: "status", value: statusFilter });
       }
 
-      // Apply shelf filter logic
-      if (activeShelfId !== "all") {
-        const shelf = shelves.find(s => s.id === activeShelfId);
-        if (shelf) {
-          if (shelf.filter_type === FilterTypeEnum.Flag) {
-            eqFilters.push({ key: shelf.filter_value, value: true });
-          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
-            eqFilters.push({ key: "content_type", value: "Audiobook" });
-          } else if (shelf.filter_type === FilterTypeEnum.Song) {
-            eqFilters.push({ key: "content_type", value: "Song" });
-          } else if (shelf.filter_type === FilterTypeEnum.Listen) {
-            inValueFilter = {
-              key: "content_type",
-              value: ["Audiobook", "Song"]
-            };
-          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
-            if (shelf.filter_value.includes(",")) {
-              inValueFilter = {
-                key: shelf.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
-                value: shelf.filter_value.split(",").map(v => v.trim())
-              };
-            } else {
-              eqFilters.push({ key: shelf.filter_type, value: shelf.filter_value });
-            }
-          }
-        }
-      }
 
       const response = await projectsAPI.get({
         eq: [
@@ -496,33 +454,6 @@ export default function Watch() {
 
           // Apply manual filters
           if (statusFilter !== "all") defaults.status = statusFilter;
-
-          // Apply shelf filters (overriding manual if specific)
-          if (activeShelfId !== "all") {
-            const shelf = shelves.find((s) => s.id === activeShelfId);
-            if (shelf) {
-              if (shelf.filter_type === FilterTypeEnum.ContentType) {
-                const type = shelf.filter_value.split(",")[0].trim();
-                defaults.content_type = type;
-              }
-              if (shelf.filter_type === FilterTypeEnum.Audiobook) {
-                defaults.content_type = "Audiobook";
-              }
-              if (shelf.filter_type === FilterTypeEnum.Song) {
-                defaults.content_type = "Song";
-              }
-              if (shelf.filter_type === FilterTypeEnum.Listen) {
-                defaults.content_type = "Song";
-              }
-              if (shelf.filter_type === FilterTypeEnum.Status) {
-                const status = shelf.filter_value.split(",")[0].trim();
-                defaults.status = status;
-              }
-              if (shelf.filter_type === FilterTypeEnum.Flag) {
-                defaults[shelf.filter_value] = true;
-              }
-            }
-          }
 
           return defaults;
         })()}

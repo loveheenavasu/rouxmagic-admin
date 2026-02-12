@@ -12,7 +12,7 @@ import {
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
+import { Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
@@ -33,14 +33,7 @@ export default function Watch() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
 
-  const { data: shelves = [] } = useQuery({
-    queryKey: ["content-rows", "watch"],
-    queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "watch" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
-  });
+
 
   const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {

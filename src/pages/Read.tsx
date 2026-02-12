@@ -35,20 +35,7 @@ export default function Read() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
 
-  const { data: shelves = [] } = useQuery({
-    queryKey: ["content-rows", "read"],
-    queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({
-        eq: [
-          { key: "page", value: "read" },
-          { key: "is_active", value: true },
-          { key: "is_deleted", value: false }
-        ]
-      });
-      return Array.isArray(resp.data) ? resp.data as any[] : [];
-    }
-  });
+
 
   const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
