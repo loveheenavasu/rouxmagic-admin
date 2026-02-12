@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { ContentTypeEnum, Flag, Project } from "@/types";
@@ -29,6 +29,22 @@ export default function Watch() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
+
+
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
+  };
 
   const queryClient = useQueryClient();
 
@@ -40,19 +56,23 @@ export default function Watch() {
   } = useQuery<Project[]>({
     queryKey: ["media", searchQuery, statusFilter],
     queryFn: async () => {
-      const eqFilters: { key: "status" | "content_type"; value: any }[] = [
-        { key: "content_type", value: ContentTypeEnum.Song },
-      ];
+      const eqFilters: any[] = [];
+      let inValueFilter: any = {
+        key: "content_type",
+        value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook]
+      };
 
       if (statusFilter !== "all") {
         eqFilters.push({ key: "status", value: statusFilter });
       }
+
 
       const response = await projectsAPI.get({
         eq: [
           ...eqFilters,
           { key: "is_deleted" as any, value: false }
         ] as any,
+        inValue: inValueFilter,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -270,28 +290,63 @@ export default function Watch() {
 
       {/* Search and Filter Section */}
 
-      <MediaFilters
-        searchPlaceholder="Search by title..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        availableStatuses={availableStatuses}
-        availableTypes={availableTypes}
-      />
+      <div className="flex flex-col lg:flex-row gap-4">
+        <MediaFilters
+          searchPlaceholder="Search by title..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          availableStatuses={availableStatuses}
+          availableTypes={availableTypes}
+        />
+      </div>
       {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50">Actions</TableHead>
+              <TableHead
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+              >
+                <div className="flex items-center gap-2">
+                  Actions
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-4 w-4 transition-opacity ${stickyColumns.includes("actions") ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    onClick={() => toggleSticky("actions")}
+                  >
+                    {stickyColumns.includes("actions") ? (
+                      <PinOff className="h-3 w-3" />
+                    ) : (
+                      <Pin className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
-                  sticky={key === "title" ? "left" : undefined}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                  sticky={stickyColumns.includes(key) ? "left" : undefined}
                 >
-                  {key.replace(/_/g, " ")}
+                  <div className="flex items-center gap-2">
+                    {key.replace(/_/g, " ")}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      onClick={() => toggleSticky(key)}
+                    >
+                      {stickyColumns.includes(key) ? (
+                        <PinOff className="h-3 w-3" />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -324,7 +379,9 @@ export default function Watch() {
                     data-state={isSelected ? "selected" : undefined}
                   >
                     <TableCell
-                     className="px-4 whitespace-nowrap">
+                      className="px-4 whitespace-nowrap"
+                      sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                    >
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
@@ -352,7 +409,11 @@ export default function Watch() {
                     {displayFields.map((key) => {
                       const value = media[key as keyof Project];
                       return (
-                        <TableCell key={key} className="max-w-[200px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50" sticky={key === "title" ? "left" : undefined}>
+                        <TableCell
+                          key={key}
+                          className="max-w-[200px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                          sticky={stickyColumns.includes(key) ? "left" : undefined}
+                        >
                           {value === null || value === undefined ? (
                             <span className="text-muted-foreground text-xs">
                               —
@@ -386,6 +447,16 @@ export default function Watch() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
+        defaultValues={(() => {
+          const defaults: any = {
+            content_type: ContentTypeEnum.Song, // Default for Listen page
+          };
+
+          // Apply manual filters
+          if (statusFilter !== "all") defaults.status = statusFilter;
+
+          return defaults;
+        })()}
         isLoading={createMutation.isPending || updateMutation.isPending}
         allowedFields={carouselAllowedFields}
       />

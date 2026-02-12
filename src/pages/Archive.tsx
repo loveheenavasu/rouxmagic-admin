@@ -32,14 +32,15 @@ import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Footers } from "@/api/integrations/supabase/footer/footer";
-import { Contents } from "@/api";
+import { Contents, ContentRows } from "@/api";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 const projectsAPI = Projects as Required<typeof Projects>;
 const footersAPI = Footers as Required<typeof Footers>;
 const chaptersAPI = Contents as Required<typeof Contents>;
+const contentRowsAPI = ContentRows as Required<typeof ContentRows>;
 
-export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer" | "chapter";
+export type ArchiveSource = "recipe" | "watch" | "listen" | "read" | "footer" | "chapter" | "content_row";
 
 export interface ArchivedItem {
   source: ArchiveSource;
@@ -72,6 +73,7 @@ const SOURCE_LABELS: Record<ArchiveSource, string> = {
   read: "Read",
   footer: "Footer",
   chapter: "Chapter",
+  content_row: "Row",
 };
 
 const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
@@ -81,6 +83,7 @@ const SOURCE_ICONS: Record<ArchiveSource, typeof Film> = {
   read: BookOpen,
   footer: ArchiveIcon,
   chapter: BookOpen,
+  content_row: ArchiveIcon,
 };
 
 const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
@@ -90,6 +93,7 @@ const SOURCE_BADGE_CLASS: Record<ArchiveSource, string> = {
   read: "bg-sky-100 text-sky-800 hover:bg-sky-100",
   footer: "bg-gray-100 text-gray-800 hover:bg-gray-100",
   chapter: "bg-amber-100 text-amber-800 hover:bg-amber-100",
+  content_row: "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
 };
 
 export default function Archive() {
@@ -106,6 +110,7 @@ export default function Archive() {
     { data: projects = [], isLoading: projectsLoading, error: projectsError },
     { data: footers = [], isLoading: footersLoading, error: footersError },
     { data: chapters = [], isLoading: chaptersLoading, error: chaptersError },
+    { data: contentRows = [], isLoading: contentRowsLoading, error: contentRowsError },
   ] = useQueries({
     queries: [
       {
@@ -186,6 +191,24 @@ export default function Archive() {
           return Array.isArray(response.data) ? response.data : [response.data];
         },
       },
+      {
+        queryKey: ["archived-content-rows", searchQuery],
+        queryFn: async () => {
+          const response = await contentRowsAPI.get({
+            eq: [{ key: "is_deleted" as any, value: true }],
+            sort: "created_at",
+            sortBy: "dec",
+            search: searchQuery || undefined,
+            searchFields: ["label"],
+          });
+          if (response.flag !== Flag.Success) {
+            throw new Error(
+              response.error?.message || "Failed to fetch content rows"
+            );
+          }
+          return Array.isArray(response.data) ? response.data : [response.data];
+        },
+      },
     ],
   });
 
@@ -221,7 +244,15 @@ export default function Archive() {
       raw: c,
     }));
 
-    const combined = [...recipeItems, ...projectItems, ...footerItems, ...chapterItems];
+    const contentRowItems: ArchivedItem[] = (contentRows as any[]).map((r) => ({
+      source: "content_row",
+      id: r.id,
+      title: r.label,
+      subtitle: r.page,
+      raw: r,
+    }));
+
+    const combined = [...recipeItems, ...projectItems, ...footerItems, ...chapterItems, ...contentRowItems];
     combined.sort((a, b) => {
       const aDate =
         "deleted_at" in a.raw && a.raw.deleted_at
@@ -236,8 +267,8 @@ export default function Archive() {
     return combined;
   }, [recipes, projects, footers, chapters]);
 
-  const isLoading = recipesLoading || projectsLoading || footersLoading || chaptersLoading;
-  const error = recipesError || projectsError || footersError || chaptersError;
+  const isLoading = recipesLoading || projectsLoading || footersLoading || chaptersLoading || contentRowsLoading;
+  const error = recipesError || projectsError || footersError || chaptersError || contentRowsError;
 
   const restoreMutation = useMutation({
     mutationFn: async (item: ArchivedItem) => {
@@ -256,6 +287,11 @@ export default function Archive() {
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
           throw new Error(res.error?.message || "Failed to restore");
         }
+      } else if (item.source === "content_row") {
+        const res = await contentRowsAPI.toogleSoftDeleteOneByID(item.id, false);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+          throw new Error(res.error?.message || "Failed to restore");
+        }
       } else {
         const res = await projectsAPI.toogleSoftDeleteOneByID(item.id, false);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -268,6 +304,7 @@ export default function Archive() {
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
       queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
       queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-content-rows"] });
       toast.success(`"${item.title}" restored.`);
       setSelectedIds(prev => prev.filter(id => id !== item.id));
     },
@@ -293,6 +330,11 @@ export default function Archive() {
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
           throw new Error(res.error?.message || "Failed to delete");
         }
+      } else if (item.source === "content_row") {
+        const res = await contentRowsAPI.deleteOneByIDPermanent(item.id);
+        if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
+          throw new Error(res.error?.message || "Failed to delete");
+        }
       } else {
         const res = await projectsAPI.deleteOneByIDPermanent(item.id);
         if (res.flag !== Flag.Success && res.flag !== Flag.UnknownOrSuccess) {
@@ -305,6 +347,7 @@ export default function Archive() {
       queryClient.invalidateQueries({ queryKey: ["archived-projects"] });
       queryClient.invalidateQueries({ queryKey: ["archived-footers"] });
       queryClient.invalidateQueries({ queryKey: ["archived-chapters"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-content-rows"] });
       toast.success(`"${item.title}" permanently deleted.`);
       setSelectedIds(prev => prev.filter(id => id !== item.id));
     },
@@ -369,7 +412,7 @@ export default function Archive() {
               Archive
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Items moved to the bin from Recipe, Watch, Listen, Read, and Chapters.
+              Items moved to the bin from Recipe, Watch, Listen, Read, Chapters, and Rows.
               Restore or delete permanently.
             </p>
           </div>

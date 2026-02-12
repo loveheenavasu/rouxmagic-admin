@@ -411,91 +411,91 @@ export default function HomeCarousel() {
                             className={`px-2 py-1 rounded-full text-xs font-medium ${item.status === "released"
                               ? "bg-green-100 text-green-700"
                               : item.status === "coming_soon"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {item.status || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.platform || ""}
-                        >
-                          {item.platform || (
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-700"
+                              }`}
+                          >
+                            {item.status || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.platform || ""}
+                          >
+                            {item.platform || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
+                          {editingOrderId === item.id ? (
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="number"
+                                value={orderValue}
+                                onChange={(e) =>
+                                  setOrderValue(Number(e.target.value))
+                                }
+                                className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => saveOrderIndex(item)}
+                                className="text-green-600 hover:bg-green-50"
+                              >
+                                ✔
+                              </Button>
+
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={cancelEditOrder}
+                                className="text-slate-400 hover:bg-slate-100"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span>{item.order_index}</span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditOrder(item);
+                                }}
+                                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
+                          {item.release_year || (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 whitespace-nowrap">
-                        {editingOrderId === item.id ? (
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="number"
-                              value={orderValue}
-                              onChange={(e) =>
-                                setOrderValue(Number(e.target.value))
-                              }
-                              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => saveOrderIndex(item)}
-                              className="text-green-600 hover:bg-green-50"
-                            >
-                              ✔
-                            </Button>
-
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={cancelEditOrder}
-                              className="text-slate-400 hover:bg-slate-100"
-                            >
-                              ✕
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{item.order_index}</span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditOrder(item);
-                              }}
-                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
-                        {item.release_year || (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
-                        {item.runtime_minutes || (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
-                        <span
-                          className="truncate block"
-                          title={item.notes || ""}
-                        >
-                          {item.notes || (
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 text-right whitespace-nowrap">
+                          {item.runtime_minutes || (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
-                        </span>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell className="text-slate-600 font-medium px-4 max-w-[200px] truncate">
+                          <span
+                            className="truncate block"
+                            title={item.notes || ""}
+                          >
+                            {item.notes || (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </span>
+                        </TableCell>
+                      </TableRow>
                     );
                   })
                 ) : (
@@ -522,6 +522,7 @@ export default function HomeCarousel() {
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
         allowedFields={carouselAllowedFields}
+        defaultValues={{ in_hero_carousel: true }}
       />
 
       <DeleteConfirmationDialog

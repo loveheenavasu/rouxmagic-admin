@@ -9,14 +9,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { StatsRow } from "@/components/StatsRow";
 import { Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
+import { StatsRow } from "@/components/StatsRow";
+import { cn } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -30,6 +31,45 @@ export default function Watch() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+
+
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
+  };
+
+  // Calculate left offset for sticky columns
+  const getStickyOffset = (columnKey: string): number => {
+    const columnWidths: Record<string, number> = {
+      actions: 120,
+      title: 200,
+      content_type: 150,
+      status: 150,
+      platform: 150,
+      release_year: 120,
+      runtime_minutes: 150,
+      notes: 300,
+    };
+
+    const index = stickyColumns.indexOf(columnKey);
+    if (index === -1) return 0;
+
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += columnWidths[stickyColumns[i]] || 150;
+    }
+    return offset;
+  };
 
   const queryClient = useQueryClient();
 
@@ -41,7 +81,8 @@ export default function Watch() {
   } = useQuery<Project[]>({
     queryKey: ["media", searchQuery, statusFilter, contentTypeFilter],
     queryFn: async () => {
-      const eqFilters: { key: "status" | "content_type"; value: any }[] = [];
+      const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
+      let inValueFilter: any = { key: "content_type" as any, value: ["TV Show", "Film"] };
 
       if (statusFilter !== "all") {
         eqFilters.push({ key: "status", value: statusFilter });
@@ -50,31 +91,19 @@ export default function Watch() {
         eqFilters.push({ key: "content_type", value: contentTypeFilter });
       }
 
+
       const response = await projectsAPI.get({
-        eq: [
-          ...eqFilters,
-          { key: "is_deleted" as any, value: false }
-        ] as any,
-        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] },
+        eq: eqFilters as any,
+        inValue: inValueFilter,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
         searchFields: ["title", "content_type"],
       });
-
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        const supabaseError = response.error?.output as any;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to fetch media";
-        throw new Error(errorMessage);
+      // ... same handling as HomePage
+      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+        throw new Error(response.error?.message || "Failed to fetch projects");
       }
-
       return Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
@@ -272,33 +301,74 @@ export default function Watch() {
         handleNew={handleAddNew}
       />
 
-      <MediaFilters
-        searchPlaceholder="Search by title..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        contentTypeFilter={contentTypeFilter}
-        onContentTypeFilterChange={setContentTypeFilter}
-        availableStatuses={availableStatuses}
-        availableTypes={availableTypes}
-      />
+      <div className="flex flex-col lg:flex-row gap-4">
+        <MediaFilters
+          searchPlaceholder="Search by title..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          contentTypeFilter={contentTypeFilter}
+          onContentTypeFilterChange={setContentTypeFilter}
+          availableStatuses={availableStatuses}
+          availableTypes={availableTypes}
+        />
+      </div>
 
       {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50">
-                Actions
+              <TableHead
+                className={cn(
+                  "text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap bg-slate-50 group",
+                  stickyColumns.includes("actions") && stickyColumns.indexOf("actions") === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes("actions") ? "pl-4 pr-0" : "px-4"
+                )}
+                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+              >
+                <div className="flex items-center gap-2">
+                  Actions
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-4 w-4 transition-opacity ${stickyColumns.includes("actions") ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    onClick={() => toggleSticky("actions")}
+                  >
+                    {stickyColumns.includes("actions") ? (
+                      <PinOff className="h-3 w-3" />
+                    ) : (
+                      <Pin className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
               </TableHead>
               {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50"
-                  sticky={key === "title" ? "left" : undefined}
+                  className={cn(
+                    "text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap bg-slate-50 group",
+                    stickyColumns.includes(key) && stickyColumns.indexOf(key) === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes(key) ? "pl-4 pr-0" : "px-4"
+                  )}
+                  sticky={stickyColumns.includes(key) ? "left" : undefined}
+                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
                 >
-                  {key.replace(/_/g, " ")}
+                  <div className="flex items-center gap-2">
+                    {key.replace(/_/g, " ")}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      onClick={() => toggleSticky(key)}
+                    >
+                      {stickyColumns.includes(key) ? (
+                        <PinOff className="h-3 w-3" />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -331,7 +401,10 @@ export default function Watch() {
                       }}
                       data-state={isSelected ? "selected" : undefined}
                     >
-                      <TableCell className="px-4 whitespace-nowrap">
+                      <TableCell className={cn(
+                        "whitespace-nowrap",
+                        stickyColumns.includes("actions") && stickyColumns.indexOf("actions") === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes("actions") ? "pl-4 pr-0" : "px-4"
+                      )} sticky={stickyColumns.includes("actions") ? "left" : undefined} left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}>
                         <div className="flex gap-2">
                           <Button
                             variant="ghost"
@@ -361,15 +434,20 @@ export default function Watch() {
                         return (
                           <TableCell
                             key={key}
-                            className="max-w-[200px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
-                            sticky={key === "title" ? "left" : undefined}
+                            className={cn(
+                              "group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50",
+                              key === "notes" || key === "description" ? "max-w-[300px]" : "max-w-[200px]",
+                              stickyColumns.includes(key) && stickyColumns.indexOf(key) === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes(key) ? "pl-4 pr-0" : "px-4"
+                            )}
+                            sticky={stickyColumns.includes(key) ? "left" : undefined}
+                            left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
                           >
                             {value === null || value === undefined ? (
                               <span className="text-muted-foreground text-xs">
                                 —
                               </span>
                             ) : (
-                              <span title={String(value)}>{String(value)}</span>
+                              <span className="truncate block" title={String(value)}>{String(value)}</span>
                             )}
                           </TableCell>
                         );
@@ -398,6 +476,16 @@ export default function Watch() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
+        defaultValues={(() => {
+          const defaults: any = {};
+
+          // Apply manual filters first
+          if (statusFilter !== "all") defaults.status = statusFilter;
+          if (contentTypeFilter !== "all") defaults.content_type = contentTypeFilter;
+
+
+          return Object.keys(defaults).length > 0 ? defaults : undefined;
+        })()}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
 
