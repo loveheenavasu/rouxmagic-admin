@@ -44,6 +44,21 @@ export async function fetchProjectsByContentRow(
         eqFilters.push({ key: row.filter_value as any, value: true });
         break;
 
+      case FilterTypeEnum.Audiobook:
+        eqFilters.push({ key: "content_type", value: "Audiobook" });
+        break;
+
+      case FilterTypeEnum.Song:
+        eqFilters.push({ key: "content_type", value: "Song" });
+        break;
+
+      case FilterTypeEnum.Listen:
+        inValueFilter = {
+          key: "content_type",
+          value: ["Audiobook", "Song"],
+        };
+        break;
+
       case FilterTypeEnum.Custom:
         console.warn(
           `Custom filter type not fully implemented for: ${row.filter_value}`

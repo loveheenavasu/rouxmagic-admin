@@ -20,8 +20,8 @@ import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
 import { StatsRow } from "@/components/StatsRow";
 
-const READ_TYPES = ["Comic", "Book", "Audiobook"] as const;
-const projectsAPI = Projects as Required<typeof Projects>;
+const READ_TYPES = ["Audiobook"] as const;
+const projectsAPI = Projects;
 
 export default function Read() {
   const navigate = useNavigate();
@@ -35,12 +35,32 @@ export default function Read() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
 
+  const { data: shelves = [] } = useQuery({
+    queryKey: ["content-rows", "read"],
+    queryFn: async () => {
+      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({
+        eq: [
+          { key: "page", value: "read" },
+          { key: "is_active", value: true },
+          { key: "is_deleted", value: false }
+        ]
+      });
+      return Array.isArray(resp.data) ? resp.data as any[] : [];
+    }
+  });
+
   const toggleSticky = (key: string) => {
-    setStickyColumns((prev) =>
-      prev.includes(key)
-        ? prev.filter((col) => col !== key)
-        : [...prev, key]
-    );
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
   };
 
   const queryClient = useQueryClient();
@@ -53,42 +73,38 @@ export default function Read() {
   } = useQuery<Project[]>({
     queryKey: ["read-items", searchQuery, statusFilter, contentTypeFilter],
     queryFn: async () => {
-      const search = searchQuery.trim();
-
-      let query = supabase
-        .from("projects")
-        .select("*")
-        .in("content_type", READ_TYPES as any)
-        .eq("is_deleted", false)
-        .order("order_index", { ascending: true });
+      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
+      let inValue: any = { key: "content_type", value: [...READ_TYPES] };
 
       if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+        eqFilters.push({ key: "status", value: statusFilter });
       }
 
       if (contentTypeFilter !== "all") {
-        query = query.eq("content_type", contentTypeFilter);
+        // If specific content type filter is set, it overrides the general READ_TYPES
+        inValue = { key: "content_type", value: [contentTypeFilter] };
       }
 
-      if (search) {
-        const pattern = `%${search}%`;
-        query = query.or(
-          `title.ilike.${pattern},platform.ilike.${pattern},notes.ilike.${pattern}`
-        );
+      const response = await projectsAPI.get({
+        eq: eqFilters,
+        inValue,
+        search: searchQuery.trim() || undefined,
+        searchFields: ["title", "platform", "notes"],
+        sort: "order_index",
+        sortBy: "asc"
+      });
+
+      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+        throw new Error(response.error?.message || "Failed to fetch read content");
       }
 
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(error.message || "Failed to fetch read content");
-      }
-
-      return (data || []) as Project[];
+      const data = response.data;
+      return (Array.isArray(data) ? data : data ? [data] : []) as Project[];
     },
   });
 
   // Create mutation
-  const createMutation = useMutation({
+  const createMutation = useMutation<Project, Error, any>({
     mutationFn: async (data: any) => {
       const response = await projectsAPI.createOne(data);
       if (
@@ -112,7 +128,7 @@ export default function Read() {
   });
 
   // Update mutation
-  const updateMutation = useMutation({
+  const updateMutation = useMutation<Project, Error, { id: string; data: any }>({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const response = await projectsAPI.updateOneByID(id, data);
       if (
@@ -137,7 +153,7 @@ export default function Read() {
   });
 
   // Delete mutation
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutation<void, Error, string>({
     mutationFn: async (id: string) => {
       const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
@@ -264,18 +280,19 @@ export default function Read() {
         handleNew={handleAddNew}
       />
 
-      {/* Search and Filter Section */}
-      <MediaFilters
-        searchPlaceholder="Search by title, platform or notes..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        contentTypeFilter={contentTypeFilter}
-        onContentTypeFilterChange={setContentTypeFilter}
-        availableStatuses={availableStatuses}
-        availableTypes={availableTypes}
-      />
+      <div className="flex flex-col lg:flex-row gap-4">
+        <MediaFilters
+          searchPlaceholder="Search by title, platform or notes..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          contentTypeFilter={contentTypeFilter}
+          onContentTypeFilterChange={setContentTypeFilter}
+          availableStatuses={availableStatuses}
+          availableTypes={availableTypes}
+        />
+      </div>
 
       {/* Table */}
       <div className="rounded-md border">

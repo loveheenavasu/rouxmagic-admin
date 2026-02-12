@@ -4,6 +4,7 @@ export enum PageEnum {
   Home = "home",
   Watch = "watch",
   Listen = "listen",
+  Read = "read",
   MyList = "mylist",
 }
 
@@ -12,6 +13,9 @@ export enum FilterTypeEnum {
   ContentType = "content_type",
   Flag = "flag",
   Custom = "custom",
+  Audiobook = "Audiobook",
+  Song = "Song",
+  Listen = "Listen",
 }
 
 export interface ContentRowMetaData {
@@ -22,6 +26,8 @@ export interface ContentRowMetaData {
   order_index: number;
   is_active: boolean;
   max_items?: number | null;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export type GetContentRowsBy =

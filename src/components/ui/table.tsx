@@ -68,18 +68,20 @@ TableRow.displayName = "TableRow"
 
 interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   sticky?: "left" | "right"
+  left?: number | string
 }
 
 const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
-  ({ className, sticky, ...props }, ref) => (
+  ({ className, sticky, left, ...props }, ref) => (
     <th
       ref={ref}
+      style={sticky === "left" && left !== undefined ? { left, backgroundColor: 'white' } : sticky === "left" ? { backgroundColor: 'white' } : undefined}
       className={cn(
-        "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 whitespace-nowrap",
         sticky === "left" &&
-        "sticky left-0 z-20 bg-background shadow-[1px_0_0_0_hsl(var(--border)),4px_0_8px_-2px_rgba(0,0,0,0.15)]",
+        "sticky left-0 z-30 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-50",
         sticky === "right" &&
-        "sticky right-0 z-20 bg-background shadow-[-1px_0_0_0_hsl(var(--border)),-4px_0_8px_-2px_rgba(0,0,0,0.15)]",
+        "sticky right-0 z-30 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.15)]",
         className
       )}
       {...props}
@@ -90,18 +92,20 @@ TableHead.displayName = "TableHead"
 
 interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
   sticky?: "left" | "right"
+  left?: number | string
 }
 
 const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ className, sticky, ...props }, ref) => (
+  ({ className, sticky, left, ...props }, ref) => (
     <td
       ref={ref}
+      style={sticky === "left" && left !== undefined ? { left, backgroundColor: 'white' } : sticky === "left" ? { backgroundColor: 'white' } : undefined}
       className={cn(
         "p-4 align-middle [&:has([role=checkbox])]:pr-0",
         sticky === "left" &&
-        "sticky left-0 z-10 bg-background shadow-[1px_0_0_0_hsl(var(--border)),4px_0_8px_-2px_rgba(0,0,0,0.15)] group-hover:bg-muted/50 group-data-[state=selected]:bg-muted",
+        "sticky left-0 z-20 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
         sticky === "right" &&
-        "sticky right-0 z-10 bg-background shadow-[-1px_0_0_0_hsl(var(--border)),-4px_0_8px_-2px_rgba(0,0,0,0.15)] group-hover:bg-muted/50 group-data-[state=selected]:bg-muted",
+        "sticky right-0 z-20 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.15)] group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
         className
       )}
       {...props}

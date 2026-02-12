@@ -105,23 +105,53 @@ const ContentRowsPage = () => {
             const rowsWithCounts = await Promise.all(
                 rows.map(async (row) => {
                     const eqFilters: any[] = [];
-                    const inValue: any = row.filter_value.includes(",")
+                    let inValue: any = row.filter_value.includes(",")
                         ? {
                             key: row.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
                             value: row.filter_value.split(",").map(v => v.trim())
                         }
                         : undefined;
 
+                    // Enforce Audiobook content type for "Read" page
+                    if (row.page === "read") {
+                        eqFilters.push({ key: "content_type", value: "Audiobook" });
+                    }
+
                     if (!inValue) {
                         if (row.filter_type === FilterTypeEnum.Flag) {
-                            eqFilters.push({ key: row.filter_value, value: true });
+                            // Known flag columns that exist in the database
+                            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+                            const flagExists = knownFlags.includes(row.filter_value.toLowerCase());
+
+                            if (flagExists) {
+                                // Query by the flag column
+                                eqFilters.push({ key: row.filter_value, value: true });
+                            } else {
+                                // For custom rows, query by content_type using the row's label
+                                // but only if not already restricted by Audiobook (Read page)
+                                if (row.page !== "read") {
+                                    eqFilters.push({ key: "content_type", value: row.label });
+                                }
+                            }
+                        } else if (row.filter_type === FilterTypeEnum.Audiobook) {
+                            eqFilters.push({ key: "content_type", value: "Audiobook" });
+                        } else if (row.filter_type === FilterTypeEnum.Song) {
+                            eqFilters.push({ key: "content_type", value: "Song" });
+                        } else if (row.filter_type === FilterTypeEnum.Listen) {
+                            inValue = {
+                                key: "content_type",
+                                value: ["Audiobook", "Song"]
+                            };
                         } else {
-                            eqFilters.push({ key: row.filter_type, value: row.filter_value });
+                            // Only add if not duplicating content_type key for Read page
+                            if (!(row.page === "read" && row.filter_type === "content_type")) {
+                                eqFilters.push({ key: row.filter_type, value: row.filter_value });
+                            }
                         }
                     }
 
                     const projectsResp = await projectsAPI.get({
-                        eq: eqFilters,
+                        eq: [...eqFilters, { key: "is_deleted", value: false }],
                         inValue,
                         limit: 1 // We just need to check if any exist or more
                     });
@@ -280,8 +310,13 @@ const ContentRowsPage = () => {
 
     const inferFilterType = (key: string): FilterTypeEnum => {
         const lowerKey = key.toLowerCase();
-        // Check for content types
-        if (["film", "tv show", "song", "audiobook", "episode", "season"].some(type => lowerKey.includes(type))) {
+        // Specific types requested for Listen page
+        if (lowerKey === "listen") return FilterTypeEnum.Listen;
+        if (lowerKey === "audiobook" || lowerKey === "audiobooks") return FilterTypeEnum.Audiobook;
+        if (lowerKey === "song" || lowerKey === "songs") return FilterTypeEnum.Song;
+
+        // Check for other content types
+        if (["film", "tv show", "episode", "season"].some(type => lowerKey.includes(type))) {
             return FilterTypeEnum.ContentType;
         }
         // Check for statuses
@@ -350,8 +385,7 @@ const ContentRowsPage = () => {
                     <TabsTrigger value="all" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">All Pages</TabsTrigger>
                     <TabsTrigger value="home" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Home</TabsTrigger>
                     <TabsTrigger value="watch" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Watch</TabsTrigger>
-                    <TabsTrigger value="listen" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Listen</TabsTrigger>
-                    <TabsTrigger value="mylist" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">My List</TabsTrigger>
+                    <TabsTrigger value="read" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Read</TabsTrigger>
                 </TabsList>
             </Tabs>
 
@@ -545,9 +579,18 @@ const ContentRowsPage = () => {
                                 <Input
                                     id="label"
                                     value={formData.label}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, label: e.target.value })
-                                    }
+                                    onChange={(e) => {
+                                        const rawVal = e.target.value;
+                                        const formattedVal = rawVal ? rawVal.charAt(0).toUpperCase() + rawVal.slice(1).toLowerCase() : "";
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            label: formattedVal,
+                                            // Only auto-fill filter_value if adding a new row
+                                            filter_value: !selectedRow
+                                                ? formattedVal
+                                                : prev.filter_value
+                                        }));
+                                    }}
                                     placeholder="e.g., Trending Now"
                                     required
                                     className="bg-slate-50 border-slate-200"
@@ -555,30 +598,64 @@ const ContentRowsPage = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="filter_value">Filter Key *</Label>
-                                <Select
-                                    value={formData.filter_value}
-                                    onValueChange={(value) =>
-                                        setFormData({ ...formData, filter_value: value })
-                                    }
-                                >
-                                    <SelectTrigger className="bg-slate-50 border-slate-200 font-mono text-xs">
-                                        <SelectValue placeholder="Select a filter..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Film">Film (Content Type)</SelectItem>
-                                        <SelectItem value="TV Show">TV Show (Content Type)</SelectItem>
-                                        <SelectItem value="Song">Song (Content Type)</SelectItem>
-                                        <SelectItem value="Audiobook">Audiobook (Content Type)</SelectItem>
-                                        <SelectItem value="in_now_playing">Now Playing (Flag)</SelectItem>
-                                        <SelectItem value="in_coming_soon">Coming Soon (Flag)</SelectItem>
-                                        <SelectItem value="in_latest_releases">Latest Releases (Flag)</SelectItem>
-                                        <SelectItem value="in_hero_carousel">Hero Carousel (Flag)</SelectItem>
-                                        <SelectItem value="released">Released (Status)</SelectItem>
-                                        <SelectItem value="created">Created (Status)</SelectItem>
-                                        <SelectItem value="custom">Custom (type manual)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+
+                                <div className="">
+                                    <Label htmlFor="filter_value">Filter Key *</Label>
+                                    <Input
+                                        id="filter_value"
+                                        value={formData.filter_value}
+                                        readOnly
+                                        placeholder="Auto-filled from Label"
+                                        required
+                                        className="bg-slate-50 border-slate-200 font-mono text-sm cursor-not-allowed opacity-70"
+                                    />
+                                </div>
+
+
+
+                                {formData.page === PageEnum.Listen && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {[
+                                            { label: "Listen (Both)", value: "Listen" },
+                                            { label: "Song Only", value: "Song" },
+                                            { label: "Audiobook Only", value: "Audiobook" },
+                                            { label: "Released", value: "released" },
+                                            { label: "Coming Soon", value: "coming_soon" }
+                                        ].map((suggestion) => (
+                                            <Button
+                                                key={suggestion.label}
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-[10px] px-2 rounded-full bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border-slate-200 hover:border-indigo-200 transition-all"
+                                                onClick={() => setFormData({ ...formData, filter_value: suggestion.value })}
+                                            >
+                                                {suggestion.label}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {formData.page === PageEnum.Read && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {[
+                                            { label: "Audiobook Only", value: "Audiobook" },
+                                            { label: "Released", value: "released" },
+                                            { label: "Coming Soon", value: "coming_soon" }
+                                        ].map((suggestion) => (
+                                            <Button
+                                                key={suggestion.label}
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-[10px] px-2 rounded-full bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border-slate-200 hover:border-indigo-200 transition-all"
+                                                onClick={() => setFormData({ ...formData, filter_value: suggestion.value })}
+                                            >
+                                                {suggestion.label}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {formData.filter_value === "custom" && (
                                     <Input
@@ -603,8 +680,7 @@ const ContentRowsPage = () => {
                                     <SelectContent>
                                         <SelectItem value="home">Home</SelectItem>
                                         <SelectItem value="watch">Watch</SelectItem>
-                                        <SelectItem value="listen">Listen</SelectItem>
-                                        <SelectItem value="mylist">My List</SelectItem>
+                                        <SelectItem value="read">Read</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

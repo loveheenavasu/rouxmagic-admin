@@ -15,17 +15,11 @@ import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
 import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
+import { cn } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -41,7 +35,7 @@ const HomePage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
   const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
 
   const { data: shelves = [] } = useQuery({
@@ -53,13 +47,44 @@ const HomePage = () => {
     }
   });
 
+
+
   const toggleSticky = (key: string) => {
-    setStickyColumns((prev) =>
-      prev.includes(key)
-        ? prev.filter((col) => col !== key)
-        : [...prev, key]
-    );
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
   };
+
+  // Calculate left offset for sticky columns
+  const getStickyOffset = (columnKey: string): number => {
+    const columnWidths: Record<string, number> = {
+      actions: 120,
+      title: 200,
+      content_type: 150,
+      status: 150,
+      platform: 150,
+      release_year: 120,
+      runtime_minutes: 150,
+      notes: 300,
+    };
+
+    const index = stickyColumns.indexOf(columnKey);
+    if (index === -1) return 0;
+
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += columnWidths[stickyColumns[i]] || 150;
+    }
+    return offset;
+  };
+
   const debouncedSearchQuery = useDebounce(searchQuery);
 
   const queryClient = useQueryClient();
@@ -69,7 +94,6 @@ const HomePage = () => {
     queryKey: ["unique-statuses"],
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
-      console.log("response", response);
       if (
         response.flag === Flag.Success ||
         (Flag.UnknownOrSuccess && response.data)
@@ -77,7 +101,6 @@ const HomePage = () => {
         const statuses = (response.data as Project[])
           .map((item) => item.status)
           .filter(Boolean);
-        console.log("statuses", statuses);
         return [...new Set(statuses)].sort();
       }
       return [];
@@ -106,10 +129,11 @@ const HomePage = () => {
     error,
   } = useQuery<Project[]>({
     queryKey: [
-      "projects",
+      "home-library",
       debouncedSearchQuery,
       statusFilter,
       contentTypeFilter,
+      selectedShelfId
     ],
     queryFn: async () => {
       const eqFilters: any[] = [];
@@ -123,12 +147,20 @@ const HomePage = () => {
       }
 
       // Apply shelf filter logic
-      // Apply shelf filter logic
       if (selectedShelfId !== "all") {
         const shelf = shelves.find(s => s.id === selectedShelfId);
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
             eqFilters.push({ key: shelf.filter_value, value: true });
+          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
+            eqFilters.push({ key: "content_type", value: "Audiobook" });
+          } else if (shelf.filter_type === FilterTypeEnum.Song) {
+            eqFilters.push({ key: "content_type", value: "Song" });
+          } else if (shelf.filter_type === FilterTypeEnum.Listen) {
+            inValueFilter = {
+              key: "content_type",
+              value: ["Audiobook", "Song"]
+            };
           } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
             if (shelf.filter_value.includes(",")) {
               inValueFilter = {
@@ -150,114 +182,12 @@ const HomePage = () => {
         search: debouncedSearchQuery || undefined,
         searchFields: ["title", "platform", "notes"],
       });
-      // ... existing error handling and return logic (truncated for compactness in replacement)
+
       if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
         throw new Error(response.error?.message || "Failed to fetch projects");
       }
       const rows = Array.isArray(response.data) ? (response.data as Project[]) : [];
       return rows.filter((item) => (item as any).is_deleted !== true);
-    },
-  });
-
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await projectsAPI.createOne(data);
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        const supabaseError = response.error?.output as
-          | { message?: string }
-          | undefined;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to create content";
-        console.error("Create Error:", response);
-        throw new Error(errorMessage);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
-      setIsMediaDialogOpen(false);
-      toast.success("Content added successfully!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to add content: ${error.message}`);
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      console.log("Update payload:", { id, data });
-      const response = await projectsAPI.updateOneByID(id, data);
-
-      console.log("Update response:", response);
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        const supabaseError = response.error?.output as
-          | { message?: string }
-          | undefined;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to update content";
-        console.error("Update Error:", response);
-        throw new Error(errorMessage);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
-      setIsMediaDialogOpen(false);
-      setSelectedMedia(null);
-      toast.success("Content updated successfully!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update content: ${error.message}`);
-    },
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
-      if (
-        response.flag !== Flag.Success &&
-        response.flag !== Flag.UnknownOrSuccess
-      ) {
-        const supabaseError = response.error?.output as
-          | { message?: string }
-          | undefined;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to delete content";
-        console.error("Delete Error:", response);
-        throw new Error(errorMessage);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
-      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
-      setDeleteDialogOpen(false);
-      setMediaToDelete(null);
-      toast.success("Moved to archive.");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to delete content: ${error.message}`);
     },
   });
 
@@ -277,6 +207,102 @@ const HomePage = () => {
       )
       : ["title", "content_type", "status", "release_year", "platform"];
 
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await projectsAPI.createOne(data);
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
+          "Failed to create content item";
+        throw new Error(errorMessage);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["home-library"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
+      setIsMediaDialogOpen(false);
+      toast.success("Content item created successfully!");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create content item: ${error.message}`);
+    },
+  });
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const response = await projectsAPI.updateOneByID(id, data);
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
+          "Failed to update content item";
+        throw new Error(errorMessage);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["home-library"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
+      setIsMediaDialogOpen(false);
+      setSelectedMedia(null);
+      toast.success("Content item updated successfully!");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update content item: ${error.message}`);
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
+          "Failed to delete content item";
+        throw new Error(errorMessage);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["home-library"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-types"] });
+      setDeleteDialogOpen(false);
+      setMediaToDelete(null);
+      toast.success("Moved to archive.");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete content item: ${error.message}`);
+    },
+  });
+
   const handleAddNew = () => {
     setSelectedMedia(null);
     setIsMediaDialogOpen(true);
@@ -295,7 +321,7 @@ const HomePage = () => {
 
   const handleSubmit = async (data: any) => {
     if (selectedMedia) {
-      await updateMutation.mutateAsync({ id: selectedMedia.id!, data });
+      await updateMutation.mutateAsync({ id: (selectedMedia as any).id, data });
     } else {
       await createMutation.mutateAsync(data);
     }
@@ -309,35 +335,26 @@ const HomePage = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center text-red-500">
-          <h2 className="text-2xl font-bold mb-2">Error Loading Catalog</h2>
+          <h2 className="text-2xl font-bold mb-2">Error Loading Content</h2>
           <p>{(error as Error).message}</p>
         </div>
       </div>
     );
   }
 
-  const totalFilms = projects.filter((m) => m.content_type === "Film").length;
-  const totalTVShows = projects.filter(
-    (m) => m.content_type === "TV Show"
-  ).length;
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <StatsRow
-        items={[
-          { label: "Total Items", value: projects?.length },
-          { label: "Films", value: totalFilms },
-          { label: "TV Shows", value: totalTVShows },
-        ]}
-        title="Home Page"
-        description="One form, multiple categories - manage all content dynamically"
+        title="Home Page Library"
+        description="Manage all content items displayed on the home page."
         handleNew={handleAddNew}
       />
 
       {/* Main Content Area */}
       <Card className="border-none shadow-sm overflow-hidden bg-white">
-        <div className="p-6">
+        <div className="p-6 space-y-4">
           <div className="flex flex-col lg:flex-row gap-4 mb-6">
             <MediaFilters
               searchQuery={searchQuery}
@@ -348,19 +365,10 @@ const HomePage = () => {
               onContentTypeFilterChange={setContentTypeFilter}
               availableStatuses={availableStatuses}
               availableTypes={availableTypes}
+              shelves={shelves}
+              selectedShelfId={selectedShelfId}
+              onShelfChange={setSelectedShelfId}
             />
-
-            <Select value={selectedShelfId} onValueChange={setSelectedShelfId}>
-              <SelectTrigger className="w-full lg:w-64 h-11 rounded-xl border-slate-200 bg-slate-50/30">
-                <SelectValue placeholder="Filter by Shelf" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Items (No Shelf)</SelectItem>
-                {shelves.map(shelf => (
-                  <SelectItem key={shelf.id} value={shelf.id}>{shelf.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
@@ -368,8 +376,12 @@ const HomePage = () => {
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
                   <TableHead
-                    className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50 group"
+                    className={cn(
+                      "text-xs font-bold uppercase tracking-wider text-slate-500 py-4 bg-slate-50 group",
+                      stickyColumns.includes("actions") && stickyColumns.indexOf("actions") === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes("actions") ? "pl-4 pr-0" : "px-4"
+                    )}
                     sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                    left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
                   >
                     <div className="flex items-center gap-2">
                       Actions
@@ -390,8 +402,12 @@ const HomePage = () => {
                   {displayFields.map((key) => (
                     <TableHead
                       key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap bg-slate-50 group",
+                        stickyColumns.includes(key) && stickyColumns.indexOf(key) === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes(key) ? "pl-4 pr-0" : "px-4"
+                      )}
                       sticky={stickyColumns.includes(key) ? "left" : undefined}
+                      left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
                     >
                       <div className="flex items-center gap-2">
                         {key.replace(/_/g, " ")}
@@ -437,8 +453,12 @@ const HomePage = () => {
                         data-state={isSelected ? "selected" : undefined}
                       >
                         <TableCell
-                          className="px-4 whitespace-nowrap"
+                          className={cn(
+                            "whitespace-nowrap",
+                            stickyColumns.includes("actions") && stickyColumns.indexOf("actions") === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes("actions") ? "pl-4 pr-0" : "px-4"
+                          )}
                           sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                          left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
                         >
                           <div className="flex gap-1">
                             <Button
@@ -466,16 +486,31 @@ const HomePage = () => {
                           </div>
                         </TableCell>
                         {displayFields.map((key) => {
-                          const value = project[key as keyof Project];
-
+                          const value = (project as any)[key];
                           return (
                             <TableCell
                               key={key}
-                              className="text-slate-600 font-medium px-4 max-w-[200px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                              className={cn(
+                                "text-slate-600 font-medium group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50",
+                                key === "notes" || key === "description" ? "max-w-[300px]" : "max-w-[200px]",
+                                stickyColumns.includes(key) && stickyColumns.indexOf(key) === stickyColumns.length - 1 ? "px-4" : stickyColumns.includes(key) ? "pl-4 pr-0" : "px-4"
+                              )}
                               sticky={stickyColumns.includes(key) ? "left" : undefined}
+                              left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
                             >
                               {value === null || value === undefined ? (
                                 <span className="text-slate-300 text-xs">—</span>
+                              ) : key === "status" ? (
+                                <span
+                                  className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${value === "released"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : value === "coming_soon"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-slate-100 text-slate-700"
+                                    }`}
+                                >
+                                  {value}
+                                </span>
                               ) : (
                                 <span
                                   className="truncate block"
@@ -496,7 +531,7 @@ const HomePage = () => {
                       colSpan={displayFields.length + 1}
                       className="h-32 text-center text-slate-500 font-medium"
                     >
-                      No content found matching your filters.
+                      No items found.
                     </TableCell>
                   </TableRow>
                 )}
@@ -506,52 +541,29 @@ const HomePage = () => {
         </div >
       </Card >
 
+
+
       <MediaDialog
         open={isMediaDialogOpen}
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
-        defaultValues={(() => {
-          const defaults: any = {};
-
-          // Apply manual filters first
-          if (statusFilter !== "all") defaults.status = statusFilter;
-          if (contentTypeFilter !== "all") defaults.content_type = contentTypeFilter;
-
-          // Apply shelf filters (overriding manual if specific)
-          if (selectedShelfId !== "all") {
-            const shelf = shelves.find((s) => s.id === selectedShelfId);
-            if (shelf) {
-              if (shelf.filter_type === FilterTypeEnum.ContentType) {
-                const type = shelf.filter_value.split(",")[0].trim();
-                defaults.content_type = type;
-              }
-              if (shelf.filter_type === FilterTypeEnum.Status) {
-                const status = shelf.filter_value.split(",")[0].trim();
-                defaults.status = status;
-              }
-              if (shelf.filter_type === FilterTypeEnum.Flag) {
-                defaults[shelf.filter_value] = true;
-              }
-            }
-          }
-
-          return Object.keys(defaults).length > 0 ? defaults : undefined;
-        })()}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        assignmentPage="home"
       />
 
       <DeleteConfirmationDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
+        title="Move to archive?"
         itemName={mediaToDelete?.title}
-        isDeleting={deleteMutation.isPending}
         description={
-          mediaToDelete
+          mediaToDelete?.title
             ? `Are you sure you want to move "${mediaToDelete.title}" to the bin? You’ll be able to permanently delete it later from the Archive.`
             : "Are you sure you want to move this item to the bin? You’ll be able to permanently delete it later from the Archive."
         }
+        isDeleting={deleteMutation.isPending}
       />
     </div >
   );

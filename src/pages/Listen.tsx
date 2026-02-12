@@ -49,11 +49,16 @@ export default function Watch() {
   });
 
   const toggleSticky = (key: string) => {
-    setStickyColumns((prev) =>
-      prev.includes(key)
-        ? prev.filter((col) => col !== key)
-        : [...prev, key]
-    );
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
   };
 
   const queryClient = useQueryClient();
@@ -66,15 +71,15 @@ export default function Watch() {
   } = useQuery<Project[]>({
     queryKey: ["media", searchQuery, statusFilter, activeShelfId],
     queryFn: async () => {
-      const eqFilters: any[] = [
-        { key: "content_type", value: ContentTypeEnum.Song },
-      ];
+      const eqFilters: any[] = [];
+      let inValueFilter: any = {
+        key: "content_type",
+        value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook]
+      };
 
       if (statusFilter !== "all") {
         eqFilters.push({ key: "status", value: statusFilter });
       }
-
-      let inValueFilter: any = undefined;
 
       // Apply shelf filter logic
       if (activeShelfId !== "all") {
@@ -82,6 +87,15 @@ export default function Watch() {
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
             eqFilters.push({ key: shelf.filter_value, value: true });
+          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
+            eqFilters.push({ key: "content_type", value: "Audiobook" });
+          } else if (shelf.filter_type === FilterTypeEnum.Song) {
+            eqFilters.push({ key: "content_type", value: "Song" });
+          } else if (shelf.filter_type === FilterTypeEnum.Listen) {
+            inValueFilter = {
+              key: "content_type",
+              value: ["Audiobook", "Song"]
+            };
           } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
             if (shelf.filter_value.includes(",")) {
               inValueFilter = {
@@ -328,19 +342,6 @@ export default function Watch() {
           availableStatuses={availableStatuses}
           availableTypes={availableTypes}
         />
-        <div className="w-full lg:w-64">
-          <Select value={activeShelfId} onValueChange={setActiveShelfId}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30">
-              <SelectValue placeholder="Filter by Shelf" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Items (No Shelf)</SelectItem>
-              {shelves.map(shelf => (
-                <SelectItem key={shelf.id} value={shelf.id}>{shelf.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
       {/* Table */}
       <div className="rounded-md border">
@@ -503,6 +504,15 @@ export default function Watch() {
               if (shelf.filter_type === FilterTypeEnum.ContentType) {
                 const type = shelf.filter_value.split(",")[0].trim();
                 defaults.content_type = type;
+              }
+              if (shelf.filter_type === FilterTypeEnum.Audiobook) {
+                defaults.content_type = "Audiobook";
+              }
+              if (shelf.filter_type === FilterTypeEnum.Song) {
+                defaults.content_type = "Song";
+              }
+              if (shelf.filter_type === FilterTypeEnum.Listen) {
+                defaults.content_type = "Song";
               }
               if (shelf.filter_type === FilterTypeEnum.Status) {
                 const status = shelf.filter_value.split(",")[0].trim();

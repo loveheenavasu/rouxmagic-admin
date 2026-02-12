@@ -10,4 +10,4 @@ export const ContentRows = new CRUDWrapper<
   ContentRow,
   ContentRowMetaData,
   GetContentRowsOpts
->(Tables.ContentRows, { supports_soft_deletion: false });
+>(Tables.ContentRows, { supports_soft_deletion: true });

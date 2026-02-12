@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { Content, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
+import { Content, ContentTypeEnum, Flag, ProjectFormData, FilterTypeEnum } from "@/types";
 import { createBucketPath } from "@/helpers";
 import { Projects, Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
@@ -38,6 +38,7 @@ interface MediaDialogProps {
   isLoading?: boolean;
   allowedFields?: string[];
   defaultValues?: Partial<ProjectFormData>;
+  assignmentPage?: string;
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -51,6 +52,7 @@ export default function MediaDialog({
   isLoading = false,
   allowedFields,
   defaultValues,
+  assignmentPage,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>(
@@ -58,7 +60,69 @@ export default function MediaDialog({
   );
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(true);
+
+  // Row Assignment Mode state
+  const [addMode, setAddMode] = useState<"standard" | "row">("standard");
+  // Renamed local state to avoid conflict with prop
+  const [localAssignmentPage, setLocalAssignmentPage] = useState<string>(assignmentPage || "home");
+  const [targetRowId, setTargetRowId] = useState<string>("");
+
   const queryClient = useQueryClient();
+
+  const applyRowTemplate = (row: any) => {
+    if (!row) return;
+
+    const { filter_type, filter_value, label } = row;
+    setFormData(prev => {
+      const next = { ...prev };
+
+      // Known statuses and flags that should NOT set content_type
+      const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
+      const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending'];
+      const labelLower = label.toLowerCase();
+
+      const isKnownStatusOrFlag =
+        knownStatuses.includes(labelLower) ||
+        knownFlags.some(flag => labelLower.includes(flag));
+
+      // Set content_type based on filter_type and label
+      if (filter_type === FilterTypeEnum.ContentType) {
+        // For content-type rows, lock the content_type to filter_value
+        next.content_type = filter_value;
+      } else if (filter_type === FilterTypeEnum.Audiobook) {
+        next.content_type = ContentTypeEnum.Audiobook;
+      } else if (filter_type === FilterTypeEnum.Song) {
+        next.content_type = ContentTypeEnum.Song;
+      } else if (filter_type === FilterTypeEnum.Listen) {
+        // For Listen, allow user to choose between Song/Audiobook
+        if (!next.content_type) next.content_type = ContentTypeEnum.Audiobook;
+      } else if (filter_type === FilterTypeEnum.Flag || filter_type === FilterTypeEnum.Status) {
+        // For Flag/Status types, check if it's a known status/flag
+        if (!isKnownStatusOrFlag) {
+          // Custom row - set content_type to the row label
+          next.content_type = label;
+        }
+        // Otherwise, leave content_type editable for known statuses/flags
+      }
+
+      // Set status if it's a status-type filter
+      if (filter_type === FilterTypeEnum.Status) {
+        next.status = filter_value;
+      }
+
+      // Set flag field if it exists in availableFields
+      if (filter_type === FilterTypeEnum.Flag) {
+        const matchedField = availableFields.find(f => f.toLowerCase() === filter_value.toLowerCase());
+        if (matchedField) {
+          (next as any)[matchedField] = true;
+        }
+      }
+
+      return next;
+    });
+
+    toast.info(`Applied template for row: ${label}`);
+  };
 
   // Chapters UI state (only relevant for Audiobooks)
   const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
@@ -122,24 +186,24 @@ export default function MediaDialog({
       const { ContentRows } = await import(
         "@/api/integrations/supabase/content_rows/content_rows"
       );
-      // Fetch ALL content_rows - no filter on filter_type
+      // Fetch ALL active content_rows
       const resp = await (ContentRows as any).get({
-        eq: [], // No filter - get all rows
+        eq: [{ key: "is_active", value: true }], // Only fetch active rows
         sort: "order_index",
         sortBy: "asc",
       });
-      
+
       if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
         console.error("Failed to fetch content row filters:", resp.error);
         return [];
       }
-      
+
       const rows = Array.isArray(resp.data)
         ? resp.data
-        : resp.data 
+        : resp.data
           ? [resp.data].filter(Boolean)
           : [];
-      
+
       return rows;
     },
     enabled: open, // Only fetch when dialog is open
@@ -371,6 +435,7 @@ export default function MediaDialog({
       }
     });
 
+    console.log("📤 Submitting data to database:", submitData);
     await onSubmit(submitData);
   };
 
@@ -438,54 +503,30 @@ export default function MediaDialog({
         { value: ContentTypeEnum.Audiobook, label: "Audiobook" },
       ];
 
-      // Helper function to normalize known plural types to singular
-      const normalizeType = (type: string) => {
-        const typeMap: Record<string, string> = {
-          "Films": "Film",
-          "TV Shows": "TV Show",
-          "Audiobooks": "Audiobook",
-          "Books": "Book",
-          "Comics": "Comic",
-          "Songs": "Song"
-        };
-        return typeMap[type] || type;
-      };
+      // Only lock content_type if:
+      // 1. Row explicitly defines a content_type filter, OR
+      // 2. Row is a custom row (not a known status/flag)
+      const selectedRow = targetRowId ? (contentRowFilters as any[]).find(r => r.id === targetRowId) : null;
 
-      // Extract and merge ALL filter_values from ALL content_rows (regardless of filter_type)
-      const allFilterValues: string[] = (contentRowFilters || [])
-        .flatMap((row: any) => {
-          if (!row?.filter_value) {
-            return [];
-          }
-          // Split by comma and clean up each value
-          const values = String(row.filter_value)
-            .split(",")
-            .map((v: string) => v.trim())
-            .filter((v: string) => v.length > 0); // Remove empty strings
-          return values;
-        });
+      let isContentTypeLocked = false;
+      if (addMode === "row" && !!targetRowId && selectedRow) {
+        // Known statuses and flags that should NOT lock content_type
+        const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
+        const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending'];
+        const labelLower = selectedRow.label?.toLowerCase() || '';
 
-      // Normalize types (convert plurals to singular, etc.)
-      const normalizedValues = allFilterValues.map((v: string) => normalizeType(v));
-      
-      // Get all unique normalized values first (case-insensitive deduplication)
-      const uniqueNormalized = Array.from(
-        new Map(
-          normalizedValues
-            .filter((v: string) => v.length > 0)
-            .map((v: string) => [v.toLowerCase(), v])
-        ).values()
-      );
-      
-      // Filter out types that already exist in standardTypes (case-insensitive)
-      // This ensures we only show additional types, not duplicates
-      const standardTypeValues = standardTypes.map(st => st.value.toLowerCase());
-      const dynamicTypes: string[] = uniqueNormalized.filter(
-        (v: string) => !standardTypeValues.includes(v.toLowerCase())
-      );
-      
-      // Final unique dynamic types sorted alphabetically
-      const uniqueDynamicTypes: string[] = dynamicTypes.sort();
+        const isKnownStatusOrFlag =
+          knownStatuses.includes(labelLower) ||
+          knownFlags.some(flag => labelLower.includes(flag));
+
+        // Lock if it's a content-type row OR a custom row (not a known status/flag)
+        isContentTypeLocked =
+          selectedRow.filter_type === FilterTypeEnum.ContentType ||
+          selectedRow.filter_type === FilterTypeEnum.Audiobook ||
+          selectedRow.filter_type === FilterTypeEnum.Song ||
+          ((selectedRow.filter_type === FilterTypeEnum.Flag || selectedRow.filter_type === FilterTypeEnum.Status) && !isKnownStatusOrFlag);
+      }
+
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
@@ -493,9 +534,10 @@ export default function MediaDialog({
           </Label>
           <Select
             value={value || ""}
+            disabled={isContentTypeLocked}
             onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
           >
-            <SelectTrigger className="mt-1.5 capitalize">
+            <SelectTrigger className={`mt-1.5 capitalize ${isContentTypeLocked ? "bg-indigo-50/50 border-indigo-100" : ""}`}>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
@@ -504,13 +546,17 @@ export default function MediaDialog({
                   {type.label}
                 </SelectItem>
               ))}
-              {(uniqueDynamicTypes as string[]).map((type: string) => (
-                <SelectItem key={type} value={type}>
-                  {type}
+              {/* Show the current value if it's not in standard types (e.g. custom from row) */}
+              {value && !standardTypes.find(t => t.value === value) && (
+                <SelectItem key={value} value={value}>
+                  {value}
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
+          {isContentTypeLocked && (
+            <p className="mt-1 text-[10px] text-indigo-500 font-medium italic">Fixed based on row selection</p>
+          )}
         </div>
       );
     }
@@ -746,6 +792,89 @@ export default function MediaDialog({
           </DialogHeader>
         </div>
 
+        {/* Mode Switcher and Row Selector */}
+        {!media && (
+          <div className="px-6 py-3 bg-slate-50/80 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+              <Button
+                variant={addMode === "standard" ? "default" : "ghost"}
+                size="sm"
+                type="button"
+                className={`h-8 rounded-md text-xs px-4 ${addMode === "standard" ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
+                onClick={() => setAddMode("standard")}
+              >
+                Standard Form
+              </Button>
+              <Button
+                variant={addMode === "row" ? "default" : "ghost"}
+                size="sm"
+                type="button"
+                className={`h-8 rounded-md text-xs px-4 ${addMode === "row" ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
+                onClick={() => setAddMode("row")}
+              >
+                Add to Row
+              </Button>
+            </div>
+
+            {addMode === "row" && (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Select value={localAssignmentPage} onValueChange={setLocalAssignmentPage}>
+                  <SelectTrigger className="h-8 w-[100px] text-xs bg-white border-slate-200 focus:ring-indigo-500">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="home">Home</SelectItem>
+                    <SelectItem value="watch">Watch</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={targetRowId}
+                  onValueChange={(val) => {
+                    setTargetRowId(val);
+                    const row = (contentRowFilters as any[]).find(r => r.id === val);
+                    if (row) applyRowTemplate(row);
+                  }}
+                >
+                  <SelectTrigger className="h-8 min-w-[160px] text-xs bg-white border-indigo-200 focus:ring-indigo-500 font-medium text-indigo-700">
+                    <SelectValue placeholder="Choose Row..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const filtered = contentRowFilters.filter((r: any) => {
+                        if (r.page !== localAssignmentPage) return false;
+
+                        const label = r.label?.toLowerCase() || "";
+                        if (localAssignmentPage === "home") {
+                          return !["now playing", "released", "listen", "watch", "coming soon", "new releases"].includes(label);
+                        }
+                        if (localAssignmentPage === "watch") {
+                          return !["now playing", "coming soon", "released"].includes(label);
+                        }
+                        if (localAssignmentPage === "read") {
+                          return !["comics & stories"].includes(label);
+                        }
+                        return true;
+                      });
+
+                      if (filtered.length === 0) {
+                        return <div className="p-2 text-[10px] text-slate-400 text-center italic">No rows</div>;
+                      }
+
+                      return filtered.map((row: any) => (
+                        <SelectItem key={row.id} value={row.id}>
+                          {row.label}
+                        </SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
+
         {isLoadingFields ? (
           <div className="p-6 flex items-center justify-center min-h-[400px]">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
@@ -755,28 +884,51 @@ export default function MediaDialog({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-2 gap-5">
-              {availableFields
-                .filter(
-                  (k) =>
-                    !k.startsWith("in_") &&
-                    k !== "featured" &&
-                    k !== "is_downloadable" &&
-                    k !== "genres"
-                )
-                .map((key) => renderField(key, (formData as any)[key]))}
-
-              <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
+            {addMode === "row" && !targetRowId && !media ? (
+              <div className="py-24 text-center space-y-5 animate-in fade-in zoom-in duration-300">
+                <div className="bg-indigo-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto rotate-3">
+                  <div className="bg-indigo-100 w-12 h-12 rounded-2xl flex items-center justify-center animate-bounce duration-1000">
+                    <Upload className="h-6 w-6 text-indigo-600" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-slate-800">Assign to Content Row</h3>
+                  <p className="text-sm text-slate-500 max-w-[280px] mx-auto leading-relaxed">
+                    Select a row template above. We'll pre-fill the specific flags and types automatically.
+                  </p>
+                </div>
+                <div className="flex justify-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-200" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-300" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-5">
                 {availableFields
                   .filter(
                     (k) =>
-                      k.startsWith("in_") ||
-                      k === "featured" ||
-                      k === "is_downloadable"
+                      !k.startsWith("in_") &&
+                      k !== "featured" &&
+                      k !== "is_downloadable" &&
+                      k !== "genres"
                   )
                   .map((key) => renderField(key, (formData as any)[key]))}
+
+                {(addMode === "standard" || media) && (
+                  <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
+                    {availableFields
+                      .filter(
+                        (k) =>
+                          k.startsWith("in_") ||
+                          k === "featured" ||
+                          k === "is_downloadable"
+                      )
+                      .map((key) => renderField(key, (formData as any)[key]))}
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             {/* Chapters section (for Audiobooks & TV Shows) */}
             {showChapters && (
