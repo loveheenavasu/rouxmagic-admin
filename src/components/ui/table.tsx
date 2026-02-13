@@ -69,19 +69,24 @@ TableRow.displayName = "TableRow"
 interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   sticky?: "left" | "right"
   left?: number | string
+  width?: number | string
+  showShadow?: boolean
 }
 
 const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
-  ({ className, sticky, left, ...props }, ref) => (
+  ({ className, sticky, left, width, showShadow, style, ...props }, ref) => (
     <th
       ref={ref}
-      style={sticky === "left" && left !== undefined ? { left, backgroundColor: 'white' } : sticky === "left" ? { backgroundColor: 'white' } : undefined}
+      style={{
+        ...(sticky === "left" && { left: left ?? 0, width, minWidth: width, maxWidth: width }),
+        ...(sticky === "right" && { right: 0, width, minWidth: width, maxWidth: width }),
+        ...style,
+      }}
       className={cn(
-        "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 whitespace-nowrap",
-        sticky === "left" &&
-        "sticky left-0 z-30 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-50",
-        sticky === "right" &&
-        "sticky right-0 z-30 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.15)]",
+        "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 whitespace-nowrap bg-slate-50",
+        (sticky === "left" || sticky === "right") && "sticky z-30 bg-slate-50",
+        showShadow && sticky === "left" && "shadow-[4px_0_8px_-4px_rgba(0,0,0,0.15)] border-r border-slate-200",
+        showShadow && sticky === "right" && "shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.15)] border-l border-slate-200",
         className
       )}
       {...props}
@@ -93,19 +98,24 @@ TableHead.displayName = "TableHead"
 interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
   sticky?: "left" | "right"
   left?: number | string
+  width?: number | string
+  showShadow?: boolean
 }
 
 const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ className, sticky, left, ...props }, ref) => (
+  ({ className, sticky, left, width, showShadow, style, ...props }, ref) => (
     <td
       ref={ref}
-      style={sticky === "left" && left !== undefined ? { left, backgroundColor: 'white' } : sticky === "left" ? { backgroundColor: 'white' } : undefined}
+      style={{
+        ...(sticky === "left" && { left: left ?? 0, width, minWidth: width, maxWidth: width }),
+        ...(sticky === "right" && { right: 0, width, minWidth: width, maxWidth: width }),
+        ...style,
+      }}
       className={cn(
         "p-4 align-middle [&:has([role=checkbox])]:pr-0",
-        sticky === "left" &&
-        "sticky left-0 z-20 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-        sticky === "right" &&
-        "sticky right-0 z-20 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.15)] group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+        (sticky === "left" || sticky === "right") && "sticky z-20 bg-white group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+        showShadow && sticky === "left" && "shadow-[4px_0_8px_-4px_rgba(0,0,0,0.15)] border-r border-slate-100",
+        showShadow && sticky === "right" && "shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.15)] border-l border-slate-100",
         className
       )}
       {...props}

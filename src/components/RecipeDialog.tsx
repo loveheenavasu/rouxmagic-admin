@@ -31,13 +31,13 @@ const emptyForm: RecipeFormData = {
   short_description: "",
   ingredients: "",
   instructions: "",
-  download_url: null,
   category: RecipeCategory.Snacks,
   paired_project_id: "",
   paired_type: null,
   suggested_pairings: null,
   cook_time_estimate: null,
   preview_url: "",
+  video_url: null,
   order_index: undefined,
   is_deleted: false,
   deleted_at: null,
@@ -252,8 +252,7 @@ export default function RecipeDialog({
                         toast.success("Preview uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Preview upload failed: ${
-                            error?.message || "Unknown error"
+                          `Preview upload failed: ${error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -281,19 +280,67 @@ export default function RecipeDialog({
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="download_url" className="font-medium">
-                Download URL
+            <div className="md:col-span-2">
+              <Label htmlFor="video_url" className="font-medium">
+                Video URL
               </Label>
-              <Input
-                id="download_url"
-                value={formData.download_url ?? ""}
-                onChange={(e) =>
-                  handleChange("download_url", e.target.value || null)
-                }
-                placeholder="Optional download link"
-                className="mt-1.5"
-              />
+              <div className="mt-1.5 flex gap-2">
+                <Input
+                  id="video_url"
+                  value={formData.video_url || ""}
+                  onChange={(e) => handleChange("video_url", e.target.value)}
+                  placeholder="Main video URL or upload"
+                  className="flex-1"
+                />
+                <div className="relative">
+                  <Input
+                    type="file"
+                    className="hidden"
+                    id="file-video_url"
+                    accept="video/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        setIsUploading("video_url");
+                        const bucket = "Media";
+                        const safeName = file.name.replace(/\s+/g, "_");
+                        const path = `Recipes/videos/${Date.now()}-${safeName}`;
+                        const publicUrl = await mediaService.uploadFile(
+                          file,
+                          bucket,
+                          path,
+                        );
+                        handleChange("video_url", publicUrl);
+                        toast.success("Video uploaded successfully!");
+                      } catch (error: any) {
+                        toast.error(
+                          `Video upload failed: ${error?.message || "Unknown error"
+                          }`,
+                        );
+                      } finally {
+                        setIsUploading(null);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUploading === "video_url"}
+                    onClick={() =>
+                      document.getElementById("file-video_url")?.click()
+                    }
+                    className="h-10 px-3 bg-slate-50 border-dashed"
+                  >
+                    {isUploading === "video_url" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    <span className="ml-2 hidden sm:inline">Upload</span>
+                  </Button>
+                </div>
+              </div>
             </div>
 
 

@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Edit, Trash2, Loader2 } from "lucide-react";
+import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { format } from "date-fns";
 import { Footers } from "@/api/integrations/supabase/footer/footer";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -19,6 +19,7 @@ import FooterDialog from "@/components/FooterDialog";
 import { toast } from "sonner";
 import { Flag, Footer } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
+import { cn } from "@/lib/utils";
 
 const footersAPI = Footers as Required<typeof Footers>;
 
@@ -29,6 +30,41 @@ export default function FooterPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [footerToDelete, setFooterToDelete] = useState<Footer | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
+  };
+
+
+  const PINNED_WIDTH = 200;
+  const COLUMN_WIDTHS: Record<string, number> = {
+    actions: PINNED_WIDTH,
+    title: PINNED_WIDTH,
+    url: 150,
+    icon_url: 150,
+    created_at: 200,
+  };
+
+  const getStickyOffset = (columnKey: string): number => {
+    const index = stickyColumns.indexOf(columnKey);
+    if (index === -1) return 0;
+
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += PINNED_WIDTH;
+    }
+    return offset;
+  };
 
   const queryClient = useQueryClient();
 
@@ -75,8 +111,8 @@ export default function FooterPage() {
           | undefined;
         throw new Error(
           supabaseError?.message ||
-            response.error?.message ||
-            "Failed to create"
+          response.error?.message ||
+          "Failed to create"
         );
       }
       return response.data;
@@ -100,8 +136,8 @@ export default function FooterPage() {
           | undefined;
         throw new Error(
           supabaseError?.message ||
-            response.error?.message ||
-            "Failed to update"
+          response.error?.message ||
+          "Failed to update"
         );
       }
       return response.data;
@@ -129,8 +165,8 @@ export default function FooterPage() {
           | undefined;
         throw new Error(
           supabaseError?.message ||
-            response.error?.message ||
-            "Failed to delete footer link"
+          response.error?.message ||
+          "Failed to delete footer link"
         );
       }
     },
@@ -186,7 +222,12 @@ export default function FooterPage() {
     );
   }
 
-  const displayFields = ["title", "url", "icon_url", "created_at"];
+  const displayFields = ["title", "url", "created_at"];
+  const allAvailableFields = ["actions", ...displayFields];
+  const orderedFields = [
+    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
+    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
+  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -208,20 +249,34 @@ export default function FooterPage() {
             />
           </div>
 
-          <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
+          <div className="rounded-xl border border-slate-100 overflow-hidden">
             <Table>
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                    Actions
-                  </TableHead>
-                  {displayFields.map((key) => (
+                  {orderedFields.map((key) => (
                     <TableHead
                       key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
-                      sticky={key === "title" ? "left" : undefined}
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
+                      sticky={stickyColumns.includes(key) ? "left" : undefined}
+                      left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                      width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                      showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                     >
-                      {key.replace(/_/g, " ")}
+                      <div className="flex items-center gap-2">
+                        {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                          onClick={() => toggleSticky(key)}
+                        >
+                          {stickyColumns.includes(key) ? (
+                            <PinOff className="h-3 w-3" />
+                          ) : (
+                            <Pin className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                     </TableHead>
                   ))}
                 </TableRow>
@@ -245,45 +300,62 @@ export default function FooterPage() {
                     return (
                       <TableRow
                         key={link.id}
-                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
+                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
                           }`}
                         onClick={() => setSelectedRowId(isSelected ? null : link.id)}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell 
-                        className="px-4 whitespace-nowrap">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(link);
-                              }}
-                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(link);
-                              }}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        {displayFields.map((key) => {
+                        {orderedFields.map((key) => {
+                          if (key === "actions") {
+                            return (
+                              <TableCell
+                                key="actions"
+                                className="whitespace-nowrap"
+                                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                                left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                                width={PINNED_WIDTH}
+                                showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                              >
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEdit(link);
+                                    }}
+                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete(link);
+                                    }}
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            );
+                          }
+
                           const value = (link as any)[key];
                           return (
                             <TableCell
                               key={key}
-                              className="text-slate-600 font-medium px-4 max-w-[260px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
-                              sticky={key === "title" ? "left" : undefined}
+                              className={cn(
+                                "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                                (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
+                              )}
+                              sticky={stickyColumns.includes(key) ? "left" : undefined}
+                              left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                              width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                              showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                             >
                               {value === null || value === undefined ? (
                                 <span className="text-slate-300 text-xs">—</span>

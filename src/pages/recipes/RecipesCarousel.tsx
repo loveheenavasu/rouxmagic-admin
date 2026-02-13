@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
 import RecipeDialog from "@/components/RecipeDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -27,6 +27,41 @@ export default function RecipesCarousel() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderValue, setOrderValue] = useState<number | "">("");
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+
+  const toggleSticky = (key: string) => {
+    setStickyColumns((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((col) => col !== key);
+      }
+      if (prev.length >= 2) {
+        toast.info("Maximum 2 columns can be pinned");
+        return prev;
+      }
+      return [...prev, key];
+    });
+  };
+
+  const PINNED_WIDTH = 200;
+  const COLUMN_WIDTHS: Record<string, number> = {
+    actions: PINNED_WIDTH,
+    title: PINNED_WIDTH,
+    category: 150,
+    slug: 150,
+    order_index: 120,
+    short_description: 250,
+  };
+
+  const getStickyOffset = (columnKey: string): number => {
+    const index = stickyColumns.indexOf(columnKey);
+    if (index === -1) return 0;
+
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += PINNED_WIDTH;
+    }
+    return offset;
+  };
 
   const startEditOrder = (item: Recipe) => {
     setEditingOrderId(item.id);
@@ -222,12 +257,18 @@ export default function RecipesCarousel() {
     );
   }
 
-  const columns = [
+  const displayFields = [
+    { key: "actions", label: "Actions" },
     { key: "title", label: "Title" },
     { key: "category", label: "Category" },
     { key: "slug", label: "Slug" },
     { key: "preview_url", label: "Preview URL" },
     { key: "order_index", label: "Order Index" },
+  ];
+
+  const orderedFields = [
+    ...displayFields.filter(f => stickyColumns.includes(f.key)),
+    ...displayFields.filter(f => !stickyColumns.includes(f.key))
   ];
 
   return (
@@ -258,16 +299,30 @@ export default function RecipesCarousel() {
             <Table>
               <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
                 <TableRow>
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50">
-                    Actions
-                  </TableHead>
-                  {columns.map((col) => (
+                  {orderedFields.map((col) => (
                     <TableHead
                       key={col.key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50"
-                      sticky={col.key === "title" ? "left" : undefined}
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                      sticky={stickyColumns.includes(col.key) ? "left" : undefined}
+                      left={stickyColumns.includes(col.key) ? getStickyOffset(col.key) : undefined}
+                      width={stickyColumns.includes(col.key) ? PINNED_WIDTH : (COLUMN_WIDTHS[col.key] || 150)}
+                      showShadow={stickyColumns.indexOf(col.key) === stickyColumns.length - 1}
                     >
-                      {col.label}
+                      <div className="flex items-center gap-2">
+                        {col.label}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-4 w-4 transition-opacity ${stickyColumns.includes(col.key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                          onClick={() => toggleSticky(col.key)}
+                        >
+                          {stickyColumns.includes(col.key) ? (
+                            <PinOff className="h-3 w-3" />
+                          ) : (
+                            <Pin className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                     </TableHead>
                   ))}
                 </TableRow>
@@ -276,7 +331,7 @@ export default function RecipesCarousel() {
                 {isLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={columns.length + 1}
+                      colSpan={orderedFields.length}
                       className="h-64 text-center"
                     >
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
@@ -291,45 +346,85 @@ export default function RecipesCarousel() {
                     return (
                       <TableRow
                         key={recipe.id}
-                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"
+                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
                           }`}
                         onClick={() => setSelectedRowId(isSelected ? null : recipe.id)}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell className="px-4 whitespace-nowrap">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(recipe);
-                              }}
-                              className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(recipe);
-                              }}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        {columns.map((col) => {
-                          const value = (recipe as any)[col.key];
-
-                          // Custom rendering for order_index
-                          if (col.key === "order_index") {
+                        {orderedFields.map((field) => {
+                          const key = field.key;
+                          if (key === "actions") {
                             return (
-                              <TableCell key={col.key} className="text-slate-600 font-medium px-4 whitespace-nowrap">
-                                {editingOrderId === recipe.id ? (
+                              <TableCell
+                                key="actions"
+                                className="px-4 whitespace-nowrap"
+                                sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                                left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                                width={PINNED_WIDTH}
+                                showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                              >
+                                <div className="flex justify-start gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEdit(recipe);
+                                    }}
+                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete(recipe);
+                                    }}
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            );
+                          }
+
+                          if (key === "title") {
+                            return (
+                              <TableCell
+                                key="title"
+                                className="text-slate-600 font-medium px-4 max-w-[200px] truncate group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50"
+                                sticky={stickyColumns.includes("title") ? "left" : undefined}
+                                left={stickyColumns.includes("title") ? getStickyOffset("title") : undefined}
+                                width={PINNED_WIDTH}
+                                showShadow={stickyColumns.indexOf("title") === stickyColumns.length - 1}
+                              >
+                                <span
+                                  className="truncate block"
+                                  title={recipe.title || ""}
+                                >
+                                  {recipe.title || (
+                                    <span className="text-slate-300 text-xs">—</span>
+                                  )}
+                                </span>
+                              </TableCell>
+                            );
+                          }
+
+                          const value = (recipe as any)[key];
+                          return (
+                            <TableCell
+                              key={key}
+                              className="text-slate-600 font-medium px-4 max-w-[200px] truncate group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50"
+                              sticky={stickyColumns.includes(key) ? "left" : undefined}
+                              left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                              width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                              showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                            >
+                              {key === "order_index" ? (
+                                editingOrderId === recipe.id ? (
                                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                     <input
                                       type="number"
@@ -373,26 +468,9 @@ export default function RecipesCarousel() {
                                       <Edit className="h-4 w-4" />
                                     </Button>
                                   </div>
-                                )}
-                              </TableCell>
-                            );
-                          }
-
-                          return (
-                            <TableCell
-                              key={col.key}
-                              className="text-slate-600 font-medium px-4 max-w-[260px] truncate group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
-                              sticky={col.key === "title" ? "left" : undefined}
-                            >
-                              {value === null || value === undefined ? (
-                                <span className="text-slate-300 text-xs">—</span>
+                                )
                               ) : (
-                                <span
-                                  className="truncate block"
-                                  title={String(value)}
-                                >
-                                  {String(value)}
-                                </span>
+                                value || <span className="text-slate-300 text-xs">—</span>
                               )}
                             </TableCell>
                           );
@@ -403,7 +481,7 @@ export default function RecipesCarousel() {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={columns.length + 1}
+                      colSpan={orderedFields.length}
                       className="h-32 text-center text-slate-500 font-medium"
                     >
                       No recipes found.

@@ -10,13 +10,13 @@ export interface RecipeMetadata {
   short_description: string;
   ingredients: string;
   instructions: string;
-  download_url: string | null;
   category: RecipeCategory;
   paired_project_id: string;
   paired_type: string | null;
   suggested_pairings: string | null;
   cook_time_estimate: string | null;
   preview_url: string;
+  video_url: string | null;
   order_index?: number;
   is_deleted: boolean;
   deleted_at: string | null;
