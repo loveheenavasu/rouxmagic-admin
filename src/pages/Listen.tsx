@@ -63,7 +63,6 @@ export default function ListenPage() {
 
     let offset = 0;
     for (let i = 0; i < index; i++) {
-      const key = stickyColumns[i];
       offset += PINNED_WIDTH;
     }
     return offset;
