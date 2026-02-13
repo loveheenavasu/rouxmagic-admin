@@ -19,6 +19,7 @@ import { Flag, Project, ContentTypeEnum } from "@/types";
 import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
 import { StatsRow } from "@/components/StatsRow";
+import { cn } from "@/lib/utils";
 
 const READ_TYPES = ["Audiobook"] as const;
 const projectsAPI = Projects;
@@ -33,11 +34,7 @@ export default function Read() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["title"]);
-
-
-
-  const toggleSticky = (key: string) => {
+  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]); const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
       if (prev.includes(key)) {
         return prev.filter((col) => col !== key);
@@ -48,6 +45,31 @@ export default function Read() {
       }
       return [...prev, key];
     });
+  };
+
+  const PINNED_WIDTH = 200;
+  const COLUMN_WIDTHS: Record<string, number> = {
+    actions: PINNED_WIDTH,
+    title: PINNED_WIDTH,
+    content_type: 150,
+    status: 150,
+    platform: 150,
+    platform_name: 150,
+    release_year: 120,
+    runtime_minutes: 150,
+    notes: 300,
+  };
+
+  // Calculate left offset for sticky columns
+  const getStickyOffset = (columnKey: string): number => {
+    const index = stickyColumns.indexOf(columnKey);
+    if (index === -1) return 0;
+
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += PINNED_WIDTH;
+    }
+    return offset;
   };
 
   const queryClient = useQueryClient();
@@ -199,6 +221,12 @@ export default function Read() {
       )
       : ["title", "content_type", "status", "platform_name"];
 
+  const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
+  const orderedFields = [
+    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
+    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
+  ];
+
   const handleAddNew = () => {
     setSelectedMedia(null);
     setIsMediaDialogOpen(true);
@@ -286,34 +314,17 @@ export default function Read() {
         <Table>
           <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
             <TableRow>
-              <TableHead
-                className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
-                sticky={stickyColumns.includes("actions") ? "left" : undefined}
-              >
-                <div className="flex items-center gap-2">
-                  Actions
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-4 w-4 transition-opacity ${stickyColumns.includes("actions") ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                    onClick={() => toggleSticky("actions")}
-                  >
-                    {stickyColumns.includes("actions") ? (
-                      <PinOff className="h-3 w-3" />
-                    ) : (
-                      <Pin className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              </TableHead>
-              {displayFields.map((key) => (
+              {orderedFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap px-4 bg-slate-50 group"
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap group"
                   sticky={stickyColumns.includes(key) ? "left" : undefined}
+                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                 >
                   <div className="flex items-center gap-2">
-                    {key.replace(/_/g, " ")}
+                    {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -345,7 +356,7 @@ export default function Read() {
               [...items].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((item) => {
                 const isSelected = selectedRowId === item.id;
                 return (
-                  <TableRow key={item.id} className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50/50"}`}
+                  <TableRow key={item.id} className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"}`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedRowId(null);
@@ -355,62 +366,77 @@ export default function Read() {
                     }}
                     data-state={isSelected ? "selected" : undefined}
                   >
-                    <TableCell
-                      className="px-4 whitespace-nowrap"
-                      sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                    >
-                      <div className="flex gap-2">
-                        {(item.content_type === ContentTypeEnum.Audiobook ||
-                          (item as any).content_type === "AudioBook") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/chapters?projectId=${item.id}`);
-                              }}
-                              title="Chapters"
-                            >
-                              <List className="h-4 w-4" />
-                            </Button>
-                          )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(item);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(item);
-                          }}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    {displayFields.map((key) => {
+                    {orderedFields.map((key) => {
+                      if (key === "actions") {
+                        return (
+                          <TableCell
+                            key="actions"
+                            className="whitespace-nowrap"
+                            sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                            left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                            width={PINNED_WIDTH}
+                            showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                          >
+                            <div className="flex gap-2">
+                              {(item.content_type === ContentTypeEnum.Audiobook ||
+                                (item as any).content_type === "AudioBook") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/chapters?projectId=${item.id}`);
+                                    }}
+                                    title="Chapters"
+                                  >
+                                    <List className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(item);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(item);
+                                }}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        );
+                      }
+
                       const value = (item as any)[key];
                       return (
                         <TableCell
                           key={key}
-                          className="max-w-[220px] truncate px-4 group-hover:bg-slate-50/50 group-data-[state=selected]:bg-indigo-50"
+                          className={cn(
+                            "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                            (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
+                          )}
                           sticky={stickyColumns.includes(key) ? "left" : undefined}
+                          left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                          width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                          showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                         >
                           {value === null || value === undefined ? (
                             <span className="text-muted-foreground text-xs">
                               —
                             </span>
                           ) : (
-                            <span title={String(value)}>{String(value)}</span>
+                            <span title={String(value)} className="truncate block">{String(value)}</span>
                           )}
                         </TableCell>
                       );

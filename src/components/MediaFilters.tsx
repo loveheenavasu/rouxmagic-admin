@@ -38,8 +38,8 @@ export function MediaFilters({
   onShelfChange,
 }: MediaFiltersProps) {
   return (
-    <div className="flex flex-col lg:flex-row gap-4 mb-6">
-      <div className="relative flex-[2] min-w-[300px]">
+    <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 mb-8 w-full">
+      <div className="relative flex-1 min-w-[300px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <Input
           placeholder={searchPlaceholder}

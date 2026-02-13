@@ -28,13 +28,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, Loader2, Eye, EyeOff, Search } from "lucide-react";
+import { Edit, Trash2, Loader2, Eye, EyeOff, Search, Pin, PinOff } from "lucide-react";
 import { ContentRows } from "@/api/integrations/supabase/content_rows/content_rows";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { Flag, ContentRow, PageEnum, FilterTypeEnum } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
+import { cn } from "@/lib/utils";
 
 const contentRowsAPI = ContentRows as Required<typeof ContentRows>;
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -47,6 +48,74 @@ const ContentRowsPage = () => {
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
     const [pageFilter, setPageFilter] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
+    const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "label"]);
+    const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+    const [orderValue, setOrderValue] = useState<number | "">("");
+
+    const startEditOrder = (row: ContentRow) => {
+        setEditingOrderId(row.id);
+        setOrderValue(row.order_index ?? "");
+    };
+
+    const cancelEditOrder = () => {
+        setEditingOrderId(null);
+        setOrderValue("");
+    };
+
+    const saveOrderIndex = async (row: ContentRow) => {
+        if (orderValue === "" || orderValue === row.order_index) {
+            cancelEditOrder();
+            return;
+        }
+
+        try {
+            await updateMutation.mutateAsync({
+                id: row.id,
+                data: { order_index: Number(orderValue) }
+            });
+            // Result toast handled by mutation onSuccess
+            cancelEditOrder();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const toggleSticky = (key: string) => {
+        setStickyColumns((prev) => {
+            if (prev.includes(key)) {
+                return prev.filter((col) => col !== key);
+            }
+            if (prev.length >= 2) {
+                toast.info("Maximum 2 columns can be pinned");
+                return prev;
+            }
+            return [...prev, key];
+        });
+    };
+
+    const PINNED_WIDTH = 200;
+    const COLUMN_WIDTHS: Record<string, number> = {
+        actions: PINNED_WIDTH,
+        label: PINNED_WIDTH,
+        page: 120,
+        filter_type: 150,
+        filter_value: 200,
+        order_index: 100,
+        max_items: 100,
+        matchCount: 120,
+        is_active: 120,
+    };
+
+    const getStickyOffset = (columnKey: string): number => {
+        const index = stickyColumns.indexOf(columnKey);
+        if (index === -1) return 0;
+
+        let offset = 0;
+        for (let i = 0; i < index; i++) {
+            offset += PINNED_WIDTH;
+        }
+        return offset;
+    };
 
     // Form state
     const [formData, setFormData] = useState({
@@ -402,164 +471,250 @@ const ContentRowsPage = () => {
                         />
                     </div>
 
-                    <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
-                                <TableRow>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Actions
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Label
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Page
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Filter Type
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Filter Value
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Order
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Max Items
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Matches
-                                    </TableHead>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 px-4 bg-slate-50">
-                                        Status
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="h-64 text-center">
-                                            <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
-                                            <p className="mt-2 text-sm text-slate-500 font-medium">
-                                                Loading content rows...
-                                            </p>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : contentRows.length > 0 ? (
-                                    [...contentRows]
-                                        .sort((a, b) =>
-                                            a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0
-                                        )
-                                        .map((row: ContentRow) => {
-                                            const isSelected = selectedRowId === row.id;
-                                            return (
-                                                <TableRow
-                                                    key={row.id}
-                                                    className={`transition-colors cursor-pointer group ${isSelected
-                                                        ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm"
-                                                        : "hover:bg-slate-50/50"
-                                                        }`}
-                                                    onClick={() =>
-                                                        setSelectedRowId(isSelected ? null : row.id)
-                                                    }
-                                                    data-state={isSelected ? "selected" : undefined}
+                    <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        {(() => {
+                            const displayFields = [
+                                { key: "label", label: "Label" },
+                                { key: "page", label: "Page" },
+                                { key: "filter_type", label: "Filter Type" },
+                                { key: "filter_value", label: "Filter Value" },
+                                { key: "order_index", label: "Order" },
+                                { key: "max_items", label: "Max Items" },
+                                { key: "matchCount", label: "Matches" },
+                                { key: "is_active", label: "Status" }
+                            ];
+                            const allAvailableFields = [{ key: "actions", label: "Actions" }, ...displayFields];
+                            const orderedFields = [
+                                ...allAvailableFields.filter(f => stickyColumns.includes(f.key)),
+                                ...allAvailableFields.filter(f => !stickyColumns.includes(f.key))
+                            ];
+
+                            return (
+                                <Table>
+                                    <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
+                                        <TableRow>
+                                            {orderedFields.map((col) => (
+                                                <TableHead
+                                                    key={col.key}
+                                                    className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
+                                                    sticky={stickyColumns.includes(col.key) ? "left" : undefined}
+                                                    left={stickyColumns.includes(col.key) ? getStickyOffset(col.key) : undefined}
+                                                    width={stickyColumns.includes(col.key) ? PINNED_WIDTH : (COLUMN_WIDTHS[col.key] || 150)}
+                                                    showShadow={stickyColumns.indexOf(col.key) === stickyColumns.length - 1}
                                                 >
-                                                    <TableCell className="px-4 whitespace-nowrap">
-                                                        <div className="flex gap-1">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleEdit(row);
-                                                                }}
-                                                                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                                            >
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleActive(row);
-                                                                }}
-                                                                className={`${row.is_active
-                                                                    ? "text-green-500 hover:text-green-700 hover:bg-green-50"
-                                                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                                                                    } rounded-lg`}
-                                                            >
-                                                                {row.is_active ? (
-                                                                    <Eye className="h-4 w-4" />
-                                                                ) : (
-                                                                    <EyeOff className="h-4 w-4" />
-                                                                )}
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDelete(row);
-                                                                }}
-                                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        {row.label}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">
-                                                            {row.page}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                                            {row.filter_type}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        {row.filter_value}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        {row.order_index}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        {row.max_items || "—"}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${(row as any).matchCount > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
-                                                            {(row as any).matchCount}+ items
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium px-4">
-                                                        <span
-                                                            className={`px-2 py-1 rounded-full text-xs font-medium ${row.is_active
-                                                                ? "bg-green-100 text-green-700"
-                                                                : "bg-gray-100 text-gray-700"
-                                                                }`}
+                                                    <div className="flex items-center gap-2">
+                                                        {col.label}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={`h-4 w-4 transition-opacity ${stickyColumns.includes(col.key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                                                            onClick={() => toggleSticky(col.key)}
                                                         >
-                                                            {row.is_active ? "Active" : "Inactive"}
-                                                        </span>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })
-                                ) : (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={8}
-                                            className="h-32 text-center text-slate-500 font-medium"
-                                        >
-                                            No content rows found. Add your first row to get started.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                                                            {stickyColumns.includes(col.key) ? (
+                                                                <PinOff className="h-3 w-3" />
+                                                            ) : (
+                                                                <Pin className="h-3 w-3" />
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                </TableHead>
+                                            ))}
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={orderedFields.length} className="h-64 text-center">
+                                                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
+                                                    <p className="mt-2 text-sm text-slate-500 font-medium">
+                                                        Loading content rows...
+                                                    </p>
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : contentRows.length > 0 ? (
+                                            [...contentRows]
+                                                .sort((a, b) =>
+                                                    a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0
+                                                )
+                                                .map((row: ContentRow) => {
+                                                    const isSelected = selectedRowId === row.id;
+                                                    return (
+                                                        <TableRow
+                                                            key={row.id}
+                                                            className={`transition-colors cursor-pointer group ${isSelected
+                                                                ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm"
+                                                                : "hover:bg-slate-50"
+                                                                }`}
+                                                            onClick={() =>
+                                                                setSelectedRowId(isSelected ? null : row.id)
+                                                            }
+                                                            data-state={isSelected ? "selected" : undefined}
+                                                        >
+                                                            {orderedFields.map((field) => {
+                                                                const key = field.key;
+                                                                if (key === "actions") {
+                                                                    return (
+                                                                        <TableCell
+                                                                            key="actions"
+                                                                            className="whitespace-nowrap font-medium"
+                                                                            sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                                                                            left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                                                                            width={PINNED_WIDTH}
+                                                                            showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                                                                        >
+                                                                            <div className="flex gap-1">
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleEdit(row);
+                                                                                    }}
+                                                                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                                                                >
+                                                                                    <Edit className="h-4 w-4" />
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        toggleActive(row);
+                                                                                    }}
+                                                                                    className={`${row.is_active
+                                                                                        ? "text-green-500 hover:text-green-700 hover:bg-green-50"
+                                                                                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                                                                                        } rounded-lg`}
+                                                                                >
+                                                                                    {row.is_active ? (
+                                                                                        <Eye className="h-4 w-4" />
+                                                                                    ) : (
+                                                                                        <EyeOff className="h-4 w-4" />
+                                                                                    )}
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleDelete(row);
+                                                                                    }}
+                                                                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                                                                >
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </div>
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                const value = (row as any)[key];
+                                                                return (
+                                                                    <TableCell
+                                                                        key={key}
+                                                                        className={cn(
+                                                                            "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                                                                            key === "filter_value" ? "max-w-[200px]" : undefined
+                                                                        )}
+                                                                        sticky={stickyColumns.includes(key) ? "left" : undefined}
+                                                                        left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                                                                        width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                                                                        showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                                                                    >
+                                                                        {key === "page" ? (
+                                                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">
+                                                                                {row.page}
+                                                                            </span>
+                                                                        ) : key === "filter_type" ? (
+                                                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                                                                {row.filter_type}
+                                                                            </span>
+                                                                        ) : key === "filter_value" ? (
+                                                                            <span className="truncate block" title={row.filter_value}>
+                                                                                {row.filter_value}
+                                                                            </span>
+                                                                        ) : key === "matchCount" ? (
+                                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${(row as any).matchCount > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
+                                                                                {(row as any).matchCount}+ items
+                                                                            </span>
+                                                                        ) : key === "order_index" ? (
+                                                                            editingOrderId === row.id ? (
+                                                                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={orderValue}
+                                                                                        onChange={(e) =>
+                                                                                            setOrderValue(Number(e.target.value))
+                                                                                        }
+                                                                                        className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                                                    />
+
+                                                                                    <Button
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        onClick={() => saveOrderIndex(row)}
+                                                                                        className="text-green-600 hover:bg-green-50 h-8 w-8"
+                                                                                    >
+                                                                                        <span className="text-lg">✔</span>
+                                                                                    </Button>
+
+                                                                                    <Button
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        onClick={cancelEditOrder}
+                                                                                        className="text-slate-400 hover:bg-slate-100 h-8 w-8"
+                                                                                    >
+                                                                                        <span className="text-lg">✕</span>
+                                                                                    </Button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span>{row.order_index}</span>
+                                                                                    <Button
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            startEditOrder(row);
+                                                                                        }}
+                                                                                        className="h-6 w-6 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                                                                    >
+                                                                                        <Edit className="h-3 w-3" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            )
+                                                                        ) : key === "is_active" ? (
+                                                                            <span
+                                                                                className={`px-2 py-1 rounded-full text-xs font-medium ${row.is_active
+                                                                                    ? "bg-green-100 text-green-700"
+                                                                                    : "bg-gray-100 text-gray-700"
+                                                                                    }`}
+                                                                            >
+                                                                                {row.is_active ? "Active" : "Inactive"}
+                                                                            </span>
+                                                                        ) : (
+                                                                            value
+                                                                        )}
+                                                                    </TableCell>
+                                                                );
+                                                            })}
+                                                        </TableRow>
+                                                    );
+                                                })
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={orderedFields.length}
+                                                    className="h-32 text-center text-slate-500 font-medium"
+                                                >
+                                                    No content rows found. Add your first row to get started.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            );
+                        })()}
                     </div>
                 </div>
             </Card>
