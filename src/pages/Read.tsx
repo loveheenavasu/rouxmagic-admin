@@ -27,7 +27,6 @@ const projectsAPI = Projects;
 export default function Read() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
@@ -80,14 +79,11 @@ export default function Read() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["read-items", searchQuery, statusFilter, contentTypeFilter],
+    queryKey: ["read-items", searchQuery, contentTypeFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
       let inValue: any = { key: "content_type", value: [...READ_TYPES] };
 
-      if (statusFilter !== "all") {
-        eqFilters.push({ key: "status", value: statusFilter });
-      }
 
       if (contentTypeFilter !== "all") {
         // If specific content type filter is set, it overrides the general READ_TYPES
@@ -300,7 +296,6 @@ export default function Read() {
           searchPlaceholder="Search by title, platform or notes..."
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
           onContentTypeFilterChange={setContentTypeFilter}
           availableStatuses={availableStatuses}
           availableTypes={availableTypes}
@@ -464,7 +459,6 @@ export default function Read() {
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
         defaultValues={{
-          status: statusFilter !== "all" ? (statusFilter as any) : undefined,
           content_type:
             contentTypeFilter !== "all" ? (contentTypeFilter as any) : undefined,
         }}
