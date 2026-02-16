@@ -15,10 +15,14 @@ export interface PairingsMetaData {
   target_ref: PairingSourceEnum;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  vibe_tags?: string[];
+  flavor_tags?: string[];
 }
 
 export interface PairingFormData extends PairingsMetaData {
-    updated_at?:CommonSchema["updated_at"]
+    updated_at?:CommonSchema["updated_at"];
+    vibe_tags?: string[];
+    flavor_tags?: string[];
 }
 
 export type GetPairingsBy = keyof Pairing

@@ -35,6 +35,7 @@ export interface ProjectMetaData {
   platform_name?: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  vibe_tags?: string[];
 }
 
 export interface ProjectFormData extends Partial<Project> {

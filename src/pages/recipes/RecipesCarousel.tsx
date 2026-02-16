@@ -13,6 +13,7 @@ import {
 import { Plus, Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
 import RecipeDialog from "@/components/RecipeDialog";
+import { Badge } from "@/components/ui/badge";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { Flag, Recipe } from "@/types";
@@ -49,6 +50,7 @@ export default function RecipesCarousel() {
     category: 150,
     slug: 150,
     order_index: 120,
+    flavor_tags: 200,
     short_description: 250,
   };
 
@@ -262,8 +264,9 @@ export default function RecipesCarousel() {
     { key: "title", label: "Title" },
     { key: "category", label: "Category" },
     { key: "slug", label: "Slug" },
-    { key: "preview_url", label: "Preview URL" },
     { key: "order_index", label: "Order Index" },
+    { key: "flavor_tags", label: "Flavor Tags" },
+    { key: "preview_url", label: "Preview URL" },
   ];
 
   const orderedFields = [
@@ -470,7 +473,17 @@ export default function RecipesCarousel() {
                                   </div>
                                 )
                               ) : (
-                                value || <span className="text-slate-300 text-xs">—</span>
+                                Array.isArray(value) ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {value.map((v) => (
+                                      <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
+                                        {v}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  value || <span className="text-slate-300 text-xs">—</span>
+                                )
                               )}
                             </TableCell>
                           );

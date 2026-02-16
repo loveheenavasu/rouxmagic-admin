@@ -301,8 +301,6 @@ export default function Read() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          contentTypeFilter={contentTypeFilter}
           onContentTypeFilterChange={setContentTypeFilter}
           availableStatuses={availableStatuses}
           availableTypes={availableTypes}

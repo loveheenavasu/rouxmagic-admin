@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { ContentTypeEnum, Flag, Project } from "@/types";
@@ -114,10 +115,11 @@ export default function ListenPage() {
         throw new Error(errorMessage);
       }
 
-      const data = Array.isArray(response.data)
+      let data = Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
 
+      return data;
       return data;
     },
   });
@@ -217,16 +219,15 @@ export default function ListenPage() {
       ) {
         return [];
       }
-      const statuses = (response.data as Project[])
+      const types = (response.data as Project[])
         .map((item) => item.status)
         .filter(Boolean);
-      return [...new Set(statuses)].sort();
+      return [...new Set(types)].sort();
     },
   });
 
   // Fetch unique types for filters (global, not affected by current filter)
   // For Listen page we always show songs, so we don't need a type filter dropdown.
-  const availableTypes: string[] = [];
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -326,7 +327,6 @@ export default function ListenPage() {
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           availableStatuses={availableStatuses}
-          availableTypes={availableTypes}
         />
       </div>
       {/* Table */}
@@ -444,6 +444,14 @@ export default function ListenPage() {
                             <span className="text-muted-foreground text-xs">
                               —
                             </span>
+                          ) : Array.isArray(value) ? (
+                            <div className="flex flex-wrap gap-1">
+                              {value.map((v) => (
+                                <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
+                                  {v}
+                                </Badge>
+                              ))}
+                            </div>
                           ) : (
                             <span title={String(value)} className="truncate block">{String(value)}</span>
                           )}

@@ -20,6 +20,7 @@ export interface RecipeMetadata {
   order_index?: number;
   is_deleted: boolean;
   deleted_at: string | null;
+  flavor_tags?: string[];
 }
 
 export type SortRecipesBy = "created_at" | "order_index";

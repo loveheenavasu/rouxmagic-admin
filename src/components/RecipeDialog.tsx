@@ -55,14 +55,12 @@ export default function RecipeDialog({
 
   useEffect(() => {
     if (open) {
-      if (recipe) {
         setFormData({
           ...emptyForm,
           ...recipe,
         });
       } else {
         setFormData(emptyForm);
-      }
     }
   }, [open, recipe]);
 

@@ -736,13 +736,17 @@ const ContentRowsPage = () => {
                                     value={formData.label}
                                     onChange={(e) => {
                                         const rawVal = e.target.value;
-                                        const formattedVal = rawVal ? rawVal.charAt(0).toUpperCase() + rawVal.slice(1).toLowerCase() : "";
+                                        // Format label: Capitalize words normally
+                                        const formattedLabel = rawVal.replace(/\b\w/g, l => l.toUpperCase());
+                                        // Format key: lowercase with underscores (slug)
+                                        const slug = rawVal.toLowerCase().trim().replace(/\s+/g, "_");
+
                                         setFormData(prev => ({
                                             ...prev,
-                                            label: formattedVal,
-                                            // Only auto-fill filter_value if adding a new row
+                                            label: formattedLabel,
+                                            // Auto-fill slugified key only for NEW rows
                                             filter_value: !selectedRow
-                                                ? formattedVal
+                                                ? slug
                                                 : prev.filter_value
                                         }));
                                     }}
