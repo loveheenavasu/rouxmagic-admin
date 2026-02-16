@@ -115,21 +115,24 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                 if (targetRef === PairingSourceEnum.Recipe) {
                     const res = await recipesAPI.get({
                         search: searchQuery || undefined,
-                        searchFields: searchQuery ? ["title"] : undefined,
+                        searchFields: searchQuery ? ["title", "flavor_tags"] as any[] : undefined,
                         eq: [{ key: "is_deleted" as any, value: false }],
                         limit: 50
                     });
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
-                        // Filter out the current item (sourceId) to prevent self-pairing
                         return data
                             .filter((r: any) => r.id !== sourceId)
-                            .map((r: any) => ({ id: r.id, title: r.title, type: PairingSourceEnum.Recipe }));
+                            .map((r: any) => ({
+                                id: r.id,
+                                title: r.title,
+                                type: PairingSourceEnum.Recipe,
+                            }));
                     }
                 } else {
                     const res = await projectsAPI.get({
                         search: searchQuery || undefined,
-                        searchFields: searchQuery ? ["title"] : undefined,
+                        searchFields: searchQuery ? ["title", "vibe_tags"] as any[] : undefined,
                         eq: [
                             { key: "content_type" as any, value: targetRef as any },
                             { key: "is_deleted" as any, value: false }
@@ -138,10 +141,13 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     } as any);
                     if (res.flag === Flag.Success && res.data) {
                         const data = Array.isArray(res.data) ? res.data : [res.data];
-                        // Filter out the current item (sourceId) to prevent self-pairing
                         return data
                             .filter((p: any) => p.id !== sourceId)
-                            .map((p: any) => ({ id: p.id, title: (p as Project).title, type: targetRef }));
+                            .map((p: any) => ({
+                                id: p.id,
+                                title: (p as Project).title,
+                                type: targetRef,
+                            }));
                     }
                 }
                 return [];
@@ -327,9 +333,11 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                             className="p-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer border-b last:border-0"
                                             onClick={() => createPairingMutation.mutate(result.id)}
                                         >
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
                                                 {getSourceIcon(result.type)}
-                                                <span className="text-sm font-medium">{result.title}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{result.title}</p>
+                                                </div>
                                             </div>
                                             <Button variant="ghost" size="sm" className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
                                                 <Plus className="h-4 w-4 mr-1" /> Add

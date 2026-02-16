@@ -13,6 +13,7 @@ import {
 import { Plus, Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import MediaDialog from "@/components/MediaDialog";
+import { Badge } from "@/components/ui/badge";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
 import { toast } from "sonner";
@@ -59,6 +60,7 @@ export default function WatchCarousel() {
     status: 120,
     platform_name: 150,
     order_index: 120,
+    vibe_tags: 200,
     release_year: 120,
     runtime_minutes: 150,
     notes: 300,
@@ -302,6 +304,7 @@ export default function WatchCarousel() {
     "runtime_minutes",
     "notes",
     "synopsis",
+    "vibe_tags",
     "in_hero_carousel",
   ];
 
@@ -329,6 +332,7 @@ export default function WatchCarousel() {
     { key: "status", label: "Status" },
     { key: "platform_name", label: "Platform" },
     { key: "order_index", label: "Order Index" },
+    { key: "vibe_tags", label: "Vibe Tags" },
     { key: "release_year", label: "Release Year" },
     { key: "runtime_minutes", label: "Runtime Minutes" },
     { key: "notes", label: "Notes" },
@@ -552,7 +556,17 @@ export default function WatchCarousel() {
                                   </div>
                                 )
                               ) : (
-                                value || <span className="text-slate-300 text-xs">—</span>
+                                Array.isArray(value) ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {value.map((v) => (
+                                      <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
+                                        {v}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  value || <span className="text-slate-300 text-xs">—</span>
+                                )
                               )}
                             </TableCell>
                           );

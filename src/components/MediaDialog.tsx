@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -307,13 +308,15 @@ export default function MediaDialog({
 
           if (projects.length > 0) {
             const KNOWN_FLAGS = ["in_now_playing", "in_coming_soon", "in_latest_releases", "in_hero_carousel"];
+            const MANDATORY_EXTRA_FIELDS: string[] = [];
 
             const fields = Array.from(new Set([
               ...Object.keys(projects[0]),
-              ...KNOWN_FLAGS
+              ...KNOWN_FLAGS,
+              ...MANDATORY_EXTRA_FIELDS
             ]))
               .filter(
-                (key) => !["id", "created_at", "updated_at"].includes(key)
+                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior", "vibe_tags"].includes(key)
               )
               .filter((key) =>
                 allowedFields ? allowedFields.includes(key) : true
@@ -326,9 +329,27 @@ export default function MediaDialog({
               const result: Record<string, any> = {};
               Object.entries(media).forEach(([key, value]) => {
                 if (allowedFields && !allowedFields.includes(key)) return;
-                if (key === "genres" && Array.isArray(value)) {
-                  result["commaSeperatedGenres"] = value.join(", ");
-                } else {
+
+                // Handle genres
+                if (key === "genres") {
+                  let tags = value;
+                  if (typeof tags === 'string' && tags.startsWith('[') && tags.endsWith(']')) {
+                    try {
+                      tags = JSON.parse(tags);
+                    } catch (e) {
+                      tags = [tags];
+                    }
+                  }
+
+                  const targetKey = "commaSeperatedGenres";
+                  result[targetKey] = Array.isArray(tags) ? tags.join(", ") : (tags || "");
+                }
+                // Handle other array fields
+                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
+                if (arrayFields.includes(key) || (Array.isArray(value) && typeof value[0] === 'string')) {
+                  result[key] = Array.isArray(value) ? value.join(", ") : (value || "");
+                }
+                else {
                   result[key] =
                     value === null || value === undefined ? "" : value;
                 }
@@ -409,8 +430,9 @@ export default function MediaDialog({
 
     // Only include fields that have actual values
     Object.entries(formData).forEach(([key, value]) => {
-      // Skip internal fields
-      if (["id", "created_at", "updated_at"].includes(key)) {
+      console.log('formData', formData)
+      // Skip internal fields, play_behavior, and UI helper fields
+      if (["id", "created_at", "updated_at", "play_behavior", "commaSeperatedGenres", "genres"].includes(key)) {
         return;
       }
 
@@ -431,11 +453,24 @@ export default function MediaDialog({
       } else if (typeof value === "boolean") {
         submitData[key] = value;
       } else {
-        submitData[key] = value;
+        // Handle other possible array fields that were stored as strings
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
+        if (arrayFields.includes(key) && typeof value === 'string') {
+          // Split by comma or newline, trim, and filter blank entries
+          submitData[key] = value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+        } else {
+          submitData[key] = value;
+        }
       }
     });
 
-    console.log("📤 Submitting data to database:", submitData);
+    // Handle genres conversion from commaSeperatedGenres
+    const genresValue = (formData as any).commaSeperatedGenres;
+    submitData["genres"] = genresValue
+      ? String(genresValue).split(",").map((t: string) => t.trim()).filter(Boolean)
+      : [];
+
+    console.log("Submitting data to database:", submitData);
     await onSubmit(submitData);
   };
 
@@ -632,33 +667,111 @@ export default function MediaDialog({
       );
     }
 
-    // Special: Genres (comma-separated)
-    if (key === "commaSeperatedGenres") {
+    // Special: Helper for comma-separated inputs (Genres)
+    if (key === "genres") {
+      const targetKey = "commaSeperatedGenres";
+      const displayValue = (formData as any)[targetKey] || "";
+      const labelText = "Genres (comma-separated)";
+      const placeholderText = "e.g., Action, Drama, Comedy";
+
       return (
         <div key={key} className="col-span-2">
-          <Label htmlFor={key} className="font-medium">
-            Genres (comma-separated)
+          <Label htmlFor={targetKey} className="font-medium">
+            {labelText}
           </Label>
           <Input
-            id={key}
+            id={targetKey}
             type="text"
-            value={value || ""}
+            value={displayValue}
             onChange={(e) =>
-              handleChange(key as keyof ProjectFormData, e.target.value)
+              handleChange(targetKey as keyof ProjectFormData, e.target.value)
             }
-            placeholder="e.g., Action, Drama, Comedy"
+            placeholder={placeholderText}
             className="mt-1.5"
           />
         </div>
       );
     }
 
-    // Skip genres array field (we use commaSeperatedGenres instead)
-    if (key === "genres") {
-      return null;
+    // Unified Field Guide for simple help text
+    const fieldGuide: Record<string, { description: string; example?: string }> = {
+      title: { description: "Name of the content as seen in the catalog." },
+      content_type: { description: "Classification for routing and playback." },
+      status: { description: "Release status: 'released' is live, 'coming_soon' shows teaser." },
+      poster_url: { description: "Primary display image URL." },
+      preview_url: { description: "Teaser video or thumbnail URL." },
+      notes: { description: "Internal notes or brief summary." },
+      platform: { description: "Where is this available? (YouTube, Netflix, etc.)" },
+      platform_url: { description: "Direct link to the content platform." },
+      release_year: { description: "Year of original release (YYYY)." },
+      runtime_minutes: { description: "Total duration in minutes." },
+      ownership: { description: "Numeric identifier for licensing/ownership." },
+      // play_behavior: { description: "Allowed: autoplay, loop, muted. Enter each separated by a comma.", example: "autoplay, loop" },
+      creators: { description: "Authors or creators. Enter names separated by commas.", example: "John Doe, Jane Smith" },
+      cast: { description: "Cast members. Enter names separated by commas.", example: "Actor A, Actor B" },
+      stars: { description: "Main stars or lead performers. Enter names separated by commas.", example: "Star One, Star Two" },
+      directors: { description: "Directors. Enter names separated by commas." },
+      producers: { description: "Producers. Enter names separated by commas." },
+      writers: { description: "Writers. Enter names separated by commas." },
+      tags: { description: "Categorization tags. Enter each separated by a comma." },
+      genres: { description: "Genres for filtering. Enter comma-separated.", example: "Action, Drama" },
+      order_index: { description: "Listing priority (lower is higher)." },
+      audio_url: { description: "Direct audio file link." },
+      audio_preview_url: { description: "Link to audio clip for preview." },
+      slug: { description: "URL-friendly name. Auto-generated if empty." }
+    };
+
+    const isDate = key.endsWith("_at") || key.includes("date") || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value));
+    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
+    const isArrayField = knownArrayFields.includes(key);
+    const fieldInfo = fieldGuide[key];
+
+    // Special: Date Fields
+    if (isDate) {
+      const dateValue = value && typeof value === 'string' ? value.split('T')[0] : "";
+      return (
+        <div key={key}>
+          <Label htmlFor={key} className="font-medium">
+            {label} {isRequired ? "*" : ""}
+          </Label>
+          <Input
+            id={key}
+            type="date"
+            value={dateValue}
+            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            className="mt-1.5"
+            required={isRequired}
+          />
+          <p className="mt-1 text-[10px] text-slate-400 italic">Format: YYYY-MM-DD</p>
+        </div>
+      );
     }
 
-    // Default: Input (Numeric or Text)
+    // Special: Array fields
+    if (isArrayField) {
+      const displayValue = Array.isArray(value) ? value.join(", ") : (value || "");
+      return (
+        <div key={key} className="col-span-2">
+          <Label htmlFor={key} className="font-medium">
+            {label} <span className="text-[10px] text-slate-400 font-normal ml-1">(Array)</span>
+          </Label>
+          <Textarea
+            id={key}
+            value={displayValue}
+            onChange={(e) => {
+              handleChange(key as keyof ProjectFormData, e.target.value);
+            }}
+            placeholder={fieldInfo?.example ? `e.g., ${fieldInfo.example}` : `Enter values separated by commas or new lines`}
+            className="mt-1.5 min-h-[80px]"
+          />
+          <div className="mt-1">
+            <p className="text-[10px] text-slate-500">{fieldInfo?.description || "Enter multiple values separated by commas or press Enter for new lines."}</p>
+            {fieldInfo?.example && <p className="text-[9px] text-slate-400 italic">Example: {fieldInfo.example}</p>}
+          </div>
+        </div>
+      );
+    }
+
     const isNumeric = [
       "release_year",
       "runtime_minutes",
@@ -666,6 +779,7 @@ export default function MediaDialog({
       "total_episodes",
       "episode_runtime_minutes",
       "order",
+      "ownership",
     ].includes(key);
 
     const isFullWidth = [
@@ -687,7 +801,6 @@ export default function MediaDialog({
           {label} {isRequired ? "*" : ""}
         </Label>
 
-        {/* Special handling for image/video/audio URLs to allow uploads */}
         {key === "poster_url" ||
           key === "preview_url" ||
           key === "audio_url" ||
@@ -724,19 +837,11 @@ export default function MediaDialog({
                       const safeName = file.name.replace(/\s+/g, "_");
                       const path =
                         key === "audio_url" || key === "audio_preview_url"
-                          ? `Audio/${formData.content_type ?? "generic"
-                          }/${Date.now()}-${safeName}`
-                          : createBucketPath(
-                            `${Date.now()}-${safeName}`,
-                            formData.content_type!
-                          );
-                      const publicUrl = await mediaService.uploadFile(
-                        file,
-                        bucket,
-                        path
-                      );
+                          ? `Audio/${formData.content_type || "generic"}/${Date.now()}-${safeName}`
+                          : createBucketPath(`${Date.now()}-${safeName}`, formData.content_type!);
+                      const publicUrl = await mediaService.uploadFile(file, bucket, path);
                       handleChange(key as keyof ProjectFormData, publicUrl);
-                      toast.success(`${label} uploaded successfully!`);
+                      toast.success(`${label} uploaded!`);
                     } catch (error: any) {
                       toast.error(`Upload failed: ${error.message}`);
                     } finally {
@@ -752,27 +857,35 @@ export default function MediaDialog({
                 onClick={() => document.getElementById(`file-${key}`)?.click()}
                 className="h-10 px-3 bg-slate-50 border-dashed"
               >
-                {isUploading === key ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
+                {isUploading === key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 <span className="ml-2 hidden sm:inline">Upload</span>
               </Button>
             </div>
           </div>
+        ) : key === "synopsis" || key === "notes" ? (
+          <Textarea
+            id={key}
+            value={value ?? ""}
+            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            placeholder={`Enter ${label.toLowerCase()}`}
+            required={isRequired}
+            className="mt-1.5 min-h-[100px]"
+          />
         ) : (
           <Input
             id={key}
             type={isNumeric ? "number" : "text"}
             value={value ?? ""}
-            onChange={(e) =>
-              handleChange(key as keyof ProjectFormData, e.target.value)
-            }
+            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
             placeholder={`Enter ${label.toLowerCase()}`}
             required={isRequired}
             className="mt-1.5"
           />
+        )}
+        {(fieldInfo?.description || isNumeric) && (
+          <p className="mt-1 text-[10px] text-slate-500 leading-tight">
+            {fieldInfo?.description || (isNumeric ? "Numeric value only." : "")}
+          </p>
         )}
       </div>
     );
@@ -910,8 +1023,7 @@ export default function MediaDialog({
                     (k) =>
                       !k.startsWith("in_") &&
                       k !== "featured" &&
-                      k !== "is_downloadable" &&
-                      k !== "genres"
+                      k !== "is_downloadable"
                   )
                   .map((key) => renderField(key, (formData as any)[key]))}
 

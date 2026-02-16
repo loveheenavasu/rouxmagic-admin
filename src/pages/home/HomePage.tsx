@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
+import { pairingService } from "@/services/pairingService";
 import MediaDialog from "@/components/MediaDialog";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -26,12 +27,12 @@ const projectsAPI = Projects as Required<typeof Projects>;
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<Partial<Project> | null>(
-    null
-  );
+  const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
@@ -49,7 +50,6 @@ const HomePage = () => {
       return [...prev, key];
     });
   };
-  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
 
   const { data: shelves = [] } = useQuery({
     queryKey: ["content-rows", "home"],
@@ -87,27 +87,8 @@ const HomePage = () => {
     return offset;
   };
 
-  const debouncedSearchQuery = useDebounce(searchQuery);
 
   const queryClient = useQueryClient();
-
-  // Fetch unique statuses for filters
-  const { data: availableStatuses = [] } = useQuery({
-    queryKey: ["unique-statuses"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({ eq: [] });
-      if (
-        response.flag === Flag.Success ||
-        (Flag.UnknownOrSuccess && response.data)
-      ) {
-        const statuses = (response.data as Project[])
-          .map((item) => item.status)
-          .filter(Boolean);
-        return [...new Set(statuses)].sort();
-      }
-      return [];
-    },
-  });
 
   // Fetch unique types for filters
   const { data: availableTypes = [] } = useQuery({
@@ -188,7 +169,25 @@ const HomePage = () => {
       if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
         throw new Error(response.error?.message || "Failed to fetch projects");
       }
-      const rows = Array.isArray(response.data) ? (response.data as Project[]) : [];
+
+      let rows = Array.isArray(response.data) ? (response.data as Project[]) : [];
+
+      // Smart Tag Search (Inheritance)
+      if (debouncedSearchQuery && debouncedSearchQuery.length > 2) {
+        try {
+          const inheritedProjects = await pairingService.searchProjectsByInheritedTag(debouncedSearchQuery);
+          // Merge results, keeping uniqueness by ID
+          const existingIds = new Set(rows.map(r => r.id));
+          inheritedProjects.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              rows.push(p);
+            }
+          });
+        } catch (e) {
+          console.error("Error fetching inherited projects:", e);
+        }
+      }
+
       return rows.filter((item) => (item as any).is_deleted !== true);
     },
   });
@@ -210,6 +209,7 @@ const HomePage = () => {
       : ["title", "content_type", "status", "release_year", "platform"];
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
+  const availableStatuses = Array.from(new Set(projects.map(p => p.status).filter(Boolean))).sort();
   const orderedFields = [
     ...allAvailableFields.filter(key => stickyColumns.includes(key)),
     ...allAvailableFields.filter(key => !stickyColumns.includes(key))
@@ -239,6 +239,7 @@ const HomePage = () => {
       queryClient.invalidateQueries({ queryKey: ["home-library"] });
       queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["unique-types"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-vibes"] });
       setIsMediaDialogOpen(false);
       toast.success("Content item created successfully!");
     },
@@ -271,6 +272,7 @@ const HomePage = () => {
       queryClient.invalidateQueries({ queryKey: ["home-library"] });
       queryClient.invalidateQueries({ queryKey: ["unique-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["unique-types"] });
+      queryClient.invalidateQueries({ queryKey: ["unique-vibes"] });
       setIsMediaDialogOpen(false);
       setSelectedMedia(null);
       toast.success("Content item updated successfully!");

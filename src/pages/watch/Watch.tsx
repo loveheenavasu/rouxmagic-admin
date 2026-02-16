@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Flag, Project } from "@/types";
@@ -57,6 +58,7 @@ export default function Watch() {
     status: 150,
     platform: 150,
     release_year: 120,
+    vibe_tags: 200,
     runtime_minutes: 150,
     notes: 300,
   };
@@ -196,7 +198,7 @@ export default function Watch() {
             "updated_at",
           ].includes(key)
       )
-      : ["title", "content_type", "status", "release_year", "platform"];
+      : ["title", "content_type", "status", "release_year", "platform", "vibe_tags"];
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
@@ -439,6 +441,14 @@ export default function Watch() {
                               <span className="text-muted-foreground text-xs">
                                 —
                               </span>
+                            ) : Array.isArray(value) ? (
+                              <div className="flex flex-wrap gap-1">
+                                {value.map((v) => (
+                                  <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
+                                    {v}
+                                  </Badge>
+                                ))}
+                              </div>
                             ) : (
                               <span className="truncate block" title={String(value)}>{String(value)}</span>
                             )}

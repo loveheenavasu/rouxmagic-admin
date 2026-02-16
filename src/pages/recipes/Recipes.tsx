@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
+import { pairingService } from "@/services/pairingService";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import RecipeDialog from "@/components/RecipeDialog";
 import { toast } from "sonner";
@@ -127,11 +128,27 @@ export default function RecipesPage() {
         throw new Error(errorMessage);
       }
 
-      const data = Array.isArray(response.data)
+      let rows = Array.isArray(response.data)
         ? (response.data as Recipe[])
         : ([response.data] as Recipe[]);
 
-      return data;
+      // Smart Tag Search (Inheritance)
+      if (searchQuery && searchQuery.length > 2) {
+        try {
+          const inheritedRecipes = await pairingService.searchRecipesByInheritedTag(searchQuery);
+          // Merge results, keeping uniqueness by ID
+          const existingIds = new Set(rows.map(r => r.id));
+          inheritedRecipes.forEach(r => {
+            if (!existingIds.has(r.id)) {
+              rows.push(r);
+            }
+          });
+        } catch (e) {
+          console.error("Error fetching inherited recipes:", e);
+        }
+      }
+
+      return rows;
     },
   });
   const createMutation = useMutation({
