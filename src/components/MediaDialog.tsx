@@ -64,9 +64,9 @@ export default function MediaDialog({
   const [isLoadingFields, setIsLoadingFields] = useState(true);
 
   // Row Assignment Mode state
-  const [addMode] = useState<"standard" | "row">("standard");
+  const [addMode, setAddMode] = useState<"standard" | "row">("standard");
   // Renamed local state to avoid conflict with prop
-  const [localAssignmentPage] = useState<string>(assignmentPage || "home");
+  const [localAssignmentPage, setLocalAssignmentPage] = useState<string>(assignmentPage || "home");
   const [targetRowId, setTargetRowId] = useState<string>("");
 
   const queryClient = useQueryClient();
@@ -1156,19 +1156,83 @@ export default function MediaDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 border-none">
-        <div className="p-6 border-b sticky top-0 bg-white z-10">
+        <div className="p-6 border-b sticky top-0 bg-white z-10 space-y-4">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">
-              {media ? "Edit Content" : "Add New Content"}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Universal Dynamic Form - All fields detected from database
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl font-bold">
+                  {media ? "Edit Content" : "Add New Content"}
+                </DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  Universal Dynamic Form - All fields detected from database
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
+
+          {!media && (
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                <Button
+                  type="button"
+                  variant={addMode === "standard" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAddMode("standard")}
+                  className={addMode === "standard" ? "bg-white text-slate-900 shadow-sm hover:bg-white h-7 px-3 text-xs font-semibold" : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"}
+                >
+                  Standard Form
+                </Button>
+                <Button
+                  type="button"
+                  variant={addMode === "row" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAddMode("row")}
+                  className={addMode === "row" ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 h-7 px-3 text-xs font-semibold" : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"}
+                >
+                  Add to Row
+                </Button>
+              </div>
+
+              {addMode === "row" && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <Select value={localAssignmentPage} onValueChange={setLocalAssignmentPage}>
+                    <SelectTrigger className="h-9 w-[100px] text-xs capitalize">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="home">Home</SelectItem>
+                      <SelectItem value="watch">Watch</SelectItem>
+                      <SelectItem value="read">Read</SelectItem>
+                      <SelectItem value="listen">Listen</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={targetRowId} onValueChange={(id) => {
+                    setTargetRowId(id);
+                    const row = (contentRowFilters as any[]).find(r => r.id === id);
+                    if (row) applyRowTemplate(row);
+                  }}>
+                    <SelectTrigger className="h-9 w-[180px] text-xs font-medium">
+                      <SelectValue placeholder="Choose Row..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(contentRowFilters as any[])
+                        .filter(r => r.page === localAssignmentPage)
+                        .map(row => (
+                          <SelectItem key={row.id} value={row.id}>
+                            {row.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Row Visibility Panel — grouped by page */}
-        {(() => {
+        {addMode === "standard" && (() => {
           // Group all rows by page
           const pageOrder = ['home', 'watch', 'read', 'listen'];
           const grouped: Record<string, any[]> = {};
