@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { pairingService } from "@/services/pairingService";
 import MediaDialog from "@/components/MediaDialog";
@@ -97,11 +98,10 @@ const HomePage = () => {
       const response = await projectsAPI.get({ eq: [] });
       if (response.flag === Flag.Success && response.data) {
         const types = (response.data as Project[])
-          .map((item) => item.content_type)
+          .flatMap((item) => item.content_type)
           .filter(Boolean);
         return [...new Set(types)].sort();
       }
-      return [];
     },
   });
 
@@ -172,14 +172,22 @@ const HomePage = () => {
 
       let rows = Array.isArray(response.data) ? (response.data as Project[]) : [];
 
-      // Smart Tag Search (Inheritance)
-      if (debouncedSearchQuery && debouncedSearchQuery.length > 2) {
+      // Handle smart search (including inheritance)
+      if (debouncedSearchQuery.length > 2) {
         try {
           const inheritedProjects = await pairingService.searchProjectsByInheritedTag(debouncedSearchQuery);
-          // Merge results, keeping uniqueness by ID
           const existingIds = new Set(rows.map(r => r.id));
           inheritedProjects.forEach(p => {
             if (!existingIds.has(p.id)) {
+              // Apply basic filters to inherited results
+              if (statusFilter !== "all") {
+                const statuses = Array.isArray(p.status) ? p.status : [p.status];
+                if (!statuses.includes(statusFilter as any)) return;
+              }
+              if (contentTypeFilter !== "all") {
+                const types = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
+                if (!types.includes(contentTypeFilter as any)) return;
+              }
               rows.push(p);
             }
           });
@@ -209,7 +217,7 @@ const HomePage = () => {
       : ["title", "content_type", "status", "release_year", "platform"];
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
-  const availableStatuses = Array.from(new Set(projects.map(p => p.status).filter(Boolean))).sort();
+  const availableStatuses = Array.from(new Set(projects.flatMap(p => p.status).filter(Boolean))).sort();
   const orderedFields = [
     ...allAvailableFields.filter(key => stickyColumns.includes(key)),
     ...allAvailableFields.filter(key => !stickyColumns.includes(key))
@@ -489,26 +497,52 @@ const HomePage = () => {
                               width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
                               showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                             >
-                              {value === null || value === undefined ? (
-                                <span className="text-slate-300 text-xs">—</span>
-                              ) : key === "status" ? (
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${value === "released"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : value === "coming_soon"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-slate-100 text-slate-700"
-                                    }`}
-                                >
-                                  {value}
-                                </span>
+                              {value === null || value === undefined || value === "" ? (
+                                <span className="text-muted-foreground text-xs">—</span>
                               ) : (
-                                <span
-                                  className="truncate block"
-                                  title={String(value)}
-                                >
-                                  {String(value)}
-                                </span>
+                                (() => {
+                                  let values: string[] = [];
+                                  if (Array.isArray(value)) {
+                                    values = value.map(String);
+                                  } else if (typeof value === "string") {
+                                    const trimmed = value.trim();
+                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                                      try {
+                                        const parsed = JSON.parse(trimmed);
+                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                      } catch (e) {
+                                        values = [value];
+                                      }
+                                    } else if (value.includes(",")) {
+                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                    } else {
+                                      values = [value];
+                                    }
+                                  } else {
+                                    values = [String(value)];
+                                  }
+
+                                  if (values.length > 1 || ["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                    return (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {values.map((v, i) => (
+                                          <Badge
+                                            key={`${v}-${i}`}
+                                            variant="secondary"
+                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                          >
+                                            {v}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <span className="truncate block" title={String(value)}>
+                                      {String(value)}
+                                    </span>
+                                  );
+                                })()
                               )}
                             </TableCell>
                           );

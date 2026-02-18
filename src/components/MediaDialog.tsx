@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
@@ -70,50 +71,55 @@ export default function MediaDialog({
 
   const queryClient = useQueryClient();
 
+  // MERGE-based apply: adds this row's flags without clearing others
   const applyRowTemplate = (row: any) => {
     if (!row) return;
 
     const { filter_type, filter_value, label } = row;
     setFormData(prev => {
       const next = { ...prev };
+      // Ensure status is an array
+      let currentStatuses = Array.isArray(next.status) ? [...next.status] : (next.status ? [next.status] : []);
 
-      // Known statuses and flags that should NOT set content_type
-      const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
-      const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending'];
-      const labelLower = label.toLowerCase();
+      const addStatus = (s: string) => {
+        if (s && !currentStatuses.includes(s as any)) currentStatuses.push(s as any);
+      };
 
-      const isKnownStatusOrFlag =
-        knownStatuses.includes(labelLower) ||
-        knownFlags.some(flag => labelLower.includes(flag));
-
-      // Set content_type based on filter_type and label
+      // Update content_type (Single selection)
       if (filter_type === FilterTypeEnum.ContentType) {
-        // For content-type rows, lock the content_type to filter_value
-        next.content_type = filter_value;
+        next.content_type = filter_value as any;
       } else if (filter_type === FilterTypeEnum.Audiobook) {
-        next.content_type = ContentTypeEnum.Audiobook;
+        next.content_type = ContentTypeEnum.Audiobook as any;
       } else if (filter_type === FilterTypeEnum.Song) {
-        next.content_type = ContentTypeEnum.Song;
+        next.content_type = ContentTypeEnum.Song as any;
       } else if (filter_type === FilterTypeEnum.Listen) {
-        // For Listen, allow user to choose between Song/Audiobook
-        if (!next.content_type) next.content_type = ContentTypeEnum.Audiobook;
-      } else if (filter_type === FilterTypeEnum.Flag || filter_type === FilterTypeEnum.Status) {
-        // For Flag/Status types, check if it's a known status/flag
-        if (!isKnownStatusOrFlag) {
-          // Custom row - set content_type to the row label
-          next.content_type = label;
+        if (!next.content_type) next.content_type = ContentTypeEnum.Audiobook as any;
+      } else if (filter_type === FilterTypeEnum.Flag) {
+        // Special case: 'Coming Soon' should update status array
+        if (label.toLowerCase().includes('coming soon')) {
+          addStatus('coming_soon');
+          next.in_coming_soon = true;
+        } else {
+          // If it's not a boolean flag, we don't have a place for multiple custom labels 
+          // if content_type is a string. We'll set it as content_type for now.
+          next.content_type = label as any;
         }
-        // Otherwise, leave content_type editable for known statuses/flags
+      } else if (filter_type === FilterTypeEnum.Status) {
+        addStatus(filter_value);
+        if (filter_value === 'coming_soon') next.in_coming_soon = true;
       }
 
-      // Set status if it's a status-type filter
-      if (filter_type === FilterTypeEnum.Status) {
-        next.status = filter_value;
-      }
+      next.status = currentStatuses as any;
 
-      // Set flag field if it exists in availableFields
       if (filter_type === FilterTypeEnum.Flag) {
-        const matchedField = availableFields.find(f => f.toLowerCase() === filter_value.toLowerCase());
+        const norm = (val: string) => val.toLowerCase().trim();
+        const matchedField = availableFields.find(f => {
+          const nf = norm(f);
+          const nv = norm(filter_value);
+          const nvUnder = nv.replace(/\s+/g, '_');
+          return nf === nv || nf === nvUnder || nf === `in_${nvUnder}`;
+        });
+
         if (matchedField) {
           (next as any)[matchedField] = true;
         }
@@ -121,8 +127,64 @@ export default function MediaDialog({
 
       return next;
     });
+  };
 
-    toast.info(`Applied template for row: ${label}`);
+  // REMOVE: unsets only this row's specific flag/status
+  const removeRowTemplate = (row: any) => {
+    if (!row) return;
+    const { filter_type, filter_value } = row;
+    setFormData(prev => {
+      const next = { ...prev };
+      let currentStatuses = Array.isArray(next.status) ? [...next.status] : (next.status ? [next.status] : []);
+
+      const removeType = () => {
+        next.content_type = "" as any;
+      };
+
+      const removeStatus = (s: string) => {
+        currentStatuses = currentStatuses.filter(existing => String(existing).toLowerCase() !== String(s).toLowerCase());
+      };
+
+      if (filter_type === FilterTypeEnum.Flag) {
+        const norm = (val: string) => val.toLowerCase().trim();
+        const matchedField = availableFields.find(f => {
+          const nf = norm(f);
+          const nv = norm(filter_value);
+          const nvUnder = nv.replace(/\s+/g, '_');
+          return nf === nv || nf === nvUnder || nf === `in_${nvUnder}`;
+        });
+
+        if (matchedField) {
+          (next as any)[matchedField] = false;
+        }
+
+        // Special case for 'Coming Soon' Flag
+        if ((row.label || '').toLowerCase().includes('coming soon')) {
+          removeStatus('coming_soon');
+          next.in_coming_soon = false;
+        }
+      }
+
+      if (filter_type === FilterTypeEnum.Status) {
+        removeStatus(filter_value);
+        if (filter_value === 'coming_soon') next.in_coming_soon = false;
+      }
+
+      if (filter_type === FilterTypeEnum.ContentType || filter_type === FilterTypeEnum.Audiobook || filter_type === FilterTypeEnum.Song) {
+        removeType();
+      }
+
+      // Remove the label from content_type for non-Status rows, 
+      // EXCEPT 'Coming Soon' which lives in status.
+      if (row.label && filter_type !== FilterTypeEnum.Status && !row.label.toLowerCase().includes('coming soon')) {
+        if (next.content_type === row.label) {
+          removeType();
+        }
+      }
+
+      next.status = currentStatuses as any;
+      return next;
+    });
   };
 
   // Chapters UI state (only relevant for Audiobooks)
@@ -132,12 +194,16 @@ export default function MediaDialog({
   const [chapterToDelete, setChapterToDelete] = useState<Content | null>(null);
 
   const projectId = (media as any)?.id as string | undefined;
-  const showChapters =
-    (formData as any)?.content_type === ContentTypeEnum.Audiobook ||
-    (formData as any)?.content_type === "AudioBook" ||
-    (formData as any)?.content_type === ContentTypeEnum.TvShow ||
-    (formData as any)?.content_type === "TvShow" ||
-    (formData as any)?.content_type === "tv_show";
+  const showChapters = (() => {
+    const types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
+    const norm = (t: any) => String(t || "").toLowerCase();
+    return types.some(t =>
+      norm(t) === "audiobook" ||
+      norm(t) === "tv show" ||
+      norm(t) === "tvshow" ||
+      norm(t) === "tv_show"
+    );
+  })();
 
   const {
     data: chapters = [],
@@ -205,11 +271,83 @@ export default function MediaDialog({
           ? [resp.data].filter(Boolean)
           : [];
 
-      return rows;
+      return rows.filter((r: any) =>
+        r.label?.toLowerCase() !== 'my list' &&
+        !['mylist', 'my_list', 'my list'].includes(r.page?.toLowerCase())
+      );
     },
     enabled: open, // Only fetch when dialog is open
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
+
+  // Calculate matched rows based on current formData
+  const matchedRows = (contentRowFilters as any[]).filter((row) => {
+    if (!formData) return false;
+    const { filter_type, filter_value, label } = row;
+
+    // Normalize helper
+    const norm = (val: any) => String(val || "").toLowerCase().trim();
+    const hasType = (t: string) => {
+      return norm(formData.content_type) === norm(t);
+    };
+    const hasStatus = (s: string) => {
+      const statuses = Array.isArray((formData as any).status) ? (formData as any).status : [(formData as any).status];
+      return statuses.some((existing: any) => norm(existing) === norm(s));
+    };
+
+    if (filter_type === FilterTypeEnum.ContentType) {
+      return hasType(filter_value);
+    }
+
+    if (filter_type === FilterTypeEnum.Status) {
+      if (hasStatus(filter_value)) return true;
+      if (hasType(label)) return true;
+      return false;
+    }
+
+    if (filter_type === FilterTypeEnum.Audiobook) {
+      return hasType(ContentTypeEnum.Audiobook) || hasType("audiobook");
+    }
+
+    if (filter_type === FilterTypeEnum.Song) {
+      return hasType(ContentTypeEnum.Song) || hasType("song");
+    }
+
+    if (filter_type === FilterTypeEnum.Flag) {
+      // 1. Check direct database flag
+      const keyMatches = Object.keys(formData).find(k =>
+        norm(k) === norm(filter_value) ||
+        norm(k) === `in_${norm(filter_value).replace(/\s+/g, '_')}`
+      );
+      if (keyMatches && !!(formData as any)[keyMatches]) return true;
+
+      // 2. Special case for 'Coming Soon'
+      if ((label || '').toLowerCase().includes('coming soon')) {
+        return hasStatus('coming_soon');
+      }
+
+      // 3. Check if label is in content_type
+      if (hasType(label)) return true;
+
+      return false;
+    }
+
+    return false;
+  });
+
+  // Auto-select row if editing and not set
+  useEffect(() => {
+    if (open && matchedRows.length > 0 && !targetRowId) {
+      // Prefer a row that matches the current page assignment if possible
+      const preferred = matchedRows.find(r => r.page === localAssignmentPage) || matchedRows[0];
+      if (preferred) {
+        setTargetRowId(preferred.id);
+        // If we are in "row" mode, this visually selects it.
+        // If we are in "standard" mode, it just sets the state ready for toggle.
+      }
+    }
+  }, [open, matchedRows.length, localAssignmentPage]);
+
 
 
   const createChapterMutation = useMutation({
@@ -307,16 +445,16 @@ export default function MediaDialog({
             : [response.data];
 
           if (projects.length > 0) {
-            const KNOWN_FLAGS = ["in_now_playing", "in_coming_soon", "in_latest_releases", "in_hero_carousel"];
-            const MANDATORY_EXTRA_FIELDS: string[] = [];
+            const KNOWN_FLAGS: string[] = ["in_hero_carousel"];
+            // const MANDATORY_EXTRA_FIELDS: string[] = [];
 
             const fields = Array.from(new Set([
               ...Object.keys(projects[0]),
               ...KNOWN_FLAGS,
-              ...MANDATORY_EXTRA_FIELDS
+              // ...MANDATORY_EXTRA_FIELDS
             ]))
               .filter(
-                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior", "vibe_tags"].includes(key)
+                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior", "vibe_tags", "flavor_tags"].includes(key)
               )
               .filter((key) =>
                 allowedFields ? allowedFields.includes(key) : true
@@ -345,15 +483,30 @@ export default function MediaDialog({
                   result[targetKey] = Array.isArray(tags) ? tags.join(", ") : (tags || "");
                 }
                 // Handle other array fields
-                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
-                if (arrayFields.includes(key) || (Array.isArray(value) && typeof value[0] === 'string')) {
-                  result[key] = Array.isArray(value) ? value.join(", ") : (value || "");
+                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status"];
+                if (arrayFields.includes(key)) {
+                  let arr = value;
+                  if (typeof arr === 'string' && arr.startsWith('[') && arr.endsWith(']')) {
+                    try { arr = JSON.parse(arr); } catch (e) { arr = [arr]; }
+                  }
+                  result[key] = Array.isArray(arr) ? arr : (arr ? [arr] : []);
                 }
                 else {
                   result[key] =
                     value === null || value === undefined ? "" : value;
                 }
               });
+
+              // Sync in_coming_soon flag and status array
+              const currentStatuses = Array.isArray(result.status) ? [...result.status] : (result.status ? [result.status] : []);
+              if (result.in_coming_soon === true && !currentStatuses.includes("coming_soon")) {
+                currentStatuses.push("coming_soon");
+              }
+              if (currentStatuses.includes("coming_soon")) {
+                result.in_coming_soon = true;
+              }
+              result.status = currentStatuses;
+
               setFormData(result as ProjectFormData);
             } else {
               // Add mode - initialize empty fields
@@ -365,6 +518,10 @@ export default function MediaDialog({
                   base[key] = false;
                 } else if (key === "genres") {
                   base["commaSeperatedGenres"] = "";
+                } else if (key === "content_type") {
+                  base[key] = "";
+                } else if (key === "status") {
+                  base[key] = [];
                 } else {
                   base[key] = "";
                 }
@@ -450,14 +607,18 @@ export default function MediaDialog({
       ) {
         // Convert numeric strings to integers
         submitData[key] = value ? parseInt(String(value)) : null;
-      } else if (typeof value === "boolean") {
-        submitData[key] = value;
       } else {
-        // Handle other possible array fields that were stored as strings
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
-        if (arrayFields.includes(key) && typeof value === 'string') {
-          // Split by comma or newline, trim, and filter blank entries
-          submitData[key] = value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+        // Handle other possible array fields
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status"];
+        if (arrayFields.includes(key)) {
+          if (Array.isArray(value)) {
+            // Keep as array for backend if backend supports it, otherwise join
+            submitData[key] = value.filter(Boolean);
+          } else if (typeof value === 'string') {
+            submitData[key] = value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+          } else {
+            submitData[key] = value;
+          }
         } else {
           submitData[key] = value;
         }
@@ -475,7 +636,19 @@ export default function MediaDialog({
   };
 
   const handleChange = (field: keyof ProjectFormData, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+
+      // Sync status -> in_coming_soon flag
+      if (field === "status") {
+        const statuses = Array.isArray(value) ? value : (value ? [value] : []);
+        const norm = (v: any) => String(v || "").toLowerCase().trim();
+        const IsComingSoon = statuses.some(s => norm(s) === "coming_soon");
+        (next as any).in_coming_soon = IsComingSoon;
+      }
+
+      return next;
+    });
   };
 
   const openAddChapter = () => {
@@ -511,7 +684,10 @@ export default function MediaDialog({
 
 
   const renderField = (key: string, value: any) => {
-    const isReadCase = formData.content_type === ContentTypeEnum.Audiobook;
+    const isReadCase = (() => {
+      const types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
+      return types.some(t => String(t).toLowerCase() === "audiobook");
+    })();
 
     const requiredFields = [
       "title",
@@ -538,83 +714,168 @@ export default function MediaDialog({
         { value: ContentTypeEnum.Audiobook, label: "Audiobook" },
       ];
 
-      // Only lock content_type if:
-      // 1. Row explicitly defines a content_type filter, OR
-      // 2. Row is a custom row (not a known status/flag)
-      const selectedRow = targetRowId ? (contentRowFilters as any[]).find(r => r.id === targetRowId) : null;
+      const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
+      const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending', 'my list', 'mylist'];
 
-      let isContentTypeLocked = false;
-      if (addMode === "row" && !!targetRowId && selectedRow) {
-        // Known statuses and flags that should NOT lock content_type
-        const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
-        const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending'];
-        const labelLower = selectedRow.label?.toLowerCase() || '';
+      const customTypes = (contentRowFilters as any[])
+        .map(r => r.label)
+        .filter(l => {
+          if (!l) return false;
+          const low = l.toLowerCase();
+          const isStandardType = [
+            ContentTypeEnum.Film,
+            ContentTypeEnum.TvShow,
+            ContentTypeEnum.Song,
+            ContentTypeEnum.Audiobook
+          ].some(t => t.toLowerCase() === low);
+          const isKnown = knownStatuses.includes(low) || knownFlags.some(f => low.includes(f));
+          return !isStandardType && !isKnown;
+        });
 
-        const isKnownStatusOrFlag =
-          knownStatuses.includes(labelLower) ||
-          knownFlags.some(flag => labelLower.includes(flag));
+      const allOptions = [
+        ...standardTypes,
+        ...Array.from(new Set(customTypes)).map(ct => ({ value: ct, label: ct }))
+      ];
 
-        // Lock if it's a content-type row OR a custom row (not a known status/flag)
-        isContentTypeLocked =
-          selectedRow.filter_type === FilterTypeEnum.ContentType ||
-          selectedRow.filter_type === FilterTypeEnum.Audiobook ||
-          selectedRow.filter_type === FilterTypeEnum.Song ||
-          ((selectedRow.filter_type === FilterTypeEnum.Flag || selectedRow.filter_type === FilterTypeEnum.Status) && !isKnownStatusOrFlag);
-      }
+      const parseArray = (val: any): string[] => {
+        if (Array.isArray(val)) return val.map(String);
+        if (typeof val === "string") {
+          const trimmed = val.trim();
+          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              return Array.isArray(parsed) ? parsed.map(String) : [val];
+            } catch (e) {
+              return [val];
+            }
+          }
+          if (val.includes(",")) return val.split(",").map(v => v.trim()).filter(Boolean);
+          return val ? [val] : [];
+        }
+        return val ? [String(val)] : [];
+      };
+
+      const currentTypes = parseArray(value);
+
+      const toggleType = (t: string) => {
+        const next = currentTypes.includes(t)
+          ? currentTypes.filter(existing => existing !== t)
+          : [...currentTypes, t];
+        handleChange(key as keyof ProjectFormData, next);
+      };
 
       return (
-        <div key={key}>
-          <Label htmlFor={key} className="font-medium">
+        <div key={key} className="col-span-2 space-y-2">
+          <Label className="font-medium">
             {label} {isRequired ? "*" : ""}
           </Label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {currentTypes.length === 0 ? (
+              <span className="text-xs text-slate-400 italic">No types selected</span>
+            ) : (
+              currentTypes.map((t: string) => (
+                <Badge
+                  key={t}
+                  variant="secondary"
+                  className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-red-50 hover:text-red-700 hover:border-red-100 cursor-pointer transition-colors"
+                  onClick={() => toggleType(t)}
+                >
+                  {t} <span className="ml-1 opacity-60">×</span>
+                </Badge>
+              ))
+            )}
+          </div>
           <Select
-            value={value || ""}
-            disabled={isContentTypeLocked}
-            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+            value=""
+            onValueChange={toggleType}
           >
-            <SelectTrigger className={`mt-1.5 capitalize ${isContentTypeLocked ? "bg-indigo-50/50 border-indigo-100" : ""}`}>
-              <SelectValue placeholder="Select type" />
+            <SelectTrigger className="capitalize">
+              <SelectValue placeholder="Add another type..." />
             </SelectTrigger>
             <SelectContent>
-              {standardTypes.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
+              {allOptions.map((type) => (
+                <SelectItem key={type.value} value={type.value} disabled={currentTypes.includes(type.value)}>
+                  {type.label} {currentTypes.includes(type.value) ? "✓" : ""}
                 </SelectItem>
               ))}
-              {/* Show the current value if it's not in standard types (e.g. custom from row) */}
-              {value && !standardTypes.find(t => t.value === value) && (
-                <SelectItem key={value} value={value}>
-                  {value}
-                </SelectItem>
-              )}
             </SelectContent>
           </Select>
-          {isContentTypeLocked && (
-            <p className="mt-1 text-[10px] text-indigo-500 font-medium italic">Fixed based on row selection</p>
-          )}
+          <p className="text-[10px] text-slate-400 italic">Click a badge above to remove it. Multiple types allow assignment to multiple rows.</p>
         </div>
       );
     }
 
     // Special: Status Select
     if (key === "status") {
+      const standardStatuses = [
+        { value: "released", label: "Released" },
+        { value: "coming_soon", label: "Coming Soon" },
+      ];
+
+      const parseArray = (val: any): string[] => {
+        if (Array.isArray(val)) return val.map(String);
+        if (typeof val === "string") {
+          const trimmed = val.trim();
+          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              return Array.isArray(parsed) ? parsed.map(String) : [val];
+            } catch (e) {
+              return [val];
+            }
+          }
+          if (val.includes(",")) return val.split(",").map(v => v.trim()).filter(Boolean);
+          return val ? [val] : [];
+        }
+        return val ? [String(val)] : [];
+      };
+
+      const currentStatuses = parseArray(value);
+
+      const toggleStatus = (s: string) => {
+        const next = currentStatuses.includes(s)
+          ? currentStatuses.filter((existing: string) => existing !== s)
+          : [...currentStatuses, s];
+        handleChange(key as keyof ProjectFormData, next);
+      };
+
       return (
-        <div key={key}>
-          <Label htmlFor={key} className="font-medium">
+        <div key={key} className="col-span-2 space-y-2">
+          <Label className="font-medium">
             {label} {isRequired ? "*" : ""}
           </Label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {currentStatuses.length === 0 ? (
+              <span className="text-xs text-slate-400 italic">No statuses selected</span>
+            ) : (
+              currentStatuses.map((s: string) => (
+                <Badge
+                  key={s}
+                  variant="secondary"
+                  className="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-100 cursor-pointer transition-colors capitalize"
+                  onClick={() => toggleStatus(s)}
+                >
+                  {s.replace(/_/g, " ")} <span className="ml-1 opacity-60">×</span>
+                </Badge>
+              ))
+            )}
+          </div>
           <Select
-            value={value || ""}
-            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+            value=""
+            onValueChange={toggleStatus}
           >
-            <SelectTrigger className="mt-1.5 capitalize">
-              <SelectValue placeholder="Select status" />
+            <SelectTrigger className="capitalize">
+              <SelectValue placeholder="Add another status..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="released">Released</SelectItem>
-              <SelectItem value="coming_soon">Coming Soon</SelectItem>
+              {standardStatuses.map((stat) => (
+                <SelectItem key={stat.value} value={stat.value} disabled={currentStatuses.includes(stat.value)}>
+                  {stat.label} {currentStatuses.includes(stat.value) ? "✓" : ""}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+          <p className="text-[10px] text-slate-400 italic">Click a badge above to remove it. Multiple statuses allow an item to be in both 'Released' and 'Coming Soon'.</p>
         </div>
       );
     }
@@ -835,10 +1096,11 @@ export default function MediaDialog({
                       setIsUploading(key);
                       const bucket = "Media";
                       const safeName = file.name.replace(/\s+/g, "_");
+                      const primaryType = (Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type) as any;
                       const path =
                         key === "audio_url" || key === "audio_preview_url"
-                          ? `Audio/${formData.content_type || "generic"}/${Date.now()}-${safeName}`
-                          : createBucketPath(`${Date.now()}-${safeName}`, formData.content_type!);
+                          ? `Audio/${primaryType || "generic"}/${Date.now()}-${safeName}`
+                          : createBucketPath(`${Date.now()}-${safeName}`, primaryType || ContentTypeEnum.Film);
                       const publicUrl = await mediaService.uploadFile(file, bucket, path);
                       handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded!`);
@@ -905,88 +1167,107 @@ export default function MediaDialog({
           </DialogHeader>
         </div>
 
-        {/* Mode Switcher and Row Selector */}
-        {!media && (
-          <div className="px-6 py-3 bg-slate-50/80 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex bg-white p-1 rounded-lg border border-slate-200">
-              <Button
-                variant={addMode === "standard" ? "default" : "ghost"}
-                size="sm"
-                type="button"
-                className={`h-8 rounded-md text-xs px-4 ${addMode === "standard" ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
-                onClick={() => setAddMode("standard")}
-              >
-                Standard Form
-              </Button>
-              <Button
-                variant={addMode === "row" ? "default" : "ghost"}
-                size="sm"
-                type="button"
-                className={`h-8 rounded-md text-xs px-4 ${addMode === "row" ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
-                onClick={() => setAddMode("row")}
-              >
-                Add to Row
-              </Button>
-            </div>
+        {/* Row Visibility Panel — grouped by page */}
+        {(() => {
+          // Group all rows by page
+          const pageOrder = ['home', 'watch', 'read', 'listen'];
+          const grouped: Record<string, any[]> = {};
+          (contentRowFilters as any[])
+            .forEach(row => {
+              const pg = row.page || 'other';
+              if (!grouped[pg]) grouped[pg] = [];
+              grouped[pg].push(row);
+            });
+          const pages = [...pageOrder.filter(p => grouped[p]), ...Object.keys(grouped).filter(p => !pageOrder.includes(p))];
 
-            {addMode === "row" && (
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Select value={localAssignmentPage} onValueChange={setLocalAssignmentPage}>
-                  <SelectTrigger className="h-8 w-[100px] text-xs bg-white border-slate-200 focus:ring-indigo-500">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="home">Home</SelectItem>
-                    <SelectItem value="watch">Watch</SelectItem>
-                    <SelectItem value="read">Read</SelectItem>
-                  </SelectContent>
-                </Select>
+          const pageColors: Record<string, string> = {
+            home: 'bg-violet-100 text-violet-700',
+            watch: 'bg-blue-100 text-blue-700',
+            read: 'bg-emerald-100 text-emerald-700',
+            listen: 'bg-amber-100 text-amber-700',
+          };
 
-                <Select
-                  value={targetRowId}
-                  onValueChange={(val) => {
-                    setTargetRowId(val);
-                    const row = (contentRowFilters as any[]).find(r => r.id === val);
-                    if (row) applyRowTemplate(row);
-                  }}
-                >
-                  <SelectTrigger className="h-8 min-w-[160px] text-xs bg-white border-indigo-200 focus:ring-indigo-500 font-medium text-indigo-700">
-                    <SelectValue placeholder="Choose Row..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(() => {
-                      const filtered = contentRowFilters.filter((r: any) => {
-                        if (r.page !== localAssignmentPage) return false;
-
-                        const label = r.label?.toLowerCase() || "";
-                        if (localAssignmentPage === "home") {
-                          return !["now playing", "released", "listen", "watch", "coming soon", "new releases"].includes(label);
-                        }
-                        if (localAssignmentPage === "watch") {
-                          return !["now playing", "coming soon", "released"].includes(label);
-                        }
-                        if (localAssignmentPage === "read") {
-                          return !["comics & stories"].includes(label);
-                        }
-                        return true;
-                      });
-
-                      if (filtered.length === 0) {
-                        return <div className="p-2 text-[10px] text-slate-400 text-center italic">No rows</div>;
-                      }
-
-                      return filtered.map((row: any) => (
-                        <SelectItem key={row.id} value={row.id}>
-                          {row.label}
-                        </SelectItem>
-                      ));
-                    })()}
-                  </SelectContent>
-                </Select>
+          return (
+            <div className="px-6 py-4 bg-slate-50 border-b space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  Row Visibility
+                </h3>
+                <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
+                  {matchedRows.length} active
+                </span>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Per-page groups */}
+              {pages.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No active rows configured yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pages.map(pg => (
+                    <div key={pg}>
+                      {/* Page label */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${pageColors[pg] || 'bg-slate-100 text-slate-500'}`}>
+                          {pg}
+                        </span>
+                        <div className="flex-1 h-px bg-slate-200" />
+                      </div>
+
+                      {/* Row checkboxes */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {(grouped[pg] || []).map((row: any) => {
+                          const isMatched = matchedRows.some(r => r.id === row.id);
+                          return (
+                            <label
+                              key={row.id}
+                              className={`
+                                flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer
+                                transition-all duration-150 select-none
+                                ${isMatched
+                                  ? 'bg-indigo-50 border-indigo-300 shadow-sm shadow-indigo-100'
+                                  : 'bg-white border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30'
+                                }
+                              `}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isMatched}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    applyRowTemplate(row);
+                                    toast.success(`Added to "${row.label}"`);
+                                  } else {
+                                    removeRowTemplate(row);
+                                    toast.info(`Removed from "${row.label}"`);
+                                  }
+                                }}
+                                className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-semibold truncate ${isMatched ? 'text-indigo-700' : 'text-slate-700'
+                                  }`}>
+                                  {row.label}
+                                </p>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {row.filter_type} · {row.filter_value}
+                                </p>
+                              </div>
+                              {isMatched && (
+                                <span className="text-indigo-500 text-[10px] font-bold flex-shrink-0">✓ ON</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          );
+        })()}
 
         {isLoadingFields ? (
           <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -1027,18 +1308,18 @@ export default function MediaDialog({
                   )
                   .map((key) => renderField(key, (formData as any)[key]))}
 
-                {(addMode === "standard" || media) && (
-                  <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t mt-2">
-                    {availableFields
-                      .filter(
-                        (k) =>
-                          k.startsWith("in_") ||
-                          k === "featured" ||
-                          k === "is_downloadable"
-                      )
-                      .map((key) => renderField(key, (formData as any)[key]))}
-                  </div>
-                )}
+                {/* Checkboxes Area */}
+                <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t mt-4 bg-slate-50/50 p-4 rounded-xl">
+                  <h4 className="col-span-full text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Additional Options</h4>
+                  {availableFields
+                    .filter(
+                      (k) =>
+                        k.startsWith("in_") &&
+                        k !== "featured" &&
+                        k !== "is_downloadable"
+                    )
+                    .map((key) => renderField(key, (formData as any)[key]))}
+                </div>
               </div>
             )}
 
@@ -1052,7 +1333,7 @@ export default function MediaDialog({
                 onAddChapter={openAddChapter}
                 onEditChapter={openEditChapter}
                 onDeleteChapter={openDeleteChapter}
-                parentContentType={formData.content_type}
+                parentContentType={Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type}
               />
             )}
 
@@ -1061,7 +1342,7 @@ export default function MediaDialog({
             {projectId && (
               <PairingsSection
                 sourceId={projectId}
-                sourceRef={formData.content_type as unknown as PairingSourceEnum}
+                sourceRef={(Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type) as unknown as PairingSourceEnum}
               />
             )}
 
@@ -1099,7 +1380,7 @@ export default function MediaDialog({
                 updateChapterMutation.isPending
               }
               defaultProjectId={projectId ?? null}
-              parentContentType={formData.content_type}
+              parentContentType={Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type}
             />
 
             <DeleteConfirmationDialog

@@ -75,7 +75,7 @@ export default function RecipeDialog({
       return;
     }
 
-    await onSubmit(formData);
+    await onSubmit(formData as any);
   };
 
   return (

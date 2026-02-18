@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
+import { supabase } from "@/lib";
+import { pairingService } from "@/services/pairingService";
 import { cn } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
@@ -27,6 +29,7 @@ export default function Watch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [genreFilter, setGenreFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -83,14 +86,10 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter],
+    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
-      let inValueFilter: any = { key: "content_type" as any, value: ["TV Show", "Film"] };
-
-      if (statusFilter !== "all") {
-        eqFilters.push({ key: "status", value: statusFilter });
-      }
+      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
+      if (statusFilter !== "all") eqFilters.push({ key: "status", value: statusFilter });
       if (contentTypeFilter !== "all") {
         eqFilters.push({ key: "content_type", value: contentTypeFilter });
       }
@@ -98,19 +97,57 @@ export default function Watch() {
 
       const response = await projectsAPI.get({
         eq: eqFilters as any,
-        inValue: inValueFilter,
+        inValue: (contentTypeFilter === "all" ? { key: "content_type", value: ["TV Show", "Film"] } : undefined) as any,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
-        searchFields: ["title", "content_type"],
+        searchFields: ["title"],
       });
-      // ... same handling as HomePage
+
       if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
         throw new Error(response.error?.message || "Failed to fetch projects");
       }
-      return Array.isArray(response.data)
-        ? response.data
-        : ([response.data].filter(Boolean) as Project[]);
+
+      let rows = Array.isArray(response.data) ? response.data : [response.data].filter(Boolean) as Project[];
+
+      // Apply Genre filter (client-side if multiple genres per project)
+      if (genreFilter !== "all") {
+        rows = rows.filter(r => {
+          const gData = r.genres as any;
+          const genres = typeof gData === 'string' ? gData.split(',') : (Array.isArray(gData) ? gData : []);
+          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+        });
+      }
+
+      // Handle smart search (including inheritance)
+      if (searchQuery.length > 2) {
+        try {
+          const inheritedProjects = await pairingService.searchProjectsByInheritedTag(searchQuery);
+          const existingIds = new Set(rows.map(r => r.id));
+          inheritedProjects.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              // Apply basic filters to inherited results
+              if (statusFilter !== "all") {
+                const statuses = Array.isArray(p.status) ? p.status : [p.status];
+                if (!statuses.includes(statusFilter as any)) return;
+              }
+              if (contentTypeFilter !== "all") {
+                const types = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
+                if (!types.includes(contentTypeFilter as any)) return;
+              }
+              // If it's inherited but doesn't match content category 'TV Show' or 'Film', skip
+              const pTypes = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
+              if (!pTypes.some(t => ["TV Show", "Film"].includes(String(t)))) return;
+
+              rows.push(p);
+            }
+          });
+        } catch (e) {
+          console.error("Error fetching inherited projects:", e);
+        }
+      }
+
+      return rows;
     },
   });
 
@@ -221,7 +258,7 @@ export default function Watch() {
         return [];
       }
       const statuses = (response.data as Project[])
-        .map((item) => item.status)
+        .flatMap((item) => item.status)
         .filter(Boolean);
       return [...new Set(statuses)].sort();
     },
@@ -240,11 +277,26 @@ export default function Watch() {
         return [];
       }
       const types = (response.data as Project[])
-        .map((item) => item.content_type)
+        .flatMap((item) => item.content_type)
         .filter(Boolean);
       return [...new Set(types)].sort();
     },
   });
+
+  const { data: availableGenres = [] } = useQuery({
+    queryKey: ["unique-genres"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('projects').select('genres').eq('is_deleted', false);
+      if (error) return [];
+      const tags = data.flatMap(d => {
+        let g = d.genres;
+        if (typeof g === 'string') return g.split(',').map((s: string) => s.trim());
+        return Array.isArray(g) ? g : [];
+      });
+      return Array.from(new Set(tags)).sort();
+    }
+  });
+
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -277,10 +329,14 @@ export default function Watch() {
   };
 
   // Calculate stats
-  const totalFilms = mediaList.filter((m) => m.content_type === "Film").length;
-  const totalTVShows = mediaList.filter(
-    (m) => m.content_type === "TV Show"
-  ).length;
+  const totalFilms = mediaList.filter((m) => {
+    const types = Array.isArray(m.content_type) ? m.content_type : [m.content_type];
+    return types.some(t => String(t) === "Film");
+  }).length;
+  const totalTVShows = mediaList.filter((m) => {
+    const types = Array.isArray(m.content_type) ? m.content_type : [m.content_type];
+    return types.some(t => String(t) === "TV Show");
+  }).length;
 
   if (error) {
     return (
@@ -322,6 +378,9 @@ export default function Watch() {
           onContentTypeFilterChange={setContentTypeFilter}
           availableStatuses={availableStatuses}
           availableTypes={availableTypes}
+          genreFilter={genreFilter}
+          onGenreFilterChange={setGenreFilter}
+          availableGenres={availableGenres}
         />
       </div>
 
@@ -437,20 +496,51 @@ export default function Watch() {
                             width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
                             showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                           >
-                            {value === null || value === undefined ? (
-                              <span className="text-muted-foreground text-xs">
-                                —
-                              </span>
-                            ) : Array.isArray(value) ? (
-                              <div className="flex flex-wrap gap-1">
-                                {value.map((v) => (
-                                  <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
-                                    {v}
-                                  </Badge>
-                                ))}
-                              </div>
+                            {value === null || value === undefined || value === "" ? (
+                              <span className="text-muted-foreground text-xs">—</span>
                             ) : (
-                              <span className="truncate block" title={String(value)}>{String(value)}</span>
+                              (() => {
+                                let values: string[] = [];
+                                if (Array.isArray(value)) {
+                                  values = value.map(String);
+                                } else if (typeof value === "string") {
+                                  if (value.startsWith("[") && value.endsWith("]")) {
+                                    try {
+                                      const parsed = JSON.parse(value);
+                                      values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                    } catch (e) {
+                                      values = [value];
+                                    }
+                                  } else if (value.includes(",")) {
+                                    values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                  } else {
+                                    values = [value];
+                                  }
+                                } else {
+                                  values = [String(value)];
+                                }
+
+                                if (values.length > 1 || ["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                  return (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {values.map((v, i) => (
+                                        <Badge
+                                          key={`${v}-${i}`}
+                                          variant="secondary"
+                                          className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                        >
+                                          {v}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <span className="truncate block" title={String(value)}>
+                                    {String(value)}
+                                  </span>
+                                );
+                              })()
                             )}
                           </TableCell>
                         );

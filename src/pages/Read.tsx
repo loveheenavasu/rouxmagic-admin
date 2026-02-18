@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Edit, Trash2, List, Pin, PinOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MediaFilters } from "@/components/MediaFilters";
@@ -424,12 +425,51 @@ export default function Read() {
                           width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
                           showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                         >
-                          {value === null || value === undefined ? (
-                            <span className="text-muted-foreground text-xs">
-                              —
-                            </span>
+                          {value === null || value === undefined || value === "" ? (
+                            <span className="text-muted-foreground text-xs">—</span>
                           ) : (
-                            <span title={String(value)} className="truncate block">{String(value)}</span>
+                            (() => {
+                              let values: string[] = [];
+                              if (Array.isArray(value)) {
+                                values = value.map(String);
+                              } else if (typeof value === "string") {
+                                if (value.startsWith("[") && value.endsWith("]")) {
+                                  try {
+                                    const parsed = JSON.parse(value);
+                                    values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                  } catch (e) {
+                                    values = [value];
+                                  }
+                                } else if (value.includes(",")) {
+                                  values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                } else {
+                                  values = [value];
+                                }
+                              } else {
+                                values = [String(value)];
+                              }
+
+                              if (values.length > 1 || ["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                return (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {values.map((v, i) => (
+                                      <Badge
+                                        key={`${v}-${i}`}
+                                        variant="secondary"
+                                        className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                      >
+                                        {v}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className="truncate block" title={String(value)}>
+                                  {String(value)}
+                                </span>
+                              );
+                            })()
                           )}
                         </TableCell>
                       );

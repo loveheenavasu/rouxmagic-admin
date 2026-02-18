@@ -21,6 +21,9 @@ interface MediaFiltersProps {
   shelves?: any[];
   selectedShelfId?: string;
   onShelfChange?: (value: string) => void;
+  genreFilter?: string;
+  onGenreFilterChange?: (value: string) => void;
+  availableGenres?: string[];
 }
 
 export function MediaFilters({
@@ -36,6 +39,9 @@ export function MediaFilters({
   shelves = [],
   selectedShelfId,
   onShelfChange,
+  genreFilter,
+  onGenreFilterChange,
+  availableGenres = [],
 }: MediaFiltersProps) {
   return (
     <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 mb-8 w-full">
@@ -117,6 +123,23 @@ export function MediaFilters({
             </Select>
           </div>
         )}
+
+        {onGenreFilterChange && (
+          <div className="w-full sm:w-44">
+            <Select value={genreFilter} onValueChange={onGenreFilterChange}>
+              <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30 capitalize">
+                <SelectValue placeholder="Genre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Genres</SelectItem>
+                {availableGenres.map((genre) => (
+                  <SelectItem key={genre} value={genre} className="capitalize">{genre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
       </div>
     </div>
   );

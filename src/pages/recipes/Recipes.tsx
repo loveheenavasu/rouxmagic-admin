@@ -10,8 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
 import { pairingService } from "@/services/pairingService";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -19,6 +19,7 @@ import RecipeDialog from "@/components/RecipeDialog";
 import { toast } from "sonner";
 import { Flag, Recipe } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
+import { MediaFilters } from "@/components/MediaFilters";
 import { cn } from "@/lib/utils";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
@@ -79,17 +80,14 @@ export default function RecipesPage() {
     queryFn: async () => {
       const response = await recipesAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        limit: 200,
+        limit: 1000,
       });
 
       if (response.flag !== Flag.Success || !response.data) {
         return [];
       }
 
-      const data = Array.isArray(response.data)
-        ? (response.data as Recipe[])
-        : ([response.data] as Recipe[]);
-
+      const data = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
       const cats = data.map((r) => r.category).filter(Boolean);
       return Array.from(new Set(cats)).sort();
     },
@@ -102,12 +100,8 @@ export default function RecipesPage() {
   } = useQuery<Recipe[]>({
     queryKey: ["recipes", searchQuery, categoryFilter],
     queryFn: async () => {
-      const eqFilters = [
-        ...(categoryFilter !== "all"
-          ? [{ key: "category" as const, value: categoryFilter }]
-          : []),
-        { key: "is_deleted" as any, value: false },
-      ];
+      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
+      if (categoryFilter !== "all") eqFilters.push({ key: "category", value: categoryFilter });
 
       const response = await recipesAPI.get({
         eq: eqFilters,
@@ -118,28 +112,20 @@ export default function RecipesPage() {
       });
 
       if (response.flag !== Flag.Success || !response.data) {
-        const supabaseError = response.error?.output as
-          | { message?: string }
-          | undefined;
-        const errorMessage =
-          supabaseError?.message ||
-          response.error?.message ||
-          "Failed to fetch recipes";
-        throw new Error(errorMessage);
+        throw new Error(response.error?.message || "Failed to fetch recipes");
       }
 
-      let rows = Array.isArray(response.data)
-        ? (response.data as Recipe[])
-        : ([response.data] as Recipe[]);
+      let rows = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
 
-      // Smart Tag Search (Inheritance)
-      if (searchQuery && searchQuery.length > 2) {
+      // Handle smart search (including inheritance)
+      if (searchQuery.length > 2) {
         try {
           const inheritedRecipes = await pairingService.searchRecipesByInheritedTag(searchQuery);
-          // Merge results, keeping uniqueness by ID
           const existingIds = new Set(rows.map(r => r.id));
           inheritedRecipes.forEach(r => {
             if (!existingIds.has(r.id)) {
+              // Apply basic filters to inherited results too
+              if (categoryFilter !== "all" && r.category !== categoryFilter) return;
               rows.push(r);
             }
           });
@@ -301,30 +287,14 @@ export default function RecipesPage() {
 
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <div className="p-6 space-y-4">
-          <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-            <div className="flex-1">
-              <Input
-                placeholder="Search recipes by title..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10"
-              />
-            </div>
-            <div className="w-full md:w-56">
-              <select
-                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <option value="all">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <MediaFilters
+            searchPlaceholder="Search recipes by title, ingredients..."
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            contentTypeFilter={categoryFilter}
+            onContentTypeFilterChange={setCategoryFilter}
+            availableTypes={categories}
+          />
 
           <div className="rounded-xl border border-slate-100 overflow-hidden">
             <Table>
@@ -434,15 +404,52 @@ export default function RecipesPage() {
                               width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
                               showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                             >
-                              {value === null || value === undefined ? (
-                                <span className="text-slate-300 text-xs">—</span>
+                              {value === null || value === undefined || value === "" ? (
+                                <span className="text-muted-foreground text-xs">—</span>
                               ) : (
-                                <span
-                                  className="truncate block"
-                                  title={String(value)}
-                                >
-                                  {String(value)}
-                                </span>
+                                (() => {
+                                  let values: string[] = [];
+                                  if (Array.isArray(value)) {
+                                    values = value.map(String);
+                                  } else if (typeof value === "string") {
+                                    const trimmed = value.trim();
+                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                                      try {
+                                        const parsed = JSON.parse(trimmed);
+                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                      } catch (e) {
+                                        values = [value];
+                                      }
+                                    } else if (value.includes(",")) {
+                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                    } else {
+                                      values = [value];
+                                    }
+                                  } else {
+                                    values = [String(value)];
+                                  }
+
+                                  if (values.length > 1 || ["category", "flavor_tags"].includes(key)) {
+                                    return (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {values.map((v, i) => (
+                                          <Badge
+                                            key={`${v}-${i}`}
+                                            variant="secondary"
+                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                          >
+                                            {v}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <span className="truncate block" title={String(value)}>
+                                      {String(value)}
+                                    </span>
+                                  );
+                                })()
                               )}
                             </TableCell>
                           );
