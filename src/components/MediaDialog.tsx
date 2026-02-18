@@ -1311,13 +1311,8 @@ export default function MediaDialog({
                 {/* Checkboxes Area */}
                 <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t mt-4 bg-slate-50/50 p-4 rounded-xl">
                   <h4 className="col-span-full text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Additional Options</h4>
-                  {availableFields
-                    .filter(
-                      (k) =>
-                        k.startsWith("in_") &&
-                        k !== "featured" &&
-                        k !== "is_downloadable"
-                    )
+                  {["in_hero_carousel", "in_theaters"]
+                    .filter((k) => availableFields.includes(k))
                     .map((key) => renderField(key, (formData as any)[key]))}
                 </div>
               </div>
