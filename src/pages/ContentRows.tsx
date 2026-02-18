@@ -631,7 +631,7 @@ const ContentRowsPage = () => {
                                                                                 {row.filter_type}
                                                                             </span>
                                                                         ) : key === "filter_value" ? (
-                                                                            <div className="flex flex-wrap gap-1.5">
+                                                                            <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
                                                                                 {(() => {
                                                                                     const val = row.filter_value;
                                                                                     let values: string[] = [];
@@ -640,11 +640,23 @@ const ContentRowsPage = () => {
                                                                                     } else {
                                                                                         values = [val];
                                                                                     }
-                                                                                    return values.map((v, i) => (
-                                                                                        <Badge key={`${v}-${i}`} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap">
-                                                                                            {v}
-                                                                                        </Badge>
-                                                                                    ));
+                                                                                    const MAX_TAGS = 3;
+                                                                                    const visible = values.slice(0, MAX_TAGS);
+                                                                                    const overflow = values.length - MAX_TAGS;
+                                                                                    return (
+                                                                                        <>
+                                                                                            {visible.map((v, i) => (
+                                                                                                <Badge key={`${v}-${i}`} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0" title={v}>
+                                                                                                    {v}
+                                                                                                </Badge>
+                                                                                            ))}
+                                                                                            {overflow > 0 && (
+                                                                                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground" title={values.slice(MAX_TAGS).join(", ")}>
+                                                                                                    +{overflow}
+                                                                                                </Badge>
+                                                                                            )}
+                                                                                        </>
+                                                                                    );
                                                                                 })()}
                                                                             </div>
                                                                         ) : key === "matchCount" ? (

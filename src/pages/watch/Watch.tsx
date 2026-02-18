@@ -10,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Flag, Project } from "@/types";
@@ -511,8 +510,6 @@ export default function Watch() {
                                     } catch (e) {
                                       values = [value];
                                     }
-                                  } else if (value.includes(",")) {
-                                    values = value.split(",").map((v) => v.trim()).filter(Boolean);
                                   } else {
                                     values = [value];
                                   }
@@ -520,24 +517,10 @@ export default function Watch() {
                                   values = [String(value)];
                                 }
 
-                                if (values.length > 1 || ["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                  return (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {values.map((v, i) => (
-                                        <Badge
-                                          key={`${v}-${i}`}
-                                          variant="secondary"
-                                          className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
-                                        >
-                                          {v}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  );
-                                }
+                                const displayValue = values.join(", ");
                                 return (
-                                  <span className="truncate block" title={String(value)}>
-                                    {String(value)}
+                                  <span className="truncate block" title={displayValue}>
+                                    {displayValue}
                                   </span>
                                 );
                               })()

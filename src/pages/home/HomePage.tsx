@@ -522,18 +522,31 @@ const HomePage = () => {
                                     values = [String(value)];
                                   }
 
-                                  if (values.length > 1 || ["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                    const MAX_TAGS = 3;
+                                    const visible = values.slice(0, MAX_TAGS);
+                                    const overflow = values.length - MAX_TAGS;
                                     return (
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {values.map((v, i) => (
+                                      <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
+                                        {visible.map((v, i) => (
                                           <Badge
                                             key={`${v}-${i}`}
                                             variant="secondary"
-                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                            title={v}
                                           >
                                             {v}
                                           </Badge>
                                         ))}
+                                        {overflow > 0 && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
+                                            title={values.slice(MAX_TAGS).join(", ")}
+                                          >
+                                            +{overflow}
+                                          </Badge>
+                                        )}
                                       </div>
                                     );
                                   }
