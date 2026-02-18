@@ -64,9 +64,9 @@ export default function MediaDialog({
   const [isLoadingFields, setIsLoadingFields] = useState(true);
 
   // Row Assignment Mode state
-  const [addMode, setAddMode] = useState<"standard" | "row">("standard");
+  const [addMode] = useState<"standard" | "row">("standard");
   // Renamed local state to avoid conflict with prop
-  const [localAssignmentPage, setLocalAssignmentPage] = useState<string>(assignmentPage || "home");
+  const [localAssignmentPage] = useState<string>(assignmentPage || "home");
   const [targetRowId, setTargetRowId] = useState<string>("");
 
   const queryClient = useQueryClient();
