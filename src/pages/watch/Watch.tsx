@@ -10,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Flag, Project } from "@/types";
