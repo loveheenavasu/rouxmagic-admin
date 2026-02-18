@@ -442,18 +442,18 @@ export default function RecipesCarousel() {
                                       size="icon"
                                       variant="ghost"
                                       onClick={() => saveOrderIndex(recipe)}
-                                      className="text-green-600 hover:bg-green-50"
+                                      className="text-green-600 hover:bg-green-50 h-8 w-8"
                                     >
-                                      ✔
+                                      <span className="text-lg">✔</span>
                                     </Button>
 
                                     <Button
                                       size="icon"
                                       variant="ghost"
                                       onClick={cancelEditOrder}
-                                      className="text-slate-400 hover:bg-slate-100"
+                                      className="text-slate-400 hover:bg-slate-100 h-8 w-8"
                                     >
-                                      ✕
+                                      <span className="text-lg">✕</span>
                                     </Button>
                                   </div>
                                 ) : (
@@ -466,24 +466,58 @@ export default function RecipesCarousel() {
                                         e.stopPropagation();
                                         startEditOrder(recipe);
                                       }}
-                                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 h-6 w-6"
                                     >
                                       <Edit className="h-4 w-4" />
                                     </Button>
                                   </div>
                                 )
+                              ) : value === null || value === undefined || value === "" ? (
+                                <span className="text-muted-foreground text-xs">—</span>
                               ) : (
-                                Array.isArray(value) ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {value.map((v) => (
-                                      <Badge key={v} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-normal">
-                                        {v}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  value || <span className="text-slate-300 text-xs">—</span>
-                                )
+                                (() => {
+                                  let values: string[] = [];
+                                  if (Array.isArray(value)) {
+                                    values = value.map(String);
+                                  } else if (typeof value === "string") {
+                                    const trimmed = value.trim();
+                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                                      try {
+                                        const parsed = JSON.parse(trimmed);
+                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                      } catch (e) {
+                                        values = [value];
+                                      }
+                                    } else if (value.includes(",")) {
+                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                    } else {
+                                      values = [value];
+                                    }
+                                  } else {
+                                    values = [String(value)];
+                                  }
+
+                                  if (values.length > 1 || ["category", "flavor_tags"].includes(key)) {
+                                    return (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {values.map((v, i) => (
+                                          <Badge
+                                            key={`${v}-${i}`}
+                                            variant="secondary"
+                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap"
+                                          >
+                                            {v}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <span className="truncate block" title={String(value)}>
+                                      {String(value)}
+                                    </span>
+                                  );
+                                })()
                               )}
                             </TableCell>
                           );

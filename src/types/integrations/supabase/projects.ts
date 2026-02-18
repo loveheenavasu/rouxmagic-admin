@@ -20,7 +20,7 @@ export interface ProjectMetaData {
   content_type: ContentTypeEnum;
   poster_url?: string;
   preview_url?: string;
-  status: ProjectStatusEnum;
+  status: ProjectStatusEnum[];
   release_year?: number;
   runtime_minutes?: number;
   notes?: string;

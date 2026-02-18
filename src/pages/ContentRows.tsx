@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -630,9 +631,22 @@ const ContentRowsPage = () => {
                                                                                 {row.filter_type}
                                                                             </span>
                                                                         ) : key === "filter_value" ? (
-                                                                            <span className="truncate block" title={row.filter_value}>
-                                                                                {row.filter_value}
-                                                                            </span>
+                                                                            <div className="flex flex-wrap gap-1.5">
+                                                                                {(() => {
+                                                                                    const val = row.filter_value;
+                                                                                    let values: string[] = [];
+                                                                                    if (val.includes(",")) {
+                                                                                        values = val.split(",").map((v) => v.trim()).filter(Boolean);
+                                                                                    } else {
+                                                                                        values = [val];
+                                                                                    }
+                                                                                    return values.map((v, i) => (
+                                                                                        <Badge key={`${v}-${i}`} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap">
+                                                                                            {v}
+                                                                                        </Badge>
+                                                                                    ));
+                                                                                })()}
+                                                                            </div>
                                                                         ) : key === "matchCount" ? (
                                                                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${(row as any).matchCount > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
                                                                                 {(row as any).matchCount}+ items

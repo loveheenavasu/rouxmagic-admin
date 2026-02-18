@@ -563,9 +563,35 @@ export default function Archive() {
                       </p>
                     )}
                   {item.source !== "recipe" && "content_type" in item.raw && (
-                    <p className="text-sm text-muted-foreground">
-                      {item.raw.content_type}
-                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(() => {
+                        const val = (item.raw as any).content_type;
+                        let values: string[] = [];
+                        if (Array.isArray(val)) {
+                          values = val.map(String);
+                        } else if (typeof val === "string") {
+                          if (val.startsWith("[") && val.endsWith("]")) {
+                            try {
+                              const parsed = JSON.parse(val);
+                              values = Array.isArray(parsed) ? parsed.map(String) : [val];
+                            } catch (e) {
+                              values = [val];
+                            }
+                          } else if (val.includes(",")) {
+                            values = val.split(",").map((v) => v.trim()).filter(Boolean);
+                          } else {
+                            values = [val];
+                          }
+                        } else {
+                          values = [String(val)];
+                        }
+                        return values.map((v, i) => (
+                          <Badge key={`${v}-${i}`} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal">
+                            {v}
+                          </Badge>
+                        ));
+                      })()}
+                    </div>
                   )}
                 </CardContent>
                 <CardFooter className="flex gap-2 border-t border-slate-100 bg-slate-50/50 pt-4">
