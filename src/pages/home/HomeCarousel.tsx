@@ -17,6 +17,7 @@ import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { Flag, Project } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -276,21 +277,6 @@ export default function HomeCarousel() {
     }
   };
 
-  const carouselAllowedFields = [
-    "title",
-    "content_type",
-    "status",
-    "platform",
-    "platform_name",
-    "poster_url",
-    "preview_url",
-    "order_index",
-    "release_year",
-    "runtime_minutes",
-    "notes",
-    "synopsis",
-    "in_hero_carousel",
-  ];
 
   const confirmDelete = async () => {
     if (mediaToDelete) {
@@ -315,6 +301,8 @@ export default function HomeCarousel() {
     { key: "content_type", label: "Content Type" },
     { key: "status", label: "Status" },
     { key: "platform", label: "Platform" },
+    { key: "genres", label: "Genres" },
+    { key: "vibe_tags", label: "Vibe Tags" },
     { key: "order_index", label: "Order Index" },
     { key: "release_year", label: "Release Year" },
     { key: "runtime_minutes", label: "Runtime Minutes" },
@@ -552,7 +540,14 @@ export default function HomeCarousel() {
                                     values = [String(value)];
                                   }
 
-                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                  // Capitalize and format for display
+                                  values = values.map((v) => {
+                                    if (!v) return v;
+                                    const s = String(v).replace(/_/g, " ");
+                                    return s.charAt(0).toUpperCase() + s.slice(1);
+                                  });
+
+                                  if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
                                     const MAX_TAGS = 3;
                                     const visible = values.slice(0, MAX_TAGS);
                                     const overflow = values.length - MAX_TAGS;
@@ -561,8 +556,13 @@ export default function HomeCarousel() {
                                         {visible.map((v, i) => (
                                           <Badge
                                             key={`${v}-${i}`}
-                                            variant="secondary"
-                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                            variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                            className={cn(
+                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                              key === "vibe_tags"
+                                                ? "border-slate-200 text-slate-500 bg-transparent"
+                                                : "bg-slate-100 text-slate-600 border-none"
+                                            )}
                                             title={v}
                                           >
                                             {v}
@@ -616,7 +616,7 @@ export default function HomeCarousel() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        allowedFields={carouselAllowedFields}
+        allowedFields={displayFields.map(f => f.key)}
         defaultValues={{ in_hero_carousel: true }}
       />
 

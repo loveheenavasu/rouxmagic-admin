@@ -12,6 +12,7 @@ import {
 import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { Badge } from "@/components/ui/badge";
 import { Flag, Project } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
@@ -29,6 +30,8 @@ export default function Watch() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [genreFilter, setGenreFilter] = useState<string>("all");
+  const [vibeFilter, setVibeFilter] = useState<string>("all");
+  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -85,17 +88,22 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter],
+    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter, flavorFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
-      if (statusFilter !== "all") eqFilters.push({ key: "status", value: statusFilter });
+      const containsFilters: any[] = [];
+
+      if (statusFilter !== "all") {
+        containsFilters.push({ key: "status", value: statusFilter });
+      }
+
       if (contentTypeFilter !== "all") {
         eqFilters.push({ key: "content_type", value: contentTypeFilter });
       }
 
-
       const response = await projectsAPI.get({
         eq: eqFilters as any,
+        contains: containsFilters as any,
         inValue: (contentTypeFilter === "all" ? { key: "content_type", value: ["TV Show", "Film"] } : undefined) as any,
         sort: "created_at",
         sortBy: "dec",
@@ -115,6 +123,24 @@ export default function Watch() {
           const gData = r.genres as any;
           const genres = typeof gData === 'string' ? gData.split(',') : (Array.isArray(gData) ? gData : []);
           return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+        });
+      }
+
+      // Apply Vibe filter
+      if (vibeFilter !== "all") {
+        rows = rows.filter(r => {
+          const vData = r.vibe_tags;
+          const vibes = Array.isArray(vData) ? vData : [];
+          return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
+        });
+      }
+
+      // Apply Flavor filter
+      if (flavorFilter !== "all") {
+        rows = rows.filter(r => {
+          const fData = r.flavor_tags;
+          const flavors = Array.isArray(fData) ? fData : [];
+          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
         });
       }
 
@@ -220,21 +246,20 @@ export default function Watch() {
     },
   });
 
-  const displayFields =
-    mediaList.length > 0
-      ? Object.keys(mediaList[0]).filter(
-        (key) =>
-          ![
-            "id",
-            "poster_url",
-            "preview_url",
-            "platform_url",
-            "order_index",
-            "created_at",
-            "updated_at",
-          ].includes(key)
-      )
-      : ["title", "content_type", "status", "release_year", "platform", "vibe_tags"];
+  const displayFields = Array.from(new Set([
+    ...(mediaList.length > 0 ? Object.keys(mediaList[0]) : []),
+    "genres",
+    "vibe_tags"
+  ])).filter(
+    (key) =>
+      ![
+        "id",
+        "poster_url",
+        "order_index",
+        "created_at",
+        "updated_at",
+      ].includes(key)
+  );
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
@@ -296,6 +321,36 @@ export default function Watch() {
     }
   });
 
+
+  const { data: availableVibes = [] } = useQuery<string[]>({
+    queryKey: ["available-vibes"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        return Array.from(new Set(vibes)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
+
+  const { data: availableFlavors = [] } = useQuery<string[]>({
+    queryKey: ["available-flavors"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
+        return Array.from(new Set(flavors)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -366,22 +421,26 @@ export default function Watch() {
         handleNew={handleAddNew}
       />
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        <MediaFilters
-          searchPlaceholder="Search by title..."
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          contentTypeFilter={contentTypeFilter}
-          onContentTypeFilterChange={setContentTypeFilter}
-          availableStatuses={availableStatuses}
-          availableTypes={availableTypes}
-          genreFilter={genreFilter}
-          onGenreFilterChange={setGenreFilter}
-          availableGenres={availableGenres}
-        />
-      </div>
+      <MediaFilters
+        searchPlaceholder="Search by title..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        contentTypeFilter={contentTypeFilter}
+        onContentTypeFilterChange={setContentTypeFilter}
+        availableStatuses={availableStatuses}
+        availableTypes={availableTypes}
+        genreFilter={genreFilter}
+        onGenreFilterChange={setGenreFilter}
+        availableGenres={availableGenres}
+        vibeFilter={vibeFilter}
+        onVibeFilterChange={setVibeFilter}
+        availableVibes={availableVibes}
+        flavorFilter={flavorFilter}
+        onFlavorFilterChange={setFlavorFilter}
+        availableFlavors={availableFlavors}
+      />
 
       {/* Table */}
       <div className="rounded-md border">
@@ -503,7 +562,7 @@ export default function Watch() {
                                 if (Array.isArray(value)) {
                                   values = value.map(String);
                                 } else if (typeof value === "string") {
-                                  if (value.startsWith("[") && value.endsWith("]")) {
+                                  if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
                                     try {
                                       const parsed = JSON.parse(value);
                                       values = Array.isArray(parsed) ? parsed.map(String) : [value];
@@ -515,6 +574,47 @@ export default function Watch() {
                                   }
                                 } else {
                                   values = [String(value)];
+                                }
+
+                                // Capitalize and format for display
+                                values = values.map((v) => {
+                                  if (!v) return v;
+                                  const s = String(v).replace(/_/g, " ");
+                                  return s.charAt(0).toUpperCase() + s.slice(1);
+                                });
+
+                                if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
+                                  const MAX_TAGS = 3;
+                                  const visible = values.slice(0, MAX_TAGS);
+                                  const overflow = values.length - MAX_TAGS;
+                                  return (
+                                    <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
+                                      {visible.map((v, i) => (
+                                        <Badge
+                                          key={`${v}-${i}`}
+                                          variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                          className={cn(
+                                            "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                            key === "vibe_tags"
+                                              ? "border-slate-200 text-slate-500 bg-transparent"
+                                              : "bg-slate-100 text-slate-600 border-none"
+                                          )}
+                                          title={v}
+                                        >
+                                          {v}
+                                        </Badge>
+                                      ))}
+                                      {overflow > 0 && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
+                                          title={values.slice(MAX_TAGS).join(", ")}
+                                        >
+                                          +{overflow}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  );
                                 }
 
                                 const displayValue = values.join(", ");

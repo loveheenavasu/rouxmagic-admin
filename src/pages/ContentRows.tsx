@@ -175,6 +175,7 @@ const ContentRowsPage = () => {
             const rowsWithCounts = await Promise.all(
                 rows.map(async (row) => {
                     const eqFilters: any[] = [];
+                    const containsFilters: any[] = [];
                     let inValue: any = row.filter_value.includes(",")
                         ? {
                             key: row.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
@@ -212,6 +213,8 @@ const ContentRowsPage = () => {
                                 key: "content_type",
                                 value: ["Audiobook", "Song"]
                             };
+                        } else if (row.filter_type === FilterTypeEnum.Genre || row.filter_type === FilterTypeEnum.VibeTags || row.filter_type === FilterTypeEnum.FlavorTags) {
+                            containsFilters.push({ key: row.filter_type, value: row.filter_value.split(",").map(v => v.trim()) });
                         } else {
                             // Only add if not duplicating content_type key for Read page
                             if (!(row.page === "read" && row.filter_type === "content_type")) {
@@ -221,9 +224,10 @@ const ContentRowsPage = () => {
                     }
 
                     const projectsResp = await projectsAPI.get({
-                        eq: [...eqFilters, { key: "is_deleted", value: false }],
+                        eq: [...eqFilters, { key: "is_deleted" as any, value: false }],
+                        contains: containsFilters,
                         inValue,
-                        limit: 1 // We just need to check if any exist or more
+                        limit: 1
                     });
 
                     // For real count, we'd need a separate count API or fetch all, 
@@ -385,14 +389,11 @@ const ContentRowsPage = () => {
         if (lowerKey === "audiobook" || lowerKey === "audiobooks") return FilterTypeEnum.Audiobook;
         if (lowerKey === "song" || lowerKey === "songs") return FilterTypeEnum.Song;
 
-        // Check for other content types
-        if (["film", "tv show", "episode", "season"].some(type => lowerKey.includes(type))) {
-            return FilterTypeEnum.ContentType;
-        }
-        // Check for statuses
-        if (["released", "draft", "archived", "scheduled"].includes(lowerKey)) {
-            return FilterTypeEnum.Status;
-        }
+        // Check for specific tag types
+        if (lowerKey.includes("genre")) return FilterTypeEnum.Genre;
+        if (lowerKey.includes("vibe")) return FilterTypeEnum.VibeTags;
+        if (lowerKey.includes("flavor")) return FilterTypeEnum.FlavorTags;
+
         // Default to flag for everything else (e.g. in_now_playing, is_trending)
         return FilterTypeEnum.Flag;
     };

@@ -36,6 +36,7 @@ export interface ProjectMetaData {
   is_deleted?: boolean;
   deleted_at?: string | null;
   vibe_tags?: string[];
+  flavor_tags?: string[];
 }
 
 export interface ProjectFormData extends Partial<Project> {

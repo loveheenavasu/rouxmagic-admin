@@ -27,6 +27,7 @@ const recipesAPI = Recipes as Required<typeof Recipes>;
 export default function RecipesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -98,7 +99,7 @@ export default function RecipesPage() {
     isLoading,
     error,
   } = useQuery<Recipe[]>({
-    queryKey: ["recipes", searchQuery, categoryFilter],
+    queryKey: ["recipes", searchQuery, categoryFilter, flavorFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
       if (categoryFilter !== "all") eqFilters.push({ key: "category", value: categoryFilter });
@@ -116,6 +117,15 @@ export default function RecipesPage() {
       }
 
       let rows = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
+
+      // Apply Flavor filter
+      if (flavorFilter !== "all") {
+        rows = rows.filter(r => {
+          const fData = r.flavor_tags;
+          const flavors = Array.isArray(fData) ? fData : [];
+          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
+        });
+      }
 
       // Handle smart search (including inheritance)
       if (searchQuery.length > 2) {
@@ -220,6 +230,24 @@ export default function RecipesPage() {
     },
   });
 
+  const { data: availableFlavors = [] } = useQuery<string[]>({
+    queryKey: ["recipe-flavors"],
+    queryFn: async () => {
+      const response = await recipesAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        limit: 1000,
+      });
+
+      if (response.flag !== Flag.Success || !response.data) {
+        return [];
+      }
+
+      const data = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
+      const flavors = data.flatMap((r) => r.flavor_tags || []);
+      return Array.from(new Set(flavors)).filter(Boolean).sort();
+    },
+  });
+
   const handleAddNew = () => {
     setSelectedRecipe(null);
     setIsDialogOpen(true);
@@ -269,6 +297,7 @@ export default function RecipesPage() {
     "ingredients",
     "instructions",
     "short_description",
+    "flavor_tags",
     "image_url",
     "video_url",
   ];
@@ -294,6 +323,9 @@ export default function RecipesPage() {
             contentTypeFilter={categoryFilter}
             onContentTypeFilterChange={setCategoryFilter}
             availableTypes={categories}
+            flavorFilter={flavorFilter}
+            onFlavorFilterChange={setFlavorFilter}
+            availableFlavors={availableFlavors}
           />
 
           <div className="rounded-xl border border-slate-100 overflow-hidden">
@@ -429,6 +461,13 @@ export default function RecipesPage() {
                                     values = [String(value)];
                                   }
 
+                                  // Capitalize and format for display
+                                  values = values.map((v) => {
+                                    if (!v) return v;
+                                    const s = String(v).replace(/_/g, " ");
+                                    return s.charAt(0).toUpperCase() + s.slice(1);
+                                  });
+
                                   if (["category", "flavor_tags"].includes(key)) {
                                     const MAX_TAGS = 3;
                                     const visible = values.slice(0, MAX_TAGS);
@@ -438,8 +477,13 @@ export default function RecipesPage() {
                                         {visible.map((v, i) => (
                                           <Badge
                                             key={`${v}-${i}`}
-                                            variant="secondary"
-                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                            variant={key === "flavor_tags" ? "outline" : "secondary"}
+                                            className={cn(
+                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                              key === "flavor_tags"
+                                                ? "border-orange-200 text-orange-600 bg-orange-50/30"
+                                                : "bg-slate-100 text-slate-600 border-none"
+                                            )}
                                             title={v}
                                           >
                                             {v}

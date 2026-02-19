@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle, Edit } from "lucide-react";
+import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,10 +39,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
     const [isSearching, setIsSearching] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-    // Tag editing state
-    const [editingPairingId, setEditingPairingId] = useState<string | null>(null);
-    const [vibeTagsInput, setVibeTagsInput] = useState("");
-    const [flavorTagsInput, setFlavorTagsInput] = useState("");
     const ensureArray = (tags: any): string[] => {
         if (Array.isArray(tags)) return tags;
         if (typeof tags === 'string') {
@@ -175,38 +171,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
         enabled: isDropdownOpen,
     });
 
-    const updatePairingMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: Partial<Pairing> }) => {
-            const res = await pairingsAPI.updateOneByID(id, data);
-            if (res.flag !== Flag.Success) throw new Error("Failed to update pairing");
-            return res.data;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["pairings", sourceId, sourceRef] });
-            setEditingPairingId(null);
-            toast.success("Pairing updated");
-        },
-        onError: (err: any) => toast.error(err.message),
-    });
 
-    const startEditing = (pairing: Pairing) => {
-        setEditingPairingId(pairing.id);
-        setVibeTagsInput(ensureArray(pairing.vibe_tags).join(", "));
-        setFlavorTagsInput(ensureArray(pairing.flavor_tags).join(", "));
-    };
-
-    const saveTags = (id: string, ref: PairingSourceEnum) => {
-        const isRecipe = ref === PairingSourceEnum.Recipe;
-        const data: Partial<Pairing> = {};
-
-        if (isRecipe) {
-            data.flavor_tags = flavorTagsInput.split(",").map(t => t.trim()).filter(Boolean);
-        } else {
-            data.vibe_tags = vibeTagsInput.split(",").map(t => t.trim()).filter(Boolean);
-        }
-
-        updatePairingMutation.mutate({ id, data });
-    };
 
     const createPairingMutation = useMutation({
         mutationFn: async (targetId: string) => {
@@ -296,7 +261,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                         const pairedItemId = isCurrentSource ? pairing.target_id : pairing.source_id;
                         const pairedItemRef = isCurrentSource ? pairing.target_ref : pairing.source_ref;
                         const item = pairedItems.find((i: any) => i.id === pairedItemId);
-                        const isEditing = editingPairingId === pairing.id;
                         return (
                             <Card key={pairing.id} className="overflow-hidden border-slate-200 hover:shadow-sm transition-shadow">
                                 <CardContent className="p-4">
@@ -307,20 +271,23 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                             </p>
                                             <Badge variant="secondary" className={cn("mt-1.5 text-[10px] h-5", getBadgeClass(pairedItemRef))}>
                                                 {getSourceIcon(pairedItemRef)}
-                                                <span className="ml-1">{pairedItemRef}</span>
+                                                <span className="ml-1">
+                                                    {(() => {
+                                                        const val = pairedItemRef as any;
+                                                        if (typeof val === 'string' && val.includes('[')) {
+                                                            try {
+                                                                const parsed = JSON.parse(val);
+                                                                return Array.isArray(parsed) ? parsed.join(", ") : val;
+                                                            } catch (e) {
+                                                                return val;
+                                                            }
+                                                        }
+                                                        return val;
+                                                    })()}
+                                                </span>
                                             </Badge>
                                         </div>
                                         <div className="flex gap-1">
-                                            {!isEditing && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                                                    onClick={() => startEditing(pairing)}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -333,62 +300,20 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                         </div>
                                     </div>
 
-                                    {isEditing ? (
-                                        <div className="space-y-3 pt-2 border-t">
-                                            {pairedItemRef !== PairingSourceEnum.Recipe ? (
-                                                <div>
-                                                    <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Vibe Tags</Label>
-                                                    <Input
-                                                        value={vibeTagsInput}
-                                                        onChange={(e) => setVibeTagsInput(e.target.value)}
-                                                        placeholder="Relaxed, Energetic..."
-                                                        className="h-8 text-xs bg-slate-50"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Flavor Tags</Label>
-                                                    <Input
-                                                        value={flavorTagsInput}
-                                                        onChange={(e) => setFlavorTagsInput(e.target.value)}
-                                                        placeholder="Spicy, Sweet..."
-                                                        className="h-8 text-xs bg-slate-50"
-                                                    />
-                                                </div>
-                                            )}
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    className="h-7 text-[10px] flex-1 bg-indigo-600 hover:bg-indigo-700"
-                                                    onClick={() => saveTags(pairing.id, pairedItemRef)}
-                                                    disabled={updatePairingMutation.isPending}
-                                                >
-                                                    {updatePairingMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="h-7 text-[10px] flex-1"
-                                                    onClick={() => setEditingPairingId(null)}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {(pairedItemRef !== PairingSourceEnum.Recipe && ensureArray(pairing.vibe_tags).length > 0) && (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {ensureArray(pairing.vibe_tags).map(tag => (
+                                    <div className="space-y-2">
+                                        {pairedItemRef !== PairingSourceEnum.Recipe && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {ensureArray(item?.vibe_tags).length > 0 &&
+                                                    ensureArray(item?.vibe_tags).map((tag: any) => (
                                                         <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-slate-200 text-slate-500 font-normal">
                                                             {tag}
                                                         </Badge>
                                                     ))}
                                                 </div>
                                             )}
-                                            {(pairedItemRef === PairingSourceEnum.Recipe && ensureArray(pairing.flavor_tags).length > 0) && (
+                                            {(pairedItemRef === PairingSourceEnum.Recipe && ensureArray(item?.flavor_tags).length > 0) && (
                                                 <div className="flex flex-wrap gap-1">
-                                                    {ensureArray(pairing.flavor_tags).map(tag => (
+                                                    {ensureArray(item?.flavor_tags).map((tag: any) => (
                                                         <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-orange-200 text-orange-600 font-normal bg-orange-50/30">
                                                             {tag}
                                                         </Badge>
@@ -396,7 +321,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                                 </div>
                                             )}
                                         </div>
-                                    )}
                                 </CardContent>
                             </Card>
                         );

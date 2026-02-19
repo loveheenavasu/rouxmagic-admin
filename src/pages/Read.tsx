@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
 import { StatsRow } from "@/components/StatsRow";
 import { cn } from "@/lib/utils";
+import { PageSettingsCard } from "@/components/PageSettingsCard";
 
 const READ_TYPES = ["Audiobook"] as const;
 const projectsAPI = Projects;
@@ -29,6 +30,9 @@ export default function Read() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [genreFilter, setGenreFilter] = useState<string>("all");
+  const [vibeFilter, setVibeFilter] = useState<string>("all");
+  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -80,7 +84,7 @@ export default function Read() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["read-items", searchQuery, contentTypeFilter],
+    queryKey: ["read-items", searchQuery, contentTypeFilter, genreFilter, vibeFilter, flavorFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
       let inValue: any = { key: "content_type", value: [...READ_TYPES] };
@@ -105,7 +109,36 @@ export default function Read() {
       }
 
       const data = response.data;
-      return (Array.isArray(data) ? data : data ? [data] : []) as Project[];
+      let rows = (Array.isArray(data) ? data : data ? [data] : []) as Project[];
+
+      // Apply Genre filter
+      if (genreFilter !== "all") {
+        rows = rows.filter(r => {
+          const gData = r.genres;
+          const genres = Array.isArray(gData) ? gData : [];
+          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+        });
+      }
+
+      // Apply Vibe filter
+      if (vibeFilter !== "all") {
+        rows = rows.filter(r => {
+          const vData = r.vibe_tags;
+          const vibes = Array.isArray(vData) ? vData : [];
+          return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
+        });
+      }
+
+      // Apply Flavor filter
+      if (flavorFilter !== "all") {
+        rows = rows.filter(r => {
+          const fData = r.flavor_tags;
+          const flavors = Array.isArray(fData) ? fData : [];
+          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
+        });
+      }
+
+      return rows;
     },
   });
 
@@ -201,28 +234,72 @@ export default function Read() {
 
   const availableTypes = READ_TYPES as unknown as string[];
 
-  const displayFields =
-    items.length > 0
-      ? Object.keys(items[0]).filter(
-        (key) =>
-          ![
-            "id",
-            "poster_url",
-            "preview_url",
-            "platform_url",
-            "order_index",
-            "created_at",
-            "updated_at",
-            "user_id",
-          ].includes(key)
-      )
-      : ["title", "content_type", "status", "platform_name"];
+  const displayFields = Array.from(new Set([
+    ...(items.length > 0 ? Object.keys(items[0]) : []),
+    "genres",
+    "vibe_tags"
+  ])).filter(
+    (key) =>
+      ![
+        "id",
+        "poster_url",
+        "order_index",
+        "created_at",
+        "updated_at",
+        "user_id",
+      ].includes(key)
+  );
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
     ...allAvailableFields.filter(key => stickyColumns.includes(key)),
     ...allAvailableFields.filter(key => !stickyColumns.includes(key))
   ];
+
+  const { data: availableGenres = [] } = useQuery<string[]>({
+    queryKey: ["read-genres"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const genres = (response.data as Project[]).flatMap(p => p.genres || []);
+        return Array.from(new Set(genres)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
+
+  const { data: availableVibes = [] } = useQuery<string[]>({
+    queryKey: ["read-vibes"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        return Array.from(new Set(vibes)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
+
+  const { data: availableFlavors = [] } = useQuery<string[]>({
+    queryKey: ["read-flavors"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
+        return Array.from(new Set(flavors)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -292,16 +369,25 @@ export default function Read() {
         handleNew={handleAddNew}
       />
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        <MediaFilters
-          searchPlaceholder="Search by title, platform or notes..."
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onContentTypeFilterChange={setContentTypeFilter}
-          availableStatuses={availableStatuses}
-          availableTypes={availableTypes}
-        />
-      </div>
+      <PageSettingsCard pageName="read" />
+
+      <MediaFilters
+        searchPlaceholder="Search by title, platform or notes..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onContentTypeFilterChange={setContentTypeFilter}
+        availableStatuses={availableStatuses}
+        availableTypes={availableTypes}
+        genreFilter={genreFilter}
+        onGenreFilterChange={setGenreFilter}
+        availableGenres={availableGenres}
+        vibeFilter={vibeFilter}
+        onVibeFilterChange={setVibeFilter}
+        availableVibes={availableVibes}
+        flavorFilter={flavorFilter}
+        onFlavorFilterChange={setFlavorFilter}
+        availableFlavors={availableFlavors}
+      />
 
       {/* Table */}
       <div className="rounded-md border">
@@ -449,7 +535,14 @@ export default function Read() {
                                 values = [String(value)];
                               }
 
-                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                              // Capitalize and format for display
+                              values = values.map((v) => {
+                                if (!v) return v;
+                                const s = String(v).replace(/_/g, " ");
+                                return s.charAt(0).toUpperCase() + s.slice(1);
+                              });
+
+                              if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
                                 const MAX_TAGS = 3;
                                 const visible = values.slice(0, MAX_TAGS);
                                 const overflow = values.length - MAX_TAGS;
@@ -458,8 +551,13 @@ export default function Read() {
                                     {visible.map((v, i) => (
                                       <Badge
                                         key={`${v}-${i}`}
-                                        variant="secondary"
-                                        className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                        variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                        className={cn(
+                                          "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                          key === "vibe_tags"
+                                            ? "border-slate-200 text-slate-500 bg-transparent"
+                                            : "bg-slate-100 text-slate-600 border-none"
+                                        )}
                                         title={v}
                                       >
                                         {v}

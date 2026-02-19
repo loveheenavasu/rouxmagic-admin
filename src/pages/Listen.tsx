@@ -27,6 +27,9 @@ import { cn } from "@/lib/utils";
 export default function ListenPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [genreFilter, setGenreFilter] = useState<string>("all");
+  const [vibeFilter, setVibeFilter] = useState<string>("all");
+  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -77,24 +80,22 @@ export default function ListenPage() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter],
+    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter, flavorFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [];
+      const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
+      const containsFilters: any[] = [];
       let inValueFilter: any = {
         key: "content_type",
         value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook]
       };
 
       if (statusFilter !== "all") {
-        eqFilters.push({ key: "status", value: statusFilter });
+        containsFilters.push({ key: "status", value: statusFilter });
       }
 
-
       const response = await projectsAPI.get({
-        eq: [
-          ...eqFilters,
-          { key: "is_deleted" as any, value: false }
-        ] as any,
+        eq: eqFilters as any,
+        contains: containsFilters as any,
         inValue: inValueFilter,
         sort: "created_at",
         sortBy: "dec",
@@ -118,6 +119,33 @@ export default function ListenPage() {
       let data = Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
+
+      // Apply Genre filter
+      if (genreFilter !== "all") {
+        data = data.filter(r => {
+          const gData = r.genres;
+          const genres = Array.isArray(gData) ? gData : [];
+          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+        });
+      }
+
+      // Apply Vibe filter
+      if (vibeFilter !== "all") {
+        data = data.filter(r => {
+          const vData = r.vibe_tags;
+          const vibes = Array.isArray(vData) ? vData : [];
+          return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
+        });
+      }
+
+      // Apply Flavor filter
+      if (flavorFilter !== "all") {
+        data = data.filter(r => {
+          const fData = r.flavor_tags;
+          const flavors = Array.isArray(fData) ? fData : [];
+          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
+        });
+      }
 
       return data;
       return data;
@@ -196,10 +224,11 @@ export default function ListenPage() {
 
   const filteredMedia = mediaList;
 
-  const displayFields =
-    mediaList.length > 0
-      ? Object.keys(mediaList[0]).filter((key) => key !== "id")
-      : ["title", "content_type", "status", "release_year", "platform"];
+  const displayFields = Array.from(new Set([
+    ...(mediaList.length > 0 ? Object.keys(mediaList[0]) : []),
+    "genres",
+    "vibe_tags"
+  ])).filter((key) => key !== "id");
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
@@ -209,21 +238,65 @@ export default function ListenPage() {
 
   // Fetch unique statuses for filters (global, not affected by current filter)
   const { data: availableStatuses = [] } = useQuery({
-    queryKey: ["unique-statuses"],
+    queryKey: ["listen-statuses"],
     queryFn: async () => {
-      const response = await projectsAPI.get({ eq: [] });
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        return [];
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const statuses = (response.data as Project[])
+          .flatMap((item) => item.status)
+          .filter(Boolean);
+        return [...new Set(statuses)].sort();
       }
-      const statuses = (response.data as Project[])
-        .flatMap((item) => item.status)
-        .filter(Boolean);
-      return [...new Set(statuses)].sort();
+      return [];
     },
+  });
+
+  const { data: availableGenres = [] } = useQuery<string[]>({
+    queryKey: ["listen-genres"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const genres = (response.data as Project[]).flatMap(p => p.genres || []);
+        return Array.from(new Set(genres)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
+
+  const { data: availableVibes = [] } = useQuery<string[]>({
+    queryKey: ["listen-vibes"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        return Array.from(new Set(vibes)).filter(Boolean).sort();
+      }
+      return [];
+    }
+  });
+
+  const { data: availableFlavors = [] } = useQuery<string[]>({
+    queryKey: ["listen-flavors"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+      });
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
+        return Array.from(new Set(flavors)).filter(Boolean).sort();
+      }
+      return [];
+    }
   });
 
   // Fetch unique types for filters (global, not affected by current filter)
@@ -269,7 +342,9 @@ export default function ListenPage() {
     // Metadata / feeds
     "slug",
     "platform_name",
-    "vibes",
+    "genres",
+    "vibe_tags",
+    "flavor_tags",
     "status",
     "release_status",
     "in_now_playing",
@@ -327,6 +402,15 @@ export default function ListenPage() {
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           availableStatuses={availableStatuses}
+          genreFilter={genreFilter}
+          onGenreFilterChange={setGenreFilter}
+          availableGenres={availableGenres}
+          vibeFilter={vibeFilter}
+          onVibeFilterChange={setVibeFilter}
+          availableVibes={availableVibes}
+          flavorFilter={flavorFilter}
+          onFlavorFilterChange={setFlavorFilter}
+          availableFlavors={availableFlavors}
         />
       </div>
       {/* Table */}
@@ -464,7 +548,14 @@ export default function ListenPage() {
                                 values = [String(value)];
                               }
 
-                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                              // Capitalize and format for display
+                              values = values.map((v) => {
+                                if (!v) return v;
+                                const s = String(v).replace(/_/g, " ");
+                                return s.charAt(0).toUpperCase() + s.slice(1);
+                              });
+
+                              if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
                                 const MAX_TAGS = 3;
                                 const visible = values.slice(0, MAX_TAGS);
                                 const overflow = values.length - MAX_TAGS;
@@ -473,8 +564,13 @@ export default function ListenPage() {
                                     {visible.map((v, i) => (
                                       <Badge
                                         key={`${v}-${i}`}
-                                        variant="secondary"
-                                        className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                        variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                        className={cn(
+                                          "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                          key === "vibe_tags"
+                                            ? "border-slate-200 text-slate-500 bg-transparent"
+                                            : "bg-slate-100 text-slate-600 border-none"
+                                        )}
                                         title={v}
                                       >
                                         {v}
@@ -525,6 +621,7 @@ export default function ListenPage() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
+        allowedFields={carouselAllowedFields}
         defaultValues={(() => {
           const defaults: any = {
             content_type: ContentTypeEnum.Song, // Default for Listen page
@@ -536,7 +633,6 @@ export default function ListenPage() {
           return defaults;
         })()}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        allowedFields={carouselAllowedFields}
       />
 
       {/* Delete Confirmation Dialog */}
