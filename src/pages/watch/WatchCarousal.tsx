@@ -18,6 +18,7 @@ import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
 import { toast } from "sonner";
 import { Flag, Project } from "@/types";
+import { cn } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -304,7 +305,9 @@ export default function WatchCarousel() {
     "runtime_minutes",
     "notes",
     "synopsis",
+    "genres",
     "vibe_tags",
+    "flavor_tags",
     "in_hero_carousel",
   ];
 
@@ -569,7 +572,14 @@ export default function WatchCarousel() {
                                     values = [String(value)];
                                   }
 
-                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                  // Capitalize and format for display
+                                  values = values.map((v) => {
+                                    if (!v) return v;
+                                    const s = String(v).replace(/_/g, " ");
+                                    return s.charAt(0).toUpperCase() + s.slice(1);
+                                  });
+
+                                  if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
                                     const MAX_TAGS = 3;
                                     const visible = values.slice(0, MAX_TAGS);
                                     const overflow = values.length - MAX_TAGS;
@@ -578,8 +588,13 @@ export default function WatchCarousel() {
                                         {visible.map((v, i) => (
                                           <Badge
                                             key={`${v}-${i}`}
-                                            variant="secondary"
-                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                            variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                            className={cn(
+                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                              key === "vibe_tags"
+                                                ? "border-slate-200 text-slate-500 bg-transparent"
+                                                : "bg-slate-100 text-slate-600 border-none"
+                                            )}
                                             title={v}
                                           >
                                             {v}

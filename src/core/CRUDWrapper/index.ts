@@ -51,13 +51,19 @@ export class CRUDWrapper<
 
         payload = {
           ...rest,
-          genres: commaSeperatedGenres
+        };
+        if (commaSeperatedGenres !== undefined) {
+          const items = commaSeperatedGenres
             ? commaSeperatedGenres
                 .split(",")
-                .map((g) => g.trim())
+                .map((g) => {
+                  const trimmed = g.trim();
+                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                })
                 .filter(Boolean)
-            : [],
-        };
+            : [];
+          payload.genres = Array.from(new Set(items));
+        }
       }
 
       const newPayload = deleteUnwantedValues(payload, ["undefined","emptystrings"]);
@@ -97,13 +103,20 @@ export class CRUDWrapper<
 
         payload = {
           ...rest,
-          genres: commaSeperatedGenres
+        };
+
+        if (commaSeperatedGenres !== undefined) {
+          const items = commaSeperatedGenres
             ? commaSeperatedGenres
                 .split(",")
-                .map((g) => g.trim())
+                .map((g) => {
+                  const trimmed = g.trim();
+                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                })
                 .filter(Boolean)
-            : [],
-        };
+            : [];
+          payload.genres = Array.from(new Set(items));
+        }
       }
       const newPayload = deleteUnwantedValues(payload, [
         "undefined",
@@ -169,6 +182,7 @@ export class CRUDWrapper<
       const {
         eq,
         or,
+        contains,
         inValue,
         limit,
         single,
@@ -177,6 +191,7 @@ export class CRUDWrapper<
         sort,
         search,
         searchFields,
+        overlaps,
       } = opts;
 
       const query = supabase.from(this.table_name).select("*");
@@ -184,6 +199,20 @@ export class CRUDWrapper<
       if (Array.isArray(eq) && eq.length > 0) {
         eq.forEach(({ key, value }) => {
           query.eq(key as string, value);
+        });
+      }
+
+      if (Array.isArray(contains) && contains.length > 0) {
+        contains.forEach(({ key, value }) => {
+          // If value is an array, check for overlap or contains
+          // .contains in Supabase for arrays checks if all items in value are in the target column
+          query.contains(key as string, Array.isArray(value) ? value : [value]);
+        });
+      }
+
+      if (Array.isArray(overlaps) && overlaps.length > 0) {
+        overlaps.forEach(({ key, value }) => {
+          query.overlaps(key as string, value);
         });
       }
 
@@ -227,6 +256,8 @@ export class CRUDWrapper<
       const { data, error } = await query;
       if (error) {
         return new APIResponse(null, Flag.APIError, {
+          message: error.message,
+          hints: (error as any).hint,
           output: error,
         }).build();
       }

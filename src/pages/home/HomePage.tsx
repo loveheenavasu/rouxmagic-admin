@@ -22,6 +22,7 @@ import { useDebounce } from "@/hooks";
 import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import { cn } from "@/lib/utils";
+import { EmailCaptureSettingsCard } from "@/components/EmailCaptureSettingsCard";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -119,11 +120,13 @@ const HomePage = () => {
       selectedShelfId
     ],
     queryFn: async () => {
-      const eqFilters: any[] = [];
+      const eqFilters: any[] = [{ key: "is_deleted" as const, value: false }];
+      const containsFilters: any[] = [];
+      const overlapsFilters: any[] = [];
       let inValueFilter: any = undefined;
 
       if (statusFilter !== "all") {
-        eqFilters.push({ key: "status" as const, value: statusFilter });
+        containsFilters.push({ key: "status" as const, value: statusFilter });
       }
       if (contentTypeFilter !== "all") {
         eqFilters.push({ key: "content_type" as const, value: contentTypeFilter });
@@ -145,13 +148,20 @@ const HomePage = () => {
               value: ["Audiobook", "Song"]
             };
           } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
             if (shelf.filter_value.includes(",")) {
-              inValueFilter = {
-                key: shelf.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
-                value: shelf.filter_value.split(",").map(v => v.trim())
-              };
+              const values = shelf.filter_value.split(",").map(v => v.trim());
+              if (isStatus) {
+                overlapsFilters.push({ key: "status", value: values });
+              } else {
+                inValueFilter = { key: "content_type", value: values };
+              }
             } else {
-              eqFilters.push({ key: shelf.filter_type, value: shelf.filter_value });
+              if (isStatus) {
+                containsFilters.push({ key: "status", value: shelf.filter_value });
+              } else {
+                eqFilters.push({ key: "content_type", value: shelf.filter_value });
+              }
             }
           }
         }
@@ -159,6 +169,8 @@ const HomePage = () => {
 
       const response = await projectsAPI.get({
         eq: eqFilters,
+        contains: containsFilters,
+        overlaps: overlapsFilters,
         inValue: inValueFilter,
         sort: "created_at",
         sortBy: "dec",
@@ -200,23 +212,23 @@ const HomePage = () => {
     },
   });
 
-  const displayFields =
-    projects.length > 0
-      ? Object.keys(projects[0]).filter(
-        (key) =>
-          ![
-            "id",
-            "poster_url",
-            "preview_url",
-            "platform_url",
-            "order_index",
-            "created_at",
-            "updated_at",
-          ].includes(key)
-      )
-      : ["title", "content_type", "status", "release_year", "platform"];
+  const displayFields = [
+    { key: "actions", label: "Actions" },
+    { key: "title", label: "Title" },
+    { key: "content_type", label: "Content Type" },
+    { key: "status", label: "Status" },
+    { key: "platform", label: "Platform" },
+    { key: "platform_url", label: "Platform URL" },
+    { key: "preview_url", label: "Preview URL" },
+    { key: "genres", label: "Genres" },
+    { key: "vibe_tags", label: "Vibe Tags" },
+    { key: "order_index", label: "Order Index" },
+    { key: "release_year", label: "Release Year" },
+    { key: "runtime_minutes", label: "Runtime Minutes" },
+    { key: "notes", label: "Notes" },
+  ];
 
-  const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
+  const allAvailableFields = displayFields.map(field => field.key);
   const availableStatuses = Array.from(new Set(projects.flatMap(p => p.status).filter(Boolean))).sort();
   const orderedFields = [
     ...allAvailableFields.filter(key => stickyColumns.includes(key)),
@@ -369,6 +381,7 @@ const HomePage = () => {
         description="Manage all content items displayed on the home page."
         handleNew={handleAddNew}
       />
+      <EmailCaptureSettingsCard />
 
       {/* Main Content Area */}
       <Card className="border-none shadow-sm overflow-hidden bg-white">
@@ -531,8 +544,13 @@ const HomePage = () => {
                                         {visible.map((v, i) => (
                                           <Badge
                                             key={`${v}-${i}`}
-                                            variant="secondary"
-                                            className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0"
+                                            variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                            className={cn(
+                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                              key === "vibe_tags"
+                                                ? "border-slate-200 text-slate-500 bg-transparent"
+                                                : "bg-slate-100 text-slate-600 border-none"
+                                            )}
                                             title={v}
                                           >
                                             {v}

@@ -16,6 +16,9 @@ export enum FilterTypeEnum {
   Audiobook = "Audiobook",
   Song = "Song",
   Listen = "Listen",
+  Genre = "genres",
+  VibeTags = "vibe_tags",
+  FlavorTags = "flavor_tags",
 }
 
 export interface ContentRowMetaData {

@@ -41,6 +41,7 @@ const emptyForm: RecipeFormData = {
   order_index: undefined,
   is_deleted: false,
   deleted_at: null,
+  flavor_tags: [],
 };
 
 export default function RecipeDialog({
@@ -75,7 +76,23 @@ export default function RecipeDialog({
       return;
     }
 
-    await onSubmit(formData as any);
+    const submitData = { ...formData };
+    if (submitData.flavor_tags) {
+      const rawTags = typeof submitData.flavor_tags === 'string'
+        ? (submitData.flavor_tags as string).split(/[,\n]/)
+        : (Array.isArray(submitData.flavor_tags) ? submitData.flavor_tags as string[] : []);
+
+      submitData.flavor_tags = Array.from(new Set(
+        rawTags
+          .map(t => {
+            const trimmed = String(t).trim();
+            return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+          })
+          .filter(Boolean)
+      ));
+    }
+
+    await onSubmit(submitData as any);
   };
 
   return (
@@ -357,6 +374,31 @@ export default function RecipeDialog({
               />
             </div>
 
+            <div className="md:col-span-2">
+              <Label htmlFor="flavor_tags" className="font-medium">
+                Flavor Tags
+              </Label>
+              <Textarea
+                id="flavor_tags"
+                value={(() => {
+                  const val = formData.flavor_tags as any;
+                  if (!val) return "";
+                  if (Array.isArray(val)) return val.join(", ");
+                  if (typeof val === 'string' && val.trim().startsWith("[") && val.trim().endsWith("]")) {
+                    try {
+                      const parsed = JSON.parse(val);
+                      return Array.isArray(parsed) ? parsed.join(", ") : val;
+                    } catch (e) {
+                      return val;
+                    }
+                  }
+                  return String(val);
+                })()}
+                onChange={(e) => handleChange("flavor_tags", e.target.value)}
+                placeholder="e.g. Spicy, Sweet, Savory"
+                className="mt-1.5 min-h-[80px]"
+              />
+            </div>
           </div>
 
           <div className="space-y-4">

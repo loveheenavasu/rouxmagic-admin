@@ -445,16 +445,27 @@ export default function MediaDialog({
             : [response.data];
 
           if (projects.length > 0) {
-            const KNOWN_FLAGS: string[] = ["in_hero_carousel"];
-            // const MANDATORY_EXTRA_FIELDS: string[] = [];
+            const KNOWN_FLAGS: string[] = ["in_hero_carousel", "in_theaters"];
+            const MANDATORY_EXTRA_FIELDS: string[] = ["genres", "vibe_tags", "flavor_tags"];
+            const ALL_POSSIBLE_FIELDS: string[] = [
+              "title", "status", "platform", "platform_url", "notes", "poster_url",
+              "order_index", "content_type", "platform_name", "poster_preview_url",
+              "preview_url", "order", "slug", "synopsis", "release_year",
+              "runtime_minutes", "external_url", "cta_label", "venue_type",
+              "venue_name", "city", "country", "start_date", "end_date",
+              "ticket_url", "creators", "writers", "directors", "stars",
+              "rating", "total_episodes", "audio_url", "audio_path",
+              "release_status", "release_date", "youtube_id", "audio_preview_url"
+            ];
 
             const fields = Array.from(new Set([
               ...Object.keys(projects[0]),
               ...KNOWN_FLAGS,
-              // ...MANDATORY_EXTRA_FIELDS
+              ...MANDATORY_EXTRA_FIELDS,
+              ...ALL_POSSIBLE_FIELDS
             ]))
               .filter(
-                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior", "vibe_tags", "flavor_tags"].includes(key)
+                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior"].includes(key)
               )
               .filter((key) =>
                 allowedFields ? allowedFields.includes(key) : true
@@ -468,22 +479,7 @@ export default function MediaDialog({
               Object.entries(media).forEach(([key, value]) => {
                 if (allowedFields && !allowedFields.includes(key)) return;
 
-                // Handle genres
-                if (key === "genres") {
-                  let tags = value;
-                  if (typeof tags === 'string' && tags.startsWith('[') && tags.endsWith(']')) {
-                    try {
-                      tags = JSON.parse(tags);
-                    } catch (e) {
-                      tags = [tags];
-                    }
-                  }
-
-                  const targetKey = "commaSeperatedGenres";
-                  result[targetKey] = Array.isArray(tags) ? tags.join(", ") : (tags || "");
-                }
-                // Handle other array fields
-                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status"];
+                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
                 if (arrayFields.includes(key)) {
                   let arr = value;
                   if (typeof arr === 'string' && arr.startsWith('[') && arr.endsWith(']')) {
@@ -512,16 +508,12 @@ export default function MediaDialog({
               // Add mode - initialize empty fields
               const base: Record<string, any> = {};
               fields.forEach((key) => {
-                const sampleValue = (projects[0] as any)[key];
 
-                if (typeof sampleValue === "boolean" || key.startsWith("in_")) {
-                  base[key] = false;
-                } else if (key === "genres") {
-                  base["commaSeperatedGenres"] = "";
+                const arrayFields = ["genres", "status", "vibe_tags", "flavor_tags"];
+                if (arrayFields.includes(key)) {
+                  base[key] = [];
                 } else if (key === "content_type") {
                   base[key] = "";
-                } else if (key === "status") {
-                  base[key] = [];
                 } else {
                   base[key] = "";
                 }
@@ -587,9 +579,8 @@ export default function MediaDialog({
 
     // Only include fields that have actual values
     Object.entries(formData).forEach(([key, value]) => {
-      console.log('formData', formData)
-      // Skip internal fields, play_behavior, and UI helper fields
-      if (["id", "created_at", "updated_at", "play_behavior", "commaSeperatedGenres", "genres"].includes(key)) {
+      // Skip internal fields and play_behavior
+      if (["id", "created_at", "updated_at", "play_behavior", "commaSeperatedGenres"].includes(key)) {
         return;
       }
 
@@ -609,13 +600,22 @@ export default function MediaDialog({
         submitData[key] = value ? parseInt(String(value)) : null;
       } else {
         // Handle other possible array fields
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status"];
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
         if (arrayFields.includes(key)) {
           if (Array.isArray(value)) {
             // Keep as array for backend if backend supports it, otherwise join
             submitData[key] = value.filter(Boolean);
           } else if (typeof value === 'string') {
-            submitData[key] = value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+            const items = value.split(/[,\n]/).map((v) => {
+              const trimmed = v.trim();
+              if (["genres", "vibe_tags", "flavor_tags"].includes(key) && trimmed) {
+                return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+              }
+              return trimmed;
+            }).filter(Boolean);
+
+            // Deduplicate
+            submitData[key] = Array.from(new Set(items));
           } else {
             submitData[key] = value;
           }
@@ -625,11 +625,6 @@ export default function MediaDialog({
       }
     });
 
-    // Handle genres conversion from commaSeperatedGenres
-    const genresValue = (formData as any).commaSeperatedGenres;
-    submitData["genres"] = genresValue
-      ? String(genresValue).split(",").map((t: string) => t.trim()).filter(Boolean)
-      : [];
 
     console.log("Submitting data to database:", submitData);
     await onSubmit(submitData);
@@ -780,7 +775,7 @@ export default function MediaDialog({
                   className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-red-50 hover:text-red-700 hover:border-red-100 cursor-pointer transition-colors"
                   onClick={() => toggleType(t)}
                 >
-                  {t} <span className="ml-1 opacity-60">×</span>
+                  {t.charAt(0).toUpperCase() + t.slice(1)} <span className="ml-1 opacity-60">×</span>
                 </Badge>
               ))
             )}
@@ -855,7 +850,10 @@ export default function MediaDialog({
                   className="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-100 cursor-pointer transition-colors capitalize"
                   onClick={() => toggleStatus(s)}
                 >
-                  {s.replace(/_/g, " ")} <span className="ml-1 opacity-60">×</span>
+                  {(() => {
+                    const sNorm = s.replace(/_/g, " ");
+                    return sNorm.charAt(0).toUpperCase() + sNorm.slice(1);
+                  })()} <span className="ml-1 opacity-60">×</span>
                 </Badge>
               ))
             )}
@@ -928,31 +926,6 @@ export default function MediaDialog({
       );
     }
 
-    // Special: Helper for comma-separated inputs (Genres)
-    if (key === "genres") {
-      const targetKey = "commaSeperatedGenres";
-      const displayValue = (formData as any)[targetKey] || "";
-      const labelText = "Genres (comma-separated)";
-      const placeholderText = "e.g., Action, Drama, Comedy";
-
-      return (
-        <div key={key} className="col-span-2">
-          <Label htmlFor={targetKey} className="font-medium">
-            {labelText}
-          </Label>
-          <Input
-            id={targetKey}
-            type="text"
-            value={displayValue}
-            onChange={(e) =>
-              handleChange(targetKey as keyof ProjectFormData, e.target.value)
-            }
-            placeholder={placeholderText}
-            className="mt-1.5"
-          />
-        </div>
-      );
-    }
 
     // Unified Field Guide for simple help text
     const fieldGuide: Record<string, { description: string; example?: string }> = {
@@ -967,23 +940,26 @@ export default function MediaDialog({
       release_year: { description: "Year of original release (YYYY)." },
       runtime_minutes: { description: "Total duration in minutes." },
       ownership: { description: "Numeric identifier for licensing/ownership." },
-      // play_behavior: { description: "Allowed: autoplay, loop, muted. Enter each separated by a comma.", example: "autoplay, loop" },
       creators: { description: "Authors or creators. Enter names separated by commas.", example: "John Doe, Jane Smith" },
-      cast: { description: "Cast members. Enter names separated by commas.", example: "Actor A, Actor B" },
       stars: { description: "Main stars or lead performers. Enter names separated by commas.", example: "Star One, Star Two" },
       directors: { description: "Directors. Enter names separated by commas." },
-      producers: { description: "Producers. Enter names separated by commas." },
       writers: { description: "Writers. Enter names separated by commas." },
-      tags: { description: "Categorization tags. Enter each separated by a comma." },
       genres: { description: "Genres for filtering. Enter comma-separated.", example: "Action, Drama" },
+      vibe_tags: { description: "Vibe tags for mood/aesthetic. Enter comma-separated.", example: "Chill, Dark, Uplifting" },
+      flavor_tags: { description: "Flavor tags for recipes. Enter comma-separated.", example: "Spicy, Sweet, Savory" },
       order_index: { description: "Listing priority (lower is higher)." },
       audio_url: { description: "Direct audio file link." },
       audio_preview_url: { description: "Link to audio clip for preview." },
-      slug: { description: "URL-friendly name. Auto-generated if empty." }
+      slug: { description: "URL-friendly name. Auto-generated if empty." },
+      synopsis: { description: "Brief overview or plot summary." },
+      venue_name: { description: "Name of the event venue or location." },
+      city: { description: "City where the event or production is located." },
+      country: { description: "Country of origin or event location." },
+      ticket_url: { description: "Direct link for purchasing tickets." }
     };
 
     const isDate = key.endsWith("_at") || key.includes("date") || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value));
-    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star"];
+    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
     const isArrayField = knownArrayFields.includes(key);
     const fieldInfo = fieldGuide[key];
 
@@ -1010,7 +986,20 @@ export default function MediaDialog({
 
     // Special: Array fields
     if (isArrayField) {
-      const displayValue = Array.isArray(value) ? value.join(", ") : (value || "");
+      const getDisplayValue = (val: any) => {
+        if (Array.isArray(val)) return val.join(", ");
+        if (typeof val === 'string' && val.trim().startsWith("[") && val.trim().endsWith("]")) {
+          try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed) ? parsed.join(", ") : val;
+          } catch (e) {
+            return val;
+          }
+        }
+        return val || "";
+      };
+
+      const displayValue = getDisplayValue(value);
       return (
         <div key={key} className="col-span-2">
           <Label htmlFor={key} className="font-medium">
@@ -1041,6 +1030,7 @@ export default function MediaDialog({
       "episode_runtime_minutes",
       "order",
       "ownership",
+      "rating",
     ].includes(key);
 
     const isFullWidth = [
@@ -1054,6 +1044,8 @@ export default function MediaDialog({
       "external_url",
       "audio_url",
       "audio_preview_url",
+      "ticket_url",
+      "poster_preview_url",
     ].includes(key);
 
     return (
@@ -1364,21 +1356,29 @@ export default function MediaDialog({
             ) : (
               <div className="grid grid-cols-2 gap-5">
                 {availableFields
-                  .filter(
-                    (k) =>
-                      !k.startsWith("in_") &&
-                      k !== "featured" &&
-                      k !== "is_downloadable"
-                  )
+                  .filter((key) => {
+                    // Internal/Legacy field filtering
+                    if (key.startsWith("in_") || key === "featured" || key === "is_downloadable") return false;
+
+                    // Tag visibility is primarily controlled by availableFields (which respects allowedFields)
+                    // We just need to make sure we don't return false for them here unless we really want them hidden.
+                    if (['flavor_tags', 'vibe_tags', 'genres'].includes(key)) return true;
+
+                    return true;
+                  })
                   .map((key) => renderField(key, (formData as any)[key]))}
 
                 {/* Checkboxes Area */}
                 <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t mt-4 bg-slate-50/50 p-4 rounded-xl">
-                  <h4 className="col-span-full text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Additional Options</h4>
-                  {["in_hero_carousel", "in_theaters"]
-                    .filter((k) => availableFields.includes(k))
-                    .map((key) => renderField(key, (formData as any)[key]))}
+                  <h4 className="col-span-full text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
+                    Additional Options
+                  </h4>
+
+                  {["in_hero_carousel", "in_theaters"].map((key) =>
+                    renderField(key, (formData as any)[key])
+                  )}
                 </div>
+
               </div>
             )}
 

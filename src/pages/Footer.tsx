@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,23 +11,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Edit, Trash2, Loader2, Pin, PinOff, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Footers } from "@/api/integrations/supabase/footer/footer";
+import { FooterSettingsAPI } from "@/api/integrations/supabase/footer/footerSettings";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import FooterDialog from "@/components/FooterDialog";
 import { toast } from "sonner";
-import { Flag, Footer } from "@/types";
+import { Flag, Footer, FooterSettings } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import { cn } from "@/lib/utils";
 
 const footersAPI = Footers as Required<typeof Footers>;
+const footerSettingsAPI = FooterSettingsAPI as Required<typeof FooterSettingsAPI>;
 
 export default function FooterPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedFooter, setSelectedFooter] = useState<Footer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contactTitle, setContactTitle] = useState("");
+  const [contactSubtitle, setContactSubtitle] = useState("");
+  const [contactLabel, setContactLabel] = useState("");
+  const [settingsId, setSettingsId] = useState<string | null>(null);
   const [footerToDelete, setFooterToDelete] = useState<Footer | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
@@ -68,6 +75,53 @@ export default function FooterPage() {
 
   const queryClient = useQueryClient();
 
+  // --- Footer Settings (contact section) ---
+  const { isLoading: isSettingsLoading, data: footerSettings } = useQuery<FooterSettings | null>({
+    queryKey: ["footer_settings"],
+    queryFn: async () => {
+      const response = await footerSettingsAPI.get({
+        eq: [],
+        maybeSingle: true,
+      });
+      if (response.flag !== Flag.Success) return null;
+      return (response.data as FooterSettings | null) ?? null;
+    },
+  });
+
+  // Sync fetched settings into local editable state
+  useEffect(() => {
+    if (footerSettings) {
+      setSettingsId(footerSettings.id);
+      setContactTitle(footerSettings.contact_section_title ?? "");
+      setContactSubtitle(footerSettings.contact_section_subtitle ?? "");
+      setContactLabel(footerSettings.contact_section_label ?? "");
+    }
+  }, [footerSettings]);
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async () => {
+      if (!settingsId) throw new Error("No settings record found");
+      const response = await footerSettingsAPI.updateOneByID(settingsId, {
+        contact_section_title: contactTitle,
+        contact_section_subtitle: contactSubtitle,
+        contact_section_label: contactLabel,
+      });
+      if (response.flag !== Flag.Success) {
+        const supabaseError = response.error?.output as { message?: string } | undefined;
+        throw new Error(supabaseError?.message || response.error?.message || "Failed to update");
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["footer_settings"] });
+      toast.success("Contact section settings saved!");
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to save: ${err.message}`);
+    },
+  });
+
+  // --- Footer Links ---
   const {
     data: footerLinks = [],
     isLoading,
@@ -237,6 +291,72 @@ export default function FooterPage() {
         description="Manage footer social links and connect links shown on the frontend."
         handleNew={handleAddNew}
       />
+
+      {/* Contact Section Settings Card */}
+      <Card className="border-none shadow-sm bg-white">
+        <div className="p-6 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800">Contact Section Settings</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Global title and subtitle shown in the footer contact section.</p>
+          </div>
+          {isSettingsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="contact_section_label" className="font-medium text-sm">
+                  Contact Section Label
+                </Label>
+                <Input
+                  id="contact_section_label"
+                  value={contactLabel}
+                  onChange={(e) => setContactLabel(e.target.value)}
+                  placeholder="e.g. Contact"
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact_section_title" className="font-medium text-sm">
+                  Contact Section Title
+                </Label>
+                <Input
+                  id="contact_section_title"
+                  value={contactTitle}
+                  onChange={(e) => setContactTitle(e.target.value)}
+                  placeholder="e.g. Let's stay in touch."
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact_section_subtitle" className="font-medium text-sm">
+                  Contact Section Subtitle
+                </Label>
+                <Input
+                  id="contact_section_subtitle"
+                  value={contactSubtitle}
+                  onChange={(e) => setContactSubtitle(e.target.value)}
+                  placeholder="e.g. Share your email..."
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button
+              onClick={() => updateSettingsMutation.mutate()}
+              disabled={updateSettingsMutation.isPending || isSettingsLoading || !settingsId}
+              className="gap-2"
+            >
+              {updateSettingsMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Save className="h-4 w-4" />}
+              Save Settings
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <div className="p-6 space-y-4">

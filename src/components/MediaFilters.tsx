@@ -24,6 +24,12 @@ interface MediaFiltersProps {
   genreFilter?: string;
   onGenreFilterChange?: (value: string) => void;
   availableGenres?: string[];
+  vibeFilter?: string;
+  onVibeFilterChange?: (value: string) => void;
+  availableVibes?: string[];
+  flavorFilter?: string;
+  onFlavorFilterChange?: (value: string) => void;
+  availableFlavors?: string[];
 }
 
 export function MediaFilters({
@@ -110,7 +116,21 @@ export function MediaFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {availableTypes.map((type) => (
+
+                {Array.from(
+                  new Set(
+                    (availableTypes || []).flatMap((type) => {
+                      try {
+                        if (type.startsWith("[") && type.endsWith("]")) {
+                          return JSON.parse(type);
+                        }
+                        return type;
+                      } catch {
+                        return type;
+                      }
+                    })
+                  )
+                ).map((type: string) => (
                   <SelectItem
                     key={type}
                     value={type}
