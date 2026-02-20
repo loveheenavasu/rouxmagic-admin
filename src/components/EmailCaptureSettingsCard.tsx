@@ -5,14 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, MessageSquare, Type, MousePointer2, Info } from "lucide-react";
 import { EmailCaptureSettingsAPI } from "@/api/integrations/supabase/emailCapture/emailCaptureSettings";
 import { toast } from "sonner";
 import { Flag, EmailCaptureSettings } from "@/types";
 
 const emailCaptureAPI = EmailCaptureSettingsAPI as Required<typeof EmailCaptureSettingsAPI>;
 
-export function EmailCaptureSettingsCard() {
+interface EmailCaptureSettingsCardProps {
+    hideCard?: boolean;
+}
+export function EmailCaptureSettingsCard({ hideCard = false }: EmailCaptureSettingsCardProps) {
     const [title, setTitle] = useState("");
     const [subtitle, setSubtitle] = useState("");
     const [ctaText, setCtaText] = useState("");
@@ -65,27 +68,21 @@ export function EmailCaptureSettingsCard() {
         },
     });
 
-    return (
-        <Card className="border-none shadow-sm bg-white mb-8">
-            <div className="p-6 space-y-4">
-                <div>
-                    <h3 className="text-base font-semibold text-slate-800">
-                        Email Capture Settings (Home Page)
-                    </h3>
-                    <p className="text-sm text-slate-500 mt-0.5">
-                        Manage the title, subtitle, and CTA text for the email signup section.
-                    </p>
-                </div>
+    const content = (
+        <div className="p-6 space-y-6">
+
 
                 {isLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-slate-400">
+                        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                 <p className="text-sm font-medium animate-pulse">Retrieving settings...</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="capture_title" className="font-medium text-sm">
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2 group">
+                            <Label htmlFor="capture_title" className="flex items-center gap-2 font-semibold text-slate-700">
+                                <Type className="h-3.5 w-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                     Section Title
                                 </Label>
                                 <Input
@@ -93,11 +90,12 @@ export function EmailCaptureSettingsCard() {
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="e.g. Enter the World of RouxMagic"
-                                    className="mt-1.5"
+                                    className="h-10 border-slate-200 focus:ring-1 focus:ring-indigo-500 rounded-md"
                                 />
                             </div>
-                            <div>
-                                <Label htmlFor="capture_cta" className="font-medium text-sm">
+                            <div className="space-y-2 group">
+                                <Label htmlFor="capture_cta" className="flex items-center gap-2 font-semibold text-slate-700 text-sm">
+                                    <MousePointer2 className="h-3.5 w-3.5 text-slate-400" />
                                     CTA Button Text
                                 </Label>
                                 <Input
@@ -105,13 +103,14 @@ export function EmailCaptureSettingsCard() {
                                     value={ctaText}
                                     onChange={(e) => setCtaText(e.target.value)}
                                     placeholder="e.g. Get Started"
-                                    className="mt-1.5"
+                                    className="h-10 border-slate-200 focus:ring-1 focus:ring-indigo-500 rounded-md"
                                 />
                             </div>
                         </div>
 
-                        <div>
-                            <Label htmlFor="capture_subtitle" className="font-medium text-sm">
+                        <div className="space-y-2 group">
+                            <Label htmlFor="capture_subtitle" className="flex items-center gap-2 font-semibold text-slate-700 text-sm">
+                                <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
                                 Subtitle / Description
                             </Label>
                             <Textarea
@@ -119,41 +118,48 @@ export function EmailCaptureSettingsCard() {
                                 value={subtitle}
                                 onChange={(e) => setSubtitle(e.target.value)}
                                 placeholder="Be the first to experience..."
-                                className="mt-1.5"
-                                rows={3}
+                                className="border-slate-200 focus:ring-1 focus:ring-indigo-500 rounded-md min-h-[100px] resize-none"
                             />
                         </div>
 
-                        <div>
-                            <Label htmlFor="capture_footer" className="font-medium text-sm">
-                                Footer Text (Small Print)
+                        <div className="space-y-2 group">
+                            <Label htmlFor="capture_footer" className="flex items-center gap-2 font-semibold text-slate-700 text-sm">
+                                <Info className="h-3.5 w-3.5 text-slate-400" />
+                                Footer Text
                             </Label>
                             <Input
                                 id="capture_footer"
                                 value={footerText}
                                 onChange={(e) => setFooterText(e.target.value)}
                                 placeholder="No spam, just premium content updates..."
-                                className="mt-1.5"
+                                className="h-10 border-slate-200 focus:ring-1 focus:ring-indigo-500 rounded-md"
                             />
                         </div>
                     </div>
                 )}
 
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-4">
                     <Button
                         onClick={() => updateMutation.mutate()}
                         disabled={updateMutation.isPending || isLoading || !settingsId}
-                        className="gap-2"
+                        className="rounded-md bg-indigo-600 hover:bg-indigo-700 h-10 px-6 shadow-sm"
                     >
                         {updateMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Save className="h-4 w-4" />
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                             <Save className="h-4 w-4 mr-2" />
                         )}
-                        Save Email Capture Settings
+                        Save Changes
                     </Button>
                 </div>
             </div>
+    );
+
+    if (hideCard) return content;
+
+    return (
+        <Card className="border-none shadow-sm bg-white mb-8">
+            {content}
         </Card>
     );
 }

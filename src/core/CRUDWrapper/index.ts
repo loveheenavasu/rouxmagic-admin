@@ -183,6 +183,8 @@ export class CRUDWrapper<
         eq,
         or,
         contains,
+        overlaps,
+        ilike,
         inValue,
         limit,
         single,
@@ -191,7 +193,6 @@ export class CRUDWrapper<
         sort,
         search,
         searchFields,
-        overlaps,
       } = opts;
 
       const query = supabase.from(this.table_name).select("*");
@@ -213,6 +214,12 @@ export class CRUDWrapper<
       if (Array.isArray(overlaps) && overlaps.length > 0) {
         overlaps.forEach(({ key, value }) => {
           query.overlaps(key as string, value);
+        });
+      }
+
+      if (Array.isArray(ilike) && ilike.length > 0) {
+        ilike.forEach(({ key, value }) => {
+          query.ilike(key as string, value);
         });
       }
 
