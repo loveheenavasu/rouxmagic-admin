@@ -83,7 +83,7 @@ export default function ListenPage() {
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
       const containsFilters: any[] = [];
-      const contentTypeOr = `content_type.ilike.%${ContentTypeEnum.Song}%,content_type.ilike.%${ContentTypeEnum.Audiobook}%`;
+      const contentTypeOr = `content_type.ilike.%${ContentTypeEnum.Song}`;
 
       if (statusFilter !== "all") {
         containsFilters.push({ key: "status", value: statusFilter });
