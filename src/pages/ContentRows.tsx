@@ -176,19 +176,31 @@ const ContentRowsPage = () => {
                 rows.map(async (row) => {
                     const eqFilters: any[] = [];
                     const containsFilters: any[] = [];
-                    let inValue: any = row.filter_value.includes(",")
-                        ? {
-                            key: row.filter_type === FilterTypeEnum.Status ? "status" : "content_type",
-                            value: row.filter_value.split(",").map(v => v.trim())
-                        }
-                        : undefined;
+                    const overlapsFilters: any[] = [];
+                    const ilikeFilters: any[] = [];
+                    let customOr: string | undefined = undefined;
 
-                    // Enforce Audiobook content type for "Read" page
+                    // Enforce content type restrictions based on page
                     if (row.page === "read") {
-                        eqFilters.push({ key: "content_type", value: "Audiobook" });
+                        ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
+                    } else if (row.page === "listen") {
+                        customOr = "content_type.ilike.%Song%,content_type.ilike.%Audiobook%";
+                    } else if (row.page === "watch") {
+                        customOr = "content_type.ilike.%TV Show%,content_type.ilike.%Film%";
                     }
 
-                    if (!inValue) {
+                    if (row.filter_value.includes(",")) {
+                        const values = row.filter_value.split(",").map(v => v.trim());
+                        if (row.filter_type === FilterTypeEnum.Status) {
+                            overlapsFilters.push({
+                                key: "status",
+                                value: values
+                            });
+                        } else if (row.filter_type === FilterTypeEnum.ContentType) {
+                            const orParts = values.map(v => `content_type.ilike.%${v}%`).join(",");
+                            customOr = customOr ? `and(${customOr},or(${orParts}))` : orParts;
+                        }
+                    } else {
                         if (row.filter_type === FilterTypeEnum.Flag) {
                             // Known flag columns that exist in the database
                             const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
@@ -201,23 +213,24 @@ const ContentRowsPage = () => {
                                 // For custom rows, query by content_type using the row's label
                                 // but only if not already restricted by Audiobook (Read page)
                                 if (row.page !== "read") {
-                                    eqFilters.push({ key: "content_type", value: row.label });
+                                    ilikeFilters.push({ key: "content_type", value: `%${row.label}%` });
                                 }
                             }
                         } else if (row.filter_type === FilterTypeEnum.Audiobook) {
-                            eqFilters.push({ key: "content_type", value: "Audiobook" });
+                            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
                         } else if (row.filter_type === FilterTypeEnum.Song) {
-                            eqFilters.push({ key: "content_type", value: "Song" });
+                            ilikeFilters.push({ key: "content_type", value: "%Song%" });
                         } else if (row.filter_type === FilterTypeEnum.Listen) {
-                            inValue = {
-                                key: "content_type",
-                                value: ["Audiobook", "Song"]
-                            };
+                            const listenOr = "content_type.ilike.%Audiobook%,content_type.ilike.%Song%";
+                            customOr = customOr ? `and(${customOr},or(${listenOr}))` : listenOr;
                         } else if (row.filter_type === FilterTypeEnum.Genre || row.filter_type === FilterTypeEnum.VibeTags || row.filter_type === FilterTypeEnum.FlavorTags) {
                             containsFilters.push({ key: row.filter_type, value: row.filter_value.split(",").map(v => v.trim()) });
                         } else {
-                            // Only add if not duplicating content_type key for Read page
-                            if (!(row.page === "read" && row.filter_type === "content_type")) {
+                            if (row.filter_type === FilterTypeEnum.ContentType) {
+                                ilikeFilters.push({ key: row.filter_type, value: `%${row.filter_value}%` });
+                            } else if (row.filter_type === FilterTypeEnum.Status) {
+                                containsFilters.push({ key: row.filter_type, value: [row.filter_value] });
+                            } else {
                                 eqFilters.push({ key: row.filter_type, value: row.filter_value });
                             }
                         }
@@ -226,7 +239,9 @@ const ContentRowsPage = () => {
                     const projectsResp = await projectsAPI.get({
                         eq: [...eqFilters, { key: "is_deleted" as any, value: false }],
                         contains: containsFilters,
-                        inValue,
+                        overlaps: overlapsFilters,
+                        ilike: ilikeFilters,
+                        or: customOr,
                         limit: 1
                     });
 
@@ -790,11 +805,14 @@ const ContentRowsPage = () => {
                                     <Input
                                         id="filter_value"
                                         value={formData.filter_value}
-                                        readOnly
-                                        placeholder="Auto-filled from Label"
+                                        onChange={(e) => setFormData(prev => ({ ...prev, filter_value: e.target.value }))}
+                                        placeholder="e.g. in_coming_soon"
                                         required
-                                        className="bg-slate-50 border-slate-200 font-mono text-sm cursor-not-allowed opacity-70"
+                                        className="bg-white border-slate-200 font-mono text-sm"
                                     />
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        For flags, use keys like: <code>in_coming_soon</code>, <code>in_now_playing</code>, <code>featured</code>.
+                                    </p>
                                 </div>
 
 

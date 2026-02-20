@@ -20,6 +20,7 @@ export interface ProjectMetaData {
   content_type: ContentTypeEnum;
   poster_url?: string;
   preview_url?: string;
+  audio_url?: string;
   status: ProjectStatusEnum[];
   release_year?: number;
   runtime_minutes?: number;
@@ -36,7 +37,7 @@ export interface ProjectMetaData {
   is_deleted?: boolean;
   deleted_at?: string | null;
   vibe_tags?: string[];
-  flavor_tags?: string[];
+  rating?: string;
 }
 
 export interface ProjectFormData extends Partial<Project> {

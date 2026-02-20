@@ -92,8 +92,6 @@ export default function MediaDialog({
         next.content_type = ContentTypeEnum.Audiobook as any;
       } else if (filter_type === FilterTypeEnum.Song) {
         next.content_type = ContentTypeEnum.Song as any;
-      } else if (filter_type === FilterTypeEnum.Listen) {
-        if (!next.content_type) next.content_type = ContentTypeEnum.Audiobook as any;
       } else if (filter_type === FilterTypeEnum.Flag) {
         // Special case: 'Coming Soon' should update status array
         if (label.toLowerCase().includes('coming soon')) {
@@ -446,7 +444,7 @@ export default function MediaDialog({
 
           if (projects.length > 0) {
             const KNOWN_FLAGS: string[] = ["in_hero_carousel", "in_theaters"];
-            const MANDATORY_EXTRA_FIELDS: string[] = ["genres", "vibe_tags", "flavor_tags"];
+            const MANDATORY_EXTRA_FIELDS: string[] = ["genres", "vibe_tags"];
             const ALL_POSSIBLE_FIELDS: string[] = [
               "title", "status", "platform", "platform_url", "notes", "poster_url",
               "order_index", "content_type", "platform_name", "poster_preview_url",
@@ -479,7 +477,7 @@ export default function MediaDialog({
               Object.entries(media).forEach(([key, value]) => {
                 if (allowedFields && !allowedFields.includes(key)) return;
 
-                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
+                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags"];
                 if (arrayFields.includes(key)) {
                   let arr = value;
                   if (typeof arr === 'string' && arr.startsWith('[') && arr.endsWith(']')) {
@@ -509,7 +507,7 @@ export default function MediaDialog({
               const base: Record<string, any> = {};
               fields.forEach((key) => {
 
-                const arrayFields = ["genres", "status", "vibe_tags", "flavor_tags"];
+                const arrayFields = ["genres", "status", "vibe_tags"];
                 if (arrayFields.includes(key)) {
                   base[key] = [];
                 } else if (key === "content_type") {
@@ -600,7 +598,7 @@ export default function MediaDialog({
         submitData[key] = value ? parseInt(String(value)) : null;
       } else {
         // Handle other possible array fields
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags"];
         if (arrayFields.includes(key)) {
           if (Array.isArray(value)) {
             // Keep as array for backend if backend supports it, otherwise join
@@ -608,7 +606,7 @@ export default function MediaDialog({
           } else if (typeof value === 'string') {
             const items = value.split(/[,\n]/).map((v) => {
               const trimmed = v.trim();
-              if (["genres", "vibe_tags", "flavor_tags"].includes(key) && trimmed) {
+              if (["genres", "vibe_tags"].includes(key) && trimmed) {
                 return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
               }
               return trimmed;
@@ -640,6 +638,11 @@ export default function MediaDialog({
         const norm = (v: any) => String(v || "").toLowerCase().trim();
         const IsComingSoon = statuses.some(s => norm(s) === "coming_soon");
         (next as any).in_coming_soon = IsComingSoon;
+      }
+
+      // If 'Song' is selected in content_type, ensure it is set as primary type
+      if (field === "content_type") {
+        // Any auto-logic for content types can go here
       }
 
       return next;
@@ -1030,7 +1033,6 @@ export default function MediaDialog({
       "episode_runtime_minutes",
       "order",
       "ownership",
-      "rating",
     ].includes(key);
 
     const isFullWidth = [
@@ -1088,11 +1090,22 @@ export default function MediaDialog({
                       setIsUploading(key);
                       const bucket = "Media";
                       const safeName = file.name.replace(/\s+/g, "_");
-                      const primaryType = (Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type) as any;
+                      // Safely determine primary type for folder structure
+                      let primaryType = "generic";
+                      if (formData.content_type) {
+                        if (Array.isArray(formData.content_type)) {
+                          primaryType = String(formData.content_type[0] || "generic");
+                        } else {
+                          primaryType = String(formData.content_type);
+                        }
+                      }
+                      // Sanitize type for folder name (remove brackets, quotes if any remain)
+                      primaryType = primaryType.replace(/[\[\]"]/g, "");
+
                       const path =
                         key === "audio_url" || key === "audio_preview_url"
-                          ? `Audio/${primaryType || "generic"}/${Date.now()}-${safeName}`
-                          : createBucketPath(`${Date.now()}-${safeName}`, primaryType || ContentTypeEnum.Film);
+                          ? `Audio/${primaryType}/${Date.now()}-${safeName}`
+                          : createBucketPath(`${Date.now()}-${safeName}`, primaryType as any);
                       const publicUrl = await mediaService.uploadFile(file, bucket, path);
                       handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded!`);
@@ -1195,7 +1208,6 @@ export default function MediaDialog({
                       <SelectItem value="home">Home</SelectItem>
                       <SelectItem value="watch">Watch</SelectItem>
                       <SelectItem value="read">Read</SelectItem>
-                      <SelectItem value="listen">Listen</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -1226,7 +1238,7 @@ export default function MediaDialog({
         {/* Row Visibility Panel — grouped by page */}
         {addMode === "standard" && (() => {
           // Group all rows by page
-          const pageOrder = ['home', 'watch', 'read', 'listen'];
+          const pageOrder = ['home', 'watch', 'read'];
           const grouped: Record<string, any[]> = {};
           (contentRowFilters as any[])
             .forEach(row => {
@@ -1240,7 +1252,6 @@ export default function MediaDialog({
             home: 'bg-violet-100 text-violet-700',
             watch: 'bg-blue-100 text-blue-700',
             read: 'bg-emerald-100 text-emerald-700',
-            listen: 'bg-amber-100 text-amber-700',
           };
 
           return (

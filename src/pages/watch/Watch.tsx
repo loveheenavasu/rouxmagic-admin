@@ -31,7 +31,6 @@ export default function Watch() {
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
-  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -88,23 +87,26 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter, flavorFilter],
+    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
       const containsFilters: any[] = [];
+      let contentTypeOr: string | undefined = undefined;
 
       if (statusFilter !== "all") {
         containsFilters.push({ key: "status", value: statusFilter });
       }
 
       if (contentTypeFilter !== "all") {
-        eqFilters.push({ key: "content_type", value: contentTypeFilter });
+        contentTypeOr = `content_type.ilike.%${contentTypeFilter}%`;
+      } else {
+        contentTypeOr = `content_type.ilike.%TV Show%,content_type.ilike.%Film%`;
       }
 
       const response = await projectsAPI.get({
         eq: eqFilters as any,
         contains: containsFilters as any,
-        inValue: (contentTypeFilter === "all" ? { key: "content_type", value: ["TV Show", "Film"] } : undefined) as any,
+        or: contentTypeOr,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -135,14 +137,7 @@ export default function Watch() {
         });
       }
 
-      // Apply Flavor filter
-      if (flavorFilter !== "all") {
-        rows = rows.filter(r => {
-          const fData = r.flavor_tags;
-          const flavors = Array.isArray(fData) ? fData : [];
-          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
-        });
-      }
+
 
       // Handle smart search (including inheritance)
       if (searchQuery.length > 2) {
@@ -337,20 +332,7 @@ export default function Watch() {
     }
   });
 
-  const { data: availableFlavors = [] } = useQuery<string[]>({
-    queryKey: ["available-flavors"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
-        return Array.from(new Set(flavors)).filter(Boolean).sort();
-      }
-      return [];
-    }
-  });
+
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -437,9 +419,6 @@ export default function Watch() {
         vibeFilter={vibeFilter}
         onVibeFilterChange={setVibeFilter}
         availableVibes={availableVibes}
-        flavorFilter={flavorFilter}
-        onFlavorFilterChange={setFlavorFilter}
-        availableFlavors={availableFlavors}
       />
 
       {/* Table */}
@@ -562,7 +541,7 @@ export default function Watch() {
                                 if (Array.isArray(value)) {
                                   values = value.map(String);
                                 } else if (typeof value === "string") {
-                                  if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
+                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
                                     try {
                                       const parsed = JSON.parse(value);
                                       values = Array.isArray(parsed) ? parsed.map(String) : [value];
@@ -583,7 +562,7 @@ export default function Watch() {
                                   return s.charAt(0).toUpperCase() + s.slice(1);
                                 });
 
-                                if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
+                                if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
                                   const MAX_TAGS = 3;
                                   const visible = values.slice(0, MAX_TAGS);
                                   const overflow = values.length - MAX_TAGS;

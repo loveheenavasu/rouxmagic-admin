@@ -32,7 +32,6 @@ export default function Read() {
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
-  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -84,20 +83,20 @@ export default function Read() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["read-items", searchQuery, contentTypeFilter, genreFilter, vibeFilter, flavorFilter],
+    queryKey: ["read-items", searchQuery, contentTypeFilter, genreFilter, vibeFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted", value: false }];
-      let inValue: any = { key: "content_type", value: [...READ_TYPES] };
-
+      let contentTypeOr: string | undefined = undefined;
+      let currentContentTypes: string[] = [...READ_TYPES];
 
       if (contentTypeFilter !== "all") {
-        // If specific content type filter is set, it overrides the general READ_TYPES
-        inValue = { key: "content_type", value: [contentTypeFilter] };
+        currentContentTypes = [contentTypeFilter];
       }
+      contentTypeOr = currentContentTypes.map(t => `content_type.ilike.%${t}%`).join(",");
 
       const response = await projectsAPI.get({
         eq: eqFilters,
-        inValue,
+        or: contentTypeOr,
         search: searchQuery.trim() || undefined,
         searchFields: ["title", "platform", "notes"],
         sort: "order_index",
@@ -129,14 +128,7 @@ export default function Read() {
         });
       }
 
-      // Apply Flavor filter
-      if (flavorFilter !== "all") {
-        rows = rows.filter(r => {
-          const fData = r.flavor_tags;
-          const flavors = Array.isArray(fData) ? fData : [];
-          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
-        });
-      }
+
 
       return rows;
     },
@@ -286,20 +278,7 @@ export default function Read() {
     }
   });
 
-  const { data: availableFlavors = [] } = useQuery<string[]>({
-    queryKey: ["read-flavors"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
-        return Array.from(new Set(flavors)).filter(Boolean).sort();
-      }
-      return [];
-    }
-  });
+
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -335,9 +314,6 @@ export default function Read() {
   const totalComics = items.filter(
     (m) => m.content_type === ContentTypeEnum.Comic
   ).length;
-  const totalBooks = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Book
-  ).length;
   const totalAudiobooks = items.filter(
     (m) => m.content_type === ContentTypeEnum.Audiobook
   ).length;
@@ -361,7 +337,6 @@ export default function Read() {
         items={[
           { label: "Total Items", value: totalItems },
           { label: "Comics", value: totalComics },
-          { label: "Books", value: totalBooks },
           { label: "Audiobooks", value: totalAudiobooks },
         ]}
         title="Read Library"
@@ -384,9 +359,6 @@ export default function Read() {
         vibeFilter={vibeFilter}
         onVibeFilterChange={setVibeFilter}
         availableVibes={availableVibes}
-        flavorFilter={flavorFilter}
-        onFlavorFilterChange={setFlavorFilter}
-        availableFlavors={availableFlavors}
       />
 
       {/* Table */}
@@ -542,7 +514,7 @@ export default function Read() {
                                 return s.charAt(0).toUpperCase() + s.slice(1);
                               });
 
-                              if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
+                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
                                 const MAX_TAGS = 3;
                                 const visible = values.slice(0, MAX_TAGS);
                                 const overflow = values.length - MAX_TAGS;

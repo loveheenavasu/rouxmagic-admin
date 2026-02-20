@@ -27,7 +27,8 @@ export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
   or?: string;
   contains?: { key: GetBy; value: any }[];
   overlaps?: { key: GetBy; value: any[] }[];
-  inValue?:{key: keyof FormData, value: any[]}
+  ilike?: { key: GetBy; value: string }[];
+  inValue?: { key: keyof FormData, value: any[] }
   search?: string;
   searchFields?: SearchField[];
 }

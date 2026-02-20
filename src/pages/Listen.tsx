@@ -29,7 +29,6 @@ export default function ListenPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
-  const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -80,14 +79,11 @@ export default function ListenPage() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter, flavorFilter],
+    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter],
     queryFn: async () => {
       const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
       const containsFilters: any[] = [];
-      let inValueFilter: any = {
-        key: "content_type",
-        value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook]
-      };
+      const contentTypeOr = `content_type.ilike.%${ContentTypeEnum.Song}%,content_type.ilike.%${ContentTypeEnum.Audiobook}%`;
 
       if (statusFilter !== "all") {
         containsFilters.push({ key: "status", value: statusFilter });
@@ -96,7 +92,7 @@ export default function ListenPage() {
       const response = await projectsAPI.get({
         eq: eqFilters as any,
         contains: containsFilters as any,
-        inValue: inValueFilter,
+        or: contentTypeOr,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -137,17 +133,6 @@ export default function ListenPage() {
           return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
         });
       }
-
-      // Apply Flavor filter
-      if (flavorFilter !== "all") {
-        data = data.filter(r => {
-          const fData = r.flavor_tags;
-          const flavors = Array.isArray(fData) ? fData : [];
-          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
-        });
-      }
-
-      return data;
       return data;
     },
   });
@@ -284,20 +269,6 @@ export default function ListenPage() {
     }
   });
 
-  const { data: availableFlavors = [] } = useQuery<string[]>({
-    queryKey: ["listen-flavors"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const flavors = (response.data as Project[]).flatMap(p => p.flavor_tags || []);
-        return Array.from(new Set(flavors)).filter(Boolean).sort();
-      }
-      return [];
-    }
-  });
 
   // Fetch unique types for filters (global, not affected by current filter)
   // For Listen page we always show songs, so we don't need a type filter dropdown.
@@ -362,9 +333,6 @@ export default function ListenPage() {
 
   // Calculate stats
   const totalSongs = mediaList.filter((m) => m.content_type === "Song").length;
-  const totalAudiobooks = mediaList.filter(
-    (m) => m.content_type === "Audiobook"
-  ).length;
 
   if (error) {
     return (
@@ -385,7 +353,6 @@ export default function ListenPage() {
         items={[
           { label: "Total Items", value: mediaList?.length },
           { label: "Songs", value: totalSongs },
-          { label: "Audiobooks", value: totalAudiobooks },
         ]}
         title="Listen Library"
         description="Manage songs and audiobooks in your catalog"
@@ -408,9 +375,6 @@ export default function ListenPage() {
           vibeFilter={vibeFilter}
           onVibeFilterChange={setVibeFilter}
           availableVibes={availableVibes}
-          flavorFilter={flavorFilter}
-          onFlavorFilterChange={setFlavorFilter}
-          availableFlavors={availableFlavors}
         />
       </div>
       {/* Table */}
@@ -555,7 +519,7 @@ export default function ListenPage() {
                                 return s.charAt(0).toUpperCase() + s.slice(1);
                               });
 
-                              if (["content_type", "status", "genres", "vibe_tags", "flavor_tags"].includes(key)) {
+                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
                                 const MAX_TAGS = 3;
                                 const visible = values.slice(0, MAX_TAGS);
                                 const overflow = values.length - MAX_TAGS;

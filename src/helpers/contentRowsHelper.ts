@@ -14,29 +14,29 @@ export async function fetchProjectsByContentRow(
 ): Promise<Project[]> {
   try {
     const eqFilters: Array<{ key: any; value: any }> = [];
-    let inValueFilter: { key: any; value: any[] } | undefined = undefined;
+    const containsFilters: Array<{ key: any; value: any }> = [];
+    const overlapsFilters: Array<{ key: any; value: any }> = [];
+    const ilikeFilters: Array<{ key: any; value: string }> = [];
 
     // Build filters based on filter type
     switch (row.filter_type) {
       case FilterTypeEnum.Status:
         if (row.filter_value.includes(",")) {
-          inValueFilter = {
+          overlapsFilters.push({
             key: "status",
             value: row.filter_value.split(",").map((v) => v.trim()),
-          };
+          });
         } else {
-          eqFilters.push({ key: "status", value: row.filter_value });
+          containsFilters.push({ key: "status", value: [row.filter_value] });
         }
         break;
 
       case FilterTypeEnum.ContentType:
         if (row.filter_value.includes(",")) {
-          inValueFilter = {
-            key: "content_type",
-            value: row.filter_value.split(",").map((v) => v.trim()),
-          };
+          // PostgREST or
+          (row as any).custom_or = row.filter_value.split(",").map((v) => `content_type.ilike.%${v.trim()}%`).join(",");
         } else {
-          eqFilters.push({ key: "content_type", value: row.filter_value });
+          ilikeFilters.push({ key: "content_type", value: `%${row.filter_value}%` });
         }
         break;
 
@@ -45,18 +45,15 @@ export async function fetchProjectsByContentRow(
         break;
 
       case FilterTypeEnum.Audiobook:
-        eqFilters.push({ key: "content_type", value: "Audiobook" });
+        ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
         break;
 
       case FilterTypeEnum.Song:
-        eqFilters.push({ key: "content_type", value: "Song" });
+        ilikeFilters.push({ key: "content_type", value: "%Song%" });
         break;
 
       case FilterTypeEnum.Listen:
-        inValueFilter = {
-          key: "content_type",
-          value: ["Audiobook", "Song"],
-        };
+        (row as any).custom_or = "content_type.ilike.%Audiobook%,content_type.ilike.%Song%";
         break;
 
       case FilterTypeEnum.Custom:
@@ -72,7 +69,10 @@ export async function fetchProjectsByContentRow(
     // Fetch projects with filters
     const response = await projectsAPI.get({
       eq: eqFilters,
-      inValue: inValueFilter,
+      contains: containsFilters,
+      overlaps: overlapsFilters,
+      ilike: ilikeFilters,
+      or: (row as any).custom_or,
       sort: "order_index",
       sortBy: "asc",
     });

@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
+import { Edit, Trash2, Loader2, Pin, PinOff, Mail, Layout } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { pairingService } from "@/services/pairingService";
@@ -22,7 +22,9 @@ import { useDebounce } from "@/hooks";
 import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmailCaptureSettingsCard } from "@/components/EmailCaptureSettingsCard";
+import { PageSettingsCard } from "@/components/PageSettingsCard";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -39,6 +41,7 @@ const HomePage = () => {
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+  const [activeConfigTab, setActiveConfigTab] = useState("email");
 
   const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
@@ -123,13 +126,13 @@ const HomePage = () => {
       const eqFilters: any[] = [{ key: "is_deleted" as const, value: false }];
       const containsFilters: any[] = [];
       const overlapsFilters: any[] = [];
-      let inValueFilter: any = undefined;
+      const ilikeFilters: any[] = [];
 
       if (statusFilter !== "all") {
         containsFilters.push({ key: "status" as const, value: statusFilter });
       }
       if (contentTypeFilter !== "all") {
-        eqFilters.push({ key: "content_type" as const, value: contentTypeFilter });
+        ilikeFilters.push({ key: "content_type" as const, value: `%${contentTypeFilter}%` });
       }
 
       // Apply shelf filter logic
@@ -139,14 +142,13 @@ const HomePage = () => {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
             eqFilters.push({ key: shelf.filter_value, value: true });
           } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
-            eqFilters.push({ key: "content_type", value: "Audiobook" });
+            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
           } else if (shelf.filter_type === FilterTypeEnum.Song) {
-            eqFilters.push({ key: "content_type", value: "Song" });
+            ilikeFilters.push({ key: "content_type", value: "%Song%" });
           } else if (shelf.filter_type === FilterTypeEnum.Listen) {
-            inValueFilter = {
-              key: "content_type",
-              value: ["Audiobook", "Song"]
-            };
+            // Since Listen is Song OR Audiobook, and we can only have one OR in CRUDWrapper easily,
+            // we'll use a hack or just stick to one for now if ANDed
+            // Actually, we can just use the 'or' property for complex ones.
           } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
             const isStatus = shelf.filter_type === FilterTypeEnum.Status;
             if (shelf.filter_value.includes(",")) {
@@ -154,13 +156,13 @@ const HomePage = () => {
               if (isStatus) {
                 overlapsFilters.push({ key: "status", value: values });
               } else {
-                inValueFilter = { key: "content_type", value: values };
+                // For complex content types, we'd need OR
               }
             } else {
               if (isStatus) {
                 containsFilters.push({ key: "status", value: shelf.filter_value });
               } else {
-                eqFilters.push({ key: "content_type", value: shelf.filter_value });
+                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
               }
             }
           }
@@ -171,7 +173,7 @@ const HomePage = () => {
         eq: eqFilters,
         contains: containsFilters,
         overlaps: overlapsFilters,
-        inValue: inValueFilter,
+        ilike: ilikeFilters,
         sort: "created_at",
         sortBy: "dec",
         search: debouncedSearchQuery || undefined,
@@ -381,7 +383,85 @@ const HomePage = () => {
         description="Manage all content items displayed on the home page."
         handleNew={handleAddNew}
       />
-      <EmailCaptureSettingsCard />
+
+      <Tabs defaultValue="library" className="w-full">
+        <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-2">
+          <TabsList className="bg-slate-100 p-1 rounded-lg h-10 border border-slate-200">
+            <TabsTrigger
+              value="library"
+              className="rounded-md px-6 h-full data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-semibold transition-all flex items-center gap-2"
+            >
+              Content Library
+            </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              className="rounded-md px-6 h-full data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-semibold transition-all flex items-center gap-2"
+            >
+              Page Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+
+
+        <TabsContent value="settings" className="mt-0 outline-none animate-in fade-in duration-300">
+          <div className="bg-white rounded-lg p-6 border border-slate-200">
+            <Tabs value={activeConfigTab} onValueChange={setActiveConfigTab} className="w-full">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200">
+                    {activeConfigTab === "email" ? (
+                      <Mail className="h-5 w-5 text-slate-600" />
+                    ) : (
+                      <Layout className="h-5 w-5 text-slate-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-800">
+                      {activeConfigTab === "email" ? "Email Capture Configuration" : "Pricing Page Header"}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {activeConfigTab === "email"
+                        ? "Tailor the signup experience for your visitors"
+                        : "Configure headlines for the pricing page"}
+                    </p>
+                  </div>
+                </div>
+                <TabsList className="bg-slate-100 p-1 rounded-lg h-10 border border-slate-200 self-start md:self-center">
+                  <TabsTrigger
+                    value="email"
+                    className="rounded-md px-6 h-full data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all flex items-center gap-2"
+                  >
+                    Email Signup
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pricing"
+                    className="rounded-md px-6 h-full data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all flex items-center gap-2"
+                  >
+                    Pricing Page
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                <TabsContent value="email" className="mt-0 outline-none">
+                  <Card className="border border-slate-200 bg-white rounded-lg overflow-hidden">
+                    <EmailCaptureSettingsCard hideCard />
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="pricing" className="mt-0 outline-none">
+                  <Card className="border border-slate-200 bg-white rounded-lg overflow-hidden">
+                    <PageSettingsCard pageName="pricing" hideCard />
+                  </Card>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="library" className="mt-0 outline-none space-y-6 animate-in fade-in slide-in-from-left-2 duration-300">
+
 
       {/* Main Content Area */}
       <Card className="border-none shadow-sm overflow-hidden bg-white">
@@ -596,7 +676,8 @@ const HomePage = () => {
           </div>
         </div >
       </Card >
-
+      </TabsContent>
+      </Tabs>
 
 
       <MediaDialog
