@@ -457,6 +457,20 @@ const ContentRowsPage = () => {
         return FilterTypeEnum.Flag;
     };
 
+    // Map frontend-only FilterTypeEnum values to DB-valid filter_type values.
+    // The DB check constraint only allows: status, content_type, flag, custom, genres, vibe_tags, flavor_tags
+    const normalizeFilterTypeForDB = (type: FilterTypeEnum): FilterTypeEnum => {
+        const CONTENT_TYPE_ALIASES = [
+            FilterTypeEnum.Audiobook,  // "Audiobook" → content_type
+            FilterTypeEnum.Song,       // "Song"      → content_type
+            FilterTypeEnum.Listen,     // "Listen"    → content_type
+        ];
+        if (CONTENT_TYPE_ALIASES.includes(type)) {
+            return FilterTypeEnum.ContentType;
+        }
+        return type;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -465,6 +479,9 @@ const ContentRowsPage = () => {
         if (!finalType || finalType === FilterTypeEnum.Flag) {
             finalType = inferFilterType(formData.filter_value);
         }
+
+        // Normalize to a DB-valid value before submitting
+        finalType = normalizeFilterTypeForDB(finalType);
 
         const dataToSubmit = { ...formData, filter_type: finalType };
 
