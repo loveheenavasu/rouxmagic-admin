@@ -290,15 +290,14 @@ export default function MediaDialog({
   });
 
   // Fetch ALL content_rows to get all filter_values (not just content_type)
-  const { data: contentRowFilters = [] } = useQuery({
+  const { data: contentRowFilters = [], isLoading: isLoadingRowFilters } = useQuery({
     queryKey: ["content-row-filters", "all"],
     queryFn: async () => {
       const { ContentRows } = await import(
         "@/api/integrations/supabase/content_rows/content_rows"
       );
-      // Fetch ALL active content_rows
       const resp = await (ContentRows as any).get({
-        eq: [{ key: "is_active", value: true }], // Only fetch active rows
+        eq: [{ key: "is_active", value: true }],
         sort: "order_index",
         sortBy: "asc",
       });
@@ -319,84 +318,74 @@ export default function MediaDialog({
         !['mylist', 'my_list', 'my list'].includes(r.page?.toLowerCase())
       );
     },
-    enabled: open, // Only fetch when dialog is open
-    staleTime: 0,
+    enabled: open,
+    staleTime: 30_000,
   });
 
-  // Calculate matched rows based on current formData
+  // Calculate matched rows based on current formData.
+  // Strategy: only check a row as "matched" if the project has an EXPLICIT assignment to it
+  // (stored in the project's row_type field), EXCEPT for known boolean flags and status rows
+  // which are matched directly against their respective DB fields.
   const matchedRows = (contentRowFilters as any[]).filter((row) => {
     if (!formData) return false;
     const { filter_type, filter_value, label } = row;
 
-    // Normalize helper
     const norm = (val: any) => String(val || "").toLowerCase().trim();
-    const hasType = (t: string) => {
-      let types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
-      // If it was a comma-separated string, split it for matching
-      if (typeof formData.content_type === 'string' && formData.content_type.includes(",")) {
-        types = formData.content_type.split(",").map(v => v.trim());
-      }
-      return types.some((existing: any) => norm(existing) === norm(t));
-    };
-    const hasStatus = (s: string) => {
-      const statuses = Array.isArray((formData as any).status) ? (formData as any).status : [(formData as any).status];
-      return statuses.some((existing: any) => norm(existing) === norm(s));
-    };
 
-    if (filter_type === FilterTypeEnum.ContentType) {
-      return hasType(filter_value);
-    }
+    // Project's explicitly-assigned row_type values (populated by applyRowTemplate)
+    const projectRowTypes = String((formData as any).row_type || "")
+      .split(",")
+      .map((p: string) => norm(p.trim()))
+      .filter(Boolean);
 
+    // This row's own identifier
+    const rowTypeValue = norm(row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_'));
+
+    // Known boolean columns on projects table
+    const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+    const isKnownFlag = filter_type === FilterTypeEnum.Flag &&
+      knownFlags.includes(norm(filter_value).replace(/\s+/g, '_'));
+
+    // Status rows: check project's status array directly
     if (filter_type === FilterTypeEnum.Status) {
-      if (hasStatus(filter_value)) return true;
-      if (hasType(label)) return true;
-      return false;
+      const statuses = Array.isArray((formData as any).status)
+        ? (formData as any).status
+        : [(formData as any).status];
+      return statuses.some((s: any) => norm(s) === norm(filter_value));
     }
 
-    if (filter_type === FilterTypeEnum.Audiobook) {
-      return hasType(ContentTypeEnum.Audiobook) || hasType("audiobooks");
-    }
-
-    if (filter_type === FilterTypeEnum.Song) {
-      return hasType(ContentTypeEnum.Song) || hasType("song");
-    }
-
-    if (filter_type === FilterTypeEnum.Flag) {
-      // 1. Check direct database flag
-      const keyMatches = Object.keys(formData).find(k =>
+    // Known flag rows: check the actual boolean column on the project
+    if (isKnownFlag) {
+      const keyMatch = Object.keys(formData).find((k: string) =>
         norm(k) === norm(filter_value) ||
         norm(k) === `in_${norm(filter_value).replace(/\s+/g, '_')}`
       );
-      if (keyMatches && !!(formData as any)[keyMatches]) return true;
+      if (keyMatch && !!(formData as any)[keyMatch]) return true;
 
-      // 2. Special case for 'Coming Soon'
+      // Special case: 'Coming Soon' flag also syncs to status array
       if ((label || '').toLowerCase().includes('coming soon')) {
-        return hasStatus('coming_soon');
+        const statuses = Array.isArray((formData as any).status)
+          ? (formData as any).status
+          : [(formData as any).status];
+        return statuses.some((s: any) => norm(s) === 'coming_soon');
       }
-
-      // 3. Check if label is in content_type
-      if (hasType(label)) return true;
-
-      // 4. Check if row_type on the project matches this row's row_type
-      const rowTypeValue = row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_');
-      const projectRowTypes = String((formData as any).row_type || "").split(",").map(p => norm(p.trim())).filter(Boolean);
-      if (rowTypeValue && projectRowTypes.includes(norm(rowTypeValue))) return true;
 
       return false;
     }
 
-    return false;
+    // For all other rows (content_type, Audiobook, Song, custom flag rows):
+    // ONLY check if this row's identifier is explicitly in the project's row_type field.
+    // This prevents false positives like all "content_type · Film" rows lighting up
+    // just because a project has Film as its content_type.
+    return rowTypeValue ? projectRowTypes.includes(rowTypeValue) : false;
   });
 
   // Auto-select row if editing and not set
   useEffect(() => {
     if (open && matchedRows.length > 0 && !targetRowId) {
-      // Prefer a row that matches the current page assignment if possible
       const preferred = matchedRows.find(r => r.page === localAssignmentPage) || matchedRows[0];
       if (preferred) {
         setTargetRowId(preferred.id);
-        // If we are in "row" mode, this visually selects it.
-        // If we are in "standard" mode, it just sets the state ready for toggle.
       }
     }
   }, [open, matchedRows.length, localAssignmentPage]);
@@ -533,12 +522,16 @@ export default function MediaDialog({
               Object.entries(media).forEach(([key, value]) => {
                 if (allowedFields && !allowedFields.includes(key)) return;
 
+                // row_type is a plain comma-separated string — never smartParse it
+                if (key === "row_type") {
+                  result[key] = value ?? "";
+                  return;
+                }
+
                 const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type"];
                 if (arrayFields.includes(key)) {
                   result[key] = smartParse(value);
-                }
-                else {
-                  // If it's corrupted data (nested JSON strings/arrays), unwrap it to plain text
+                } else {
                   const parsedValues = smartParse(value);
                   const val = parsedValues.join(", ");
                   result[key] = (val === "" && (value === null || value === undefined)) ? "" : val;
@@ -560,12 +553,13 @@ export default function MediaDialog({
               // Add mode - initialize empty fields
               const base: Record<string, any> = {};
               fields.forEach((key) => {
-
                 const arrayFields = ["genres", "status", "vibe_tags"];
                 if (arrayFields.includes(key)) {
                   base[key] = [];
                 } else if (key === "content_type") {
                   base[key] = [];
+                } else if (key === "row_type") {
+                  base[key] = ""; // always a plain string
                 } else {
                   base[key] = "";
                 }
@@ -655,19 +649,23 @@ export default function MediaDialog({
         submitData[key] = (value !== null && value !== undefined && value !== "") ? parseInt(String(value), 10) : null;
       } else {
         // Handle other possible array fields
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type", "row_type"];
-        if (arrayFields.includes(key)) {
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type"];
+        if (key === "row_type") {
+          // row_type is a comma-separated string of row identifiers — store as-is, just clean it up
+          const parts = String(value || "")
+            .split(",")
+            .map((p: string) => p.trim())
+            .filter(Boolean);
+          submitData[key] = parts.join(", ") || null;
+        } else if (arrayFields.includes(key)) {
           const parsedArray = smartParse(value);
           const cleanArray = parsedArray.filter(Boolean);
-          if (key === "content_type" || key === "row_type") {
+          if (key === "content_type") {
             submitData[key] = cleanArray.join(", ");
           } else {
             submitData[key] = cleanArray;
           }
         } else if (typeof value === 'string') {
-          // DO NOT split general strings by comma/newline and convert to array.
-          // This was corrupting fields like 'title' and 'platform'.
-          // Only trim the string.
           submitData[key] = value.trim();
         } else {
           submitData[key] = value;
@@ -1240,17 +1238,15 @@ export default function MediaDialog({
           )}
         </div>
 
-        {/* Row Visibility Panel — grouped by page */}
-        {addMode === "standard" && (() => {
-          // Group all rows by page
+        {/* Row Visibility Panel — always shown for both Add and Edit, grouped by page */}
+        {(() => {
           const pageOrder = ['home', 'watch', 'read'];
           const grouped: Record<string, any[]> = {};
-          (contentRowFilters as any[])
-            .forEach(row => {
-              const pg = row.page || 'other';
-              if (!grouped[pg]) grouped[pg] = [];
-              grouped[pg].push(row);
-            });
+          (contentRowFilters as any[]).forEach(row => {
+            const pg = row.page || 'other';
+            if (!grouped[pg]) grouped[pg] = [];
+            grouped[pg].push(row);
+          });
           const pages = [...pageOrder.filter(p => grouped[p]), ...Object.keys(grouped).filter(p => !pageOrder.includes(p))];
 
           const pageColors: Record<string, string> = {
@@ -1263,22 +1259,27 @@ export default function MediaDialog({
             <div className="px-6 py-4 bg-slate-50 border-b space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  Row Visibility
-                </h3>
-                <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
-                  {matchedRows.length} active
-                </span>
+                <h3 className="text-sm font-semibold text-slate-800">Row Visibility</h3>
+                {!isLoadingRowFilters && (
+                  <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
+                    {matchedRows.length} active
+                  </span>
+                )}
               </div>
 
-              {/* Per-page groups */}
-              {pages.length === 0 ? (
+              {/* Loading skeleton */}
+              {isLoadingRowFilters ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 animate-pulse">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="h-10 rounded-lg bg-slate-200" />
+                  ))}
+                </div>
+              ) : pages.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">No active rows configured yet.</p>
               ) : (
                 <div className="space-y-3">
                   {pages.map(pg => (
                     <div key={pg}>
-                      {/* Page label */}
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${pageColors[pg] || 'bg-slate-100 text-slate-500'}`}>
                           {pg}
@@ -1286,7 +1287,6 @@ export default function MediaDialog({
                         <div className="flex-1 h-px bg-slate-200" />
                       </div>
 
-                      {/* Row checkboxes */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {(grouped[pg] || []).map((row: any) => {
                           const isMatched = matchedRows.some(r => r.id === row.id);
@@ -1317,8 +1317,7 @@ export default function MediaDialog({
                                 className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className={`text-xs font-semibold truncate ${isMatched ? 'text-indigo-700' : 'text-slate-700'
-                                  }`}>
+                                <p className={`text-xs font-semibold truncate ${isMatched ? 'text-indigo-700' : 'text-slate-700'}`}>
                                   {row.label}
                                 </p>
                                 <p className="text-[10px] text-slate-400 truncate">
@@ -1336,7 +1335,6 @@ export default function MediaDialog({
                   ))}
                 </div>
               )}
-
             </div>
           );
         })()}
