@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks";
 import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmailCaptureSettingsCard } from "@/components/EmailCaptureSettingsCard";
 import { PageSettingsCard } from "@/components/PageSettingsCard";
@@ -32,8 +32,8 @@ const projectsAPI = Projects as Required<typeof Projects>;
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
@@ -95,17 +95,75 @@ const HomePage = () => {
 
   const queryClient = useQueryClient();
 
-  // Fetch unique types for filters
+  // // Fetch unique types for filters
+  // const { data: availableTypes = [] } = useQuery({
+  //   queryKey: ["unique-types"],
+  //   queryFn: async () => {
+  //     const response = await projectsAPI.get({ eq: [] });
+  //     if (response.flag === Flag.Success && response.data) {
+  //       const types = (response.data as Project[])
+  //         .flatMap((item) => smartParse(item.content_type))
+  //         .filter(Boolean);
+  //       return [...new Set(types)].sort();
+  //     }
+  //   },
+  // });
+  // Fetch unique content types for filters
   const { data: availableTypes = [] } = useQuery({
     queryKey: ["unique-types"],
     queryFn: async () => {
       const response = await projectsAPI.get({ eq: [] });
-      if (response.flag === Flag.Success && response.data) {
-        const types = (response.data as Project[])
-          .flatMap((item) => item.content_type)
-          .filter(Boolean);
-        return [...new Set(types)].sort();
+
+      if (response.flag !== Flag.Success || !response.data) {
+        return [];
       }
+
+      const typesSet = new Set<string>();
+
+      // 🔥 Recursive deep parser
+      const extractValues = (value: any): string[] => {
+        if (!value) return [];
+
+        // If already array → flatten deeply
+        if (Array.isArray(value)) {
+          return value.flatMap(extractValues);
+        }
+
+        // If string → try parsing repeatedly
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+
+          // Try to parse JSON safely
+          try {
+            const parsed = JSON.parse(trimmed);
+
+            // If parsing changes the value → recurse again
+            if (parsed !== trimmed) {
+              return extractValues(parsed);
+            }
+          } catch {
+            // Not JSON — continue
+          }
+
+          return [trimmed];
+        }
+
+        return [];
+      };
+
+      (response.data as Project[]).forEach((item) => {
+        const cleanValues = extractValues(item.content_type);
+
+        cleanValues.forEach((val) => {
+          if (typeof val === "string" && val.trim()) {
+            typesSet.add(val.trim());
+          }
+        });
+      });
+
+      return Array.from(typesSet).sort((a, b) =>
+        a.localeCompare(b)
+      );
     },
   });
 
@@ -123,24 +181,32 @@ const HomePage = () => {
       selectedShelfId
     ],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted" as const, value: false }];
+      const eqFilters: any[] = [];
       const containsFilters: any[] = [];
       const overlapsFilters: any[] = [];
       const ilikeFilters: any[] = [];
 
-      if (statusFilter !== "all") {
-        containsFilters.push({ key: "status" as const, value: statusFilter });
+      if (statusFilter.length > 0) {
+        overlapsFilters.push({ key: "status" as const, value: statusFilter });
       }
-      if (contentTypeFilter !== "all") {
-        ilikeFilters.push({ key: "content_type" as const, value: `%${contentTypeFilter}%` });
-      }
+      let shelfOr: string | undefined = undefined;
 
       // Apply shelf filter logic
       if (selectedShelfId !== "all") {
         const shelf = shelves.find(s => s.id === selectedShelfId);
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
-            eqFilters.push({ key: shelf.filter_value, value: true });
+            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+
+            if (flagExists) {
+              eqFilters.push({ key: shelf.filter_value, value: true });
+            } else if (shelf.page !== "listen") {
+              // For custom rows, query by row_type using the shelf's row_type or label
+              // Only for pages where row_type exists
+              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+            }
           } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
             ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
           } else if (shelf.filter_type === FilterTypeEnum.Song) {
@@ -156,17 +222,44 @@ const HomePage = () => {
               if (isStatus) {
                 overlapsFilters.push({ key: "status", value: values });
               } else {
-                // For complex content types, we'd need OR
+                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
               }
             } else {
               if (isStatus) {
-                containsFilters.push({ key: "status", value: shelf.filter_value });
+                containsFilters.push({ key: "status", value: [shelf.filter_value] });
               } else {
                 ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
               }
             }
+          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
+            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
+            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+          } else if (shelf.filter_type === FilterTypeEnum.FlavorTags) {
+            containsFilters.push({ key: "flavor_tags", value: [shelf.filter_value] });
           }
         }
+      }
+
+      if (contentTypeFilter.length > 0) {
+        // Build multiple ilike patterns joined by OR
+        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        if (shelfOr) {
+          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
+        } else {
+          shelfOr = contentTypePatterns;
+        }
+      }
+
+      // Apply base content type restriction for Home page
+      const pageFilterOr = "content_type.ilike.%Film%,content_type.ilike.%TV Show%";
+      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
+      let finalOr = shelfOr;
+
+      if (finalOr) {
+        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
+      } else {
+        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
       }
 
       const response = await projectsAPI.get({
@@ -174,6 +267,7 @@ const HomePage = () => {
         contains: containsFilters,
         overlaps: overlapsFilters,
         ilike: ilikeFilters,
+        or: finalOr,
         sort: "created_at",
         sortBy: "dec",
         search: debouncedSearchQuery || undefined,
@@ -194,13 +288,13 @@ const HomePage = () => {
           inheritedProjects.forEach(p => {
             if (!existingIds.has(p.id)) {
               // Apply basic filters to inherited results
-              if (statusFilter !== "all") {
-                const statuses = Array.isArray(p.status) ? p.status : [p.status];
-                if (!statuses.includes(statusFilter as any)) return;
+              if (statusFilter.length > 0) {
+                const statuses = Array.isArray(p.status) ? p.status : (typeof p.status === 'string' ? smartParse(p.status) : []);
+                if (!statusFilter.some(sf => statuses.includes(sf as any))) return;
               }
-              if (contentTypeFilter !== "all") {
-                const types = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
-                if (!types.includes(contentTypeFilter as any)) return;
+              if (contentTypeFilter.length > 0) {
+                const types = Array.isArray(p.content_type) ? p.content_type : (typeof p.content_type === 'string' ? smartParse(p.content_type) : []);
+                if (!contentTypeFilter.some(cf => types.includes(cf as any))) return;
               }
               rows.push(p);
             }
@@ -231,7 +325,7 @@ const HomePage = () => {
   ];
 
   const allAvailableFields = displayFields.map(field => field.key);
-  const availableStatuses = Array.from(new Set(projects.flatMap(p => p.status).filter(Boolean))).sort();
+  const availableStatuses = Array.from(new Set(projects.flatMap(p => smartParse(p.status)).filter(Boolean))).sort();
   const orderedFields = [
     ...allAvailableFields.filter(key => stickyColumns.includes(key)),
     ...allAvailableFields.filter(key => !stickyColumns.includes(key))
@@ -463,220 +557,220 @@ const HomePage = () => {
         <TabsContent value="library" className="mt-0 outline-none space-y-6 animate-in fade-in slide-in-from-left-2 duration-300">
 
 
-      {/* Main Content Area */}
-      <Card className="border-none shadow-sm overflow-hidden bg-white">
-        <div className="p-6 space-y-4">
-          <div className="flex flex-col lg:flex-row gap-4 mb-6">
-            <MediaFilters
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              contentTypeFilter={contentTypeFilter}
-              onContentTypeFilterChange={setContentTypeFilter}
-              availableStatuses={availableStatuses}
-              availableTypes={availableTypes}
-              shelves={shelves}
-              selectedShelfId={selectedShelfId}
-              onShelfChange={setSelectedShelfId}
-            />
-          </div>
+          {/* Main Content Area */}
+          <Card className="border-none shadow-sm overflow-hidden bg-white">
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col lg:flex-row gap-4 mb-6">
+                <MediaFilters
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
+                  contentTypeFilter={contentTypeFilter}
+                  onContentTypeFilterChange={setContentTypeFilter}
+                  availableStatuses={availableStatuses}
+                  availableTypes={availableTypes}
+                  shelves={shelves}
+                  selectedShelfId={selectedShelfId}
+                  onShelfChange={setSelectedShelfId}
+                />
+              </div>
 
-          <div className="rounded-xl border border-slate-100 overflow-hidden">
-            <Table>
-              <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
-                <TableRow>
-                  {orderedFields.map((key) => (
-                    <TableHead
-                      key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
-                      sticky={stickyColumns.includes(key) ? "left" : undefined}
-                      left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                      width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                      showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
-                    >
-                      <div className="flex items-center gap-2">
-                        {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                          onClick={() => toggleSticky(key)}
+              <div className="rounded-xl border border-slate-100 overflow-hidden">
+                <Table>
+                  <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
+                    <TableRow>
+                      {orderedFields.map((key) => (
+                        <TableHead
+                          key={key}
+                          className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
+                          sticky={stickyColumns.includes(key) ? "left" : undefined}
+                          left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                          width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                          showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
                         >
-                          {stickyColumns.includes(key) ? (
-                            <PinOff className="h-3 w-3" />
-                          ) : (
-                            <Pin className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="h-64 text-center"
-                    >
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
-                      <p className="mt-2 text-sm text-slate-500 font-medium">
-                        Loading content library...
-                      </p>
-                    </TableCell>
-                  </TableRow>
-                ) : projects.length > 0 ? (
-                  [...projects].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((project: Project) => {
-                    const isSelected = selectedRowId === project.id;
-                    return (
-                      <TableRow
-                        key={project.id}
-                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
-                          }`}
-                        onClick={() => setSelectedRowId(isSelected ? null : project.id)}
-                        data-state={isSelected ? "selected" : undefined}
-                      >
-                        {orderedFields.map((key) => {
-                          if (key === "actions") {
-                            return (
-                              <TableCell
-                                key="actions"
-                                className="whitespace-nowrap"
-                                sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                                left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
-                                width={PINNED_WIDTH}
-                                showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
-                              >
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEdit(project);
-                                    }}
-                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(project);
-                                    }}
-                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-
-                          const value = (project as any)[key];
-                          return (
-                            <TableCell
-                              key={key}
-                              className={cn(
-                                "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                                (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
-                              )}
-                              sticky={stickyColumns.includes(key) ? "left" : undefined}
-                              left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                              width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                              showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                          <div className="flex items-center gap-2">
+                            {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                              onClick={() => toggleSticky(key)}
                             >
-                              {value === null || value === undefined || value === "" ? (
-                                <span className="text-muted-foreground text-xs">—</span>
+                              {stickyColumns.includes(key) ? (
+                                <PinOff className="h-3 w-3" />
                               ) : (
-                                (() => {
-                                  let values: string[] = [];
-                                  if (Array.isArray(value)) {
-                                    values = value.map(String);
-                                  } else if (typeof value === "string") {
-                                    const trimmed = value.trim();
-                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                                      try {
-                                        const parsed = JSON.parse(trimmed);
-                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                      } catch (e) {
-                                        values = [value];
-                                      }
-                                    } else if (value.includes(",")) {
-                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
-                                    } else {
-                                      values = [value];
-                                    }
-                                  } else {
-                                    values = [String(value)];
-                                  }
-
-                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                    const MAX_TAGS = 3;
-                                    const visible = values.slice(0, MAX_TAGS);
-                                    const overflow = values.length - MAX_TAGS;
-                                    return (
-                                      <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                        {visible.map((v, i) => (
-                                          <Badge
-                                            key={`${v}-${i}`}
-                                            variant={key === "vibe_tags" ? "outline" : "secondary"}
-                                            className={cn(
-                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                              key === "vibe_tags"
-                                                ? "border-slate-200 text-slate-500 bg-transparent"
-                                                : "bg-slate-100 text-slate-600 border-none"
-                                            )}
-                                            title={v}
-                                          >
-                                            {v}
-                                          </Badge>
-                                        ))}
-                                        {overflow > 0 && (
-                                          <Badge
-                                            variant="outline"
-                                            className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                            title={values.slice(MAX_TAGS).join(", ")}
-                                          >
-                                            +{overflow}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <span className="truncate block" title={String(value)}>
-                                      {String(value)}
-                                    </span>
-                                  );
-                                })()
+                                <Pin className="h-3 w-3" />
                               )}
-                            </TableCell>
-                          );
-                        })}
+                            </Button>
+                          </div>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={displayFields.length + 1}
+                          className="h-64 text-center"
+                        >
+                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-600" />
+                          <p className="mt-2 text-sm text-slate-500 font-medium">
+                            Loading content library...
+                          </p>
+                        </TableCell>
                       </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={displayFields.length + 1}
-                      className="h-32 text-center text-slate-500 font-medium"
-                    >
-                      No items found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div >
-      </Card >
-      </TabsContent>
+                    ) : projects.length > 0 ? (
+                      [...projects].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((project: Project) => {
+                        const isSelected = selectedRowId === project.id;
+                        return (
+                          <TableRow
+                            key={project.id}
+                            className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
+                              }`}
+                            onClick={() => setSelectedRowId(isSelected ? null : project.id)}
+                            data-state={isSelected ? "selected" : undefined}
+                          >
+                            {orderedFields.map((key) => {
+                              if (key === "actions") {
+                                return (
+                                  <TableCell
+                                    key="actions"
+                                    className="whitespace-nowrap"
+                                    sticky={stickyColumns.includes("actions") ? "left" : undefined}
+                                    left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                                    width={PINNED_WIDTH}
+                                    showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                                  >
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEdit(project);
+                                        }}
+                                        className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDelete(project);
+                                        }}
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+
+                              const value = (project as any)[key];
+                              return (
+                                <TableCell
+                                  key={key}
+                                  className={cn(
+                                    "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                                    (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
+                                  )}
+                                  sticky={stickyColumns.includes(key) ? "left" : undefined}
+                                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
+                                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
+                                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                                >
+                                  {value === null || value === undefined || value === "" ? (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  ) : (
+                                    (() => {
+                                      let values: string[] = [];
+                                      if (Array.isArray(value)) {
+                                        values = value.map(String);
+                                      } else if (typeof value === "string") {
+                                        const trimmed = value.trim();
+                                        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                                          try {
+                                            const parsed = JSON.parse(trimmed);
+                                            values = Array.isArray(parsed) ? parsed.map(String) : [value];
+                                          } catch (e) {
+                                            values = [value];
+                                          }
+                                        } else if (value.includes(",")) {
+                                          values = value.split(",").map((v) => v.trim()).filter(Boolean);
+                                        } else {
+                                          values = [value];
+                                        }
+                                      } else {
+                                        values = [String(value)];
+                                      }
+
+                                      if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                        const MAX_TAGS = 3;
+                                        const visible = values.slice(0, MAX_TAGS);
+                                        const overflow = values.length - MAX_TAGS;
+                                        return (
+                                          <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
+                                            {visible.map((v, i) => (
+                                              <Badge
+                                                key={`${v}-${i}`}
+                                                variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                                className={cn(
+                                                  "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                                  key === "vibe_tags"
+                                                    ? "border-slate-200 text-slate-500 bg-transparent"
+                                                    : "bg-slate-100 text-slate-600 border-none"
+                                                )}
+                                                title={v}
+                                              >
+                                                {v}
+                                              </Badge>
+                                            ))}
+                                            {overflow > 0 && (
+                                              <Badge
+                                                variant="outline"
+                                                className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
+                                                title={values.slice(MAX_TAGS).join(", ")}
+                                              >
+                                                +{overflow}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <span className="truncate block" title={String(value)}>
+                                          {String(value)}
+                                        </span>
+                                      );
+                                    })()
+                                  )}
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={displayFields.length + 1}
+                          className="h-32 text-center text-slate-500 font-medium"
+                        >
+                          No items found.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div >
+          </Card >
+        </TabsContent>
       </Tabs>
 
 
@@ -687,6 +781,7 @@ const HomePage = () => {
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
         assignmentPage="home"
+        selectedShelfId={selectedShelfId}
       />
 
       <DeleteConfirmationDialog

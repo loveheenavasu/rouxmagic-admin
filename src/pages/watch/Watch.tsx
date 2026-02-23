@@ -13,22 +13,21 @@ import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
-import { Flag, Project } from "@/types";
+import { Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { toast } from "sonner";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
-import { supabase } from "@/lib";
 import { pairingService } from "@/services/pairingService";
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
 
 export default function Watch() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
@@ -36,6 +35,7 @@ export default function Watch() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
 
   const toggleSticky = (key: string) => {
@@ -81,32 +81,100 @@ export default function Watch() {
 
   const queryClient = useQueryClient();
 
+  const { data: shelves = [] } = useQuery({
+    queryKey: ["content-rows", "watch"],
+    queryFn: async () => {
+      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "watch" }, { key: "is_active", value: true }] });
+      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
+    }
+  });
+
   // Fetch all media
   const {
     data: mediaList = [],
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter],
+    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter, selectedShelfId],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
+      const eqFilters: any[] = [];
       const containsFilters: any[] = [];
-      let contentTypeOr: string | undefined = undefined;
+      const overlapsFilters: any[] = [];
+      const ilikeFilters: any[] = [];
+      let shelfOr: string | undefined = undefined;
 
-      if (statusFilter !== "all") {
-        containsFilters.push({ key: "status", value: statusFilter });
+      if (statusFilter.length > 0) {
+        overlapsFilters.push({ key: "status", value: statusFilter });
       }
 
-      if (contentTypeFilter !== "all") {
-        contentTypeOr = `content_type.ilike.%${contentTypeFilter}%`;
+      // Apply shelf filter logic
+      if (selectedShelfId !== "all") {
+        const shelf = shelves.find(s => s.id === selectedShelfId);
+        if (shelf) {
+          if (shelf.filter_type === FilterTypeEnum.Flag) {
+            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+
+            if (flagExists) {
+              eqFilters.push({ key: shelf.filter_value, value: true });
+            } else {
+              // For custom rows, query by row_type using the shelf's row_type or label
+              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
+            if (shelf.filter_value.includes(",")) {
+              const values = shelf.filter_value.split(",").map(v => v.trim());
+              if (isStatus) {
+                overlapsFilters.push({ key: "status", value: values });
+              } else {
+                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+              }
+            } else {
+              if (isStatus) {
+                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+              } else {
+                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+              }
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
+            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
+            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+          }
+        }
+      }
+
+      if (contentTypeFilter.length > 0) {
+        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        if (shelfOr) {
+          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
+        } else {
+          shelfOr = contentTypePatterns;
+        }
+      } else if (!shelfOr) {
+        shelfOr = `content_type.ilike.%TV Show%,content_type.ilike.%Film%`;
+      }
+
+      // Final OR needs to respect the shelf selection and exclude deleted
+      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
+      const pageFilterOr = `content_type.ilike.%TV Show%,content_type.ilike.%Film%`;
+      let finalOr = shelfOr;
+
+      if (finalOr) {
+        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
       } else {
-        contentTypeOr = `content_type.ilike.%TV Show%,content_type.ilike.%Film%`;
+        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
       }
 
       const response = await projectsAPI.get({
         eq: eqFilters as any,
-        contains: containsFilters as any,
-        or: contentTypeOr,
+        contains: containsFilters.length > 0 ? containsFilters : undefined,
+        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
+        ilike: ilikeFilters.length > 0 ? ilikeFilters : undefined,
+        or: finalOr,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -147,13 +215,13 @@ export default function Watch() {
           inheritedProjects.forEach(p => {
             if (!existingIds.has(p.id)) {
               // Apply basic filters to inherited results
-              if (statusFilter !== "all") {
+              if (statusFilter.length > 0) {
                 const statuses = Array.isArray(p.status) ? p.status : [p.status];
-                if (!statuses.includes(statusFilter as any)) return;
+                if (!statusFilter.some(sf => statuses.includes(sf as any))) return;
               }
-              if (contentTypeFilter !== "all") {
+              if (contentTypeFilter.length > 0) {
                 const types = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
-                if (!types.includes(contentTypeFilter as any)) return;
+                if (!contentTypeFilter.some(cf => types.includes(cf as any))) return;
               }
               // If it's inherited but doesn't match content category 'TV Show' or 'Film', skip
               const pTypes = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
@@ -277,7 +345,7 @@ export default function Watch() {
         return [];
       }
       const statuses = (response.data as Project[])
-        .flatMap((item) => item.status)
+        .flatMap((item) => smartParse(item.status))
         .filter(Boolean);
       return [...new Set(statuses)].sort();
     },
@@ -296,7 +364,7 @@ export default function Watch() {
         return [];
       }
       const types = (response.data as Project[])
-        .flatMap((item) => item.content_type)
+        .flatMap((item) => smartParse(item.content_type))
         .filter(Boolean);
       return [...new Set(types)].sort();
     },
@@ -305,14 +373,15 @@ export default function Watch() {
   const { data: availableGenres = [] } = useQuery({
     queryKey: ["unique-genres"],
     queryFn: async () => {
-      const { data, error } = await supabase.from('projects').select('genres').eq('is_deleted', false);
-      if (error) return [];
-      const tags = data.flatMap(d => {
-        let g = d.genres;
-        if (typeof g === 'string') return g.split(',').map((s: string) => s.trim());
-        return Array.isArray(g) ? g : [];
+      const response = await projectsAPI.get({
+        eq: [{ key: "is_deleted" as any, value: false }],
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
       });
-      return Array.from(new Set(tags)).sort();
+      if (response.flag === Flag.Success && Array.isArray(response.data)) {
+        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
+        return Array.from(new Set(genres)).filter(Boolean).sort();
+      }
+      return [];
     }
   });
 
@@ -325,7 +394,7 @@ export default function Watch() {
         inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        const vibes = (response.data as Project[]).flatMap(p => smartParse(p.vibe_tags));
         return Array.from(new Set(vibes)).filter(Boolean).sort();
       }
       return [];
@@ -413,6 +482,9 @@ export default function Watch() {
         onContentTypeFilterChange={setContentTypeFilter}
         availableStatuses={availableStatuses}
         availableTypes={availableTypes}
+        shelves={shelves}
+        selectedShelfId={selectedShelfId}
+        onShelfChange={setSelectedShelfId}
         genreFilter={genreFilter}
         onGenreFilterChange={setGenreFilter}
         availableGenres={availableGenres}
@@ -537,23 +609,7 @@ export default function Watch() {
                               <span className="text-muted-foreground text-xs">—</span>
                             ) : (
                               (() => {
-                                let values: string[] = [];
-                                if (Array.isArray(value)) {
-                                  values = value.map(String);
-                                } else if (typeof value === "string") {
-                                  if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                    try {
-                                      const parsed = JSON.parse(value);
-                                      values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                    } catch (e) {
-                                      values = [value];
-                                    }
-                                  } else {
-                                    values = [value];
-                                  }
-                                } else {
-                                  values = [String(value)];
-                                }
+                                let values = smartParse(value);
 
                                 // Capitalize and format for display
                                 values = values.map((v) => {
@@ -631,16 +687,9 @@ export default function Watch() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
-        defaultValues={(() => {
-          const defaults: any = {};
-
-          // Apply manual filters first
-          if (statusFilter !== "all") defaults.status = statusFilter;
-          if (contentTypeFilter !== "all") defaults.content_type = contentTypeFilter;
-
-
-          return Object.keys(defaults).length > 0 ? defaults : undefined;
-        })()}
+        assignmentPage="watch"
+        selectedShelfId={selectedShelfId}
+        defaultValues={{}}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
 

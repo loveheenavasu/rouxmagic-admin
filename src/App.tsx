@@ -20,6 +20,7 @@ import Read from "./pages/Read";
 import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
 import ContentRows from "./pages/ContentRows";
+import NavigationPage from "./pages/NavigationPage";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -150,6 +151,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Footer />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/navigation"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <NavigationPage />
               </Layout>
             </ProtectedRoute>
           }

@@ -14,6 +14,7 @@ import { Loader2, Upload } from "lucide-react";
 import { ContentContentTypeEnum, ContentFormData, ContentTypeEnum } from "@/types";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
+import { smartParse } from "@/lib/utils";
 
 
 interface ChapterDialogProps {
@@ -60,9 +61,18 @@ export default function ChapterDialog({
   useEffect(() => {
     if (!open) return;
     if (chapter) {
+      const cleanedChapter = { ...chapter };
+      // Deeply unwrap and clean potentially corrupted strings
+      Object.entries(cleanedChapter).forEach(([key, value]) => {
+        if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+          const parsed = smartParse(value);
+          (cleanedChapter as any)[key] = parsed.join(", ");
+        }
+      });
+
       setFormData({
         ...emptyForm,
-        ...chapter,
+        ...cleanedChapter,
       });
       return;
     }

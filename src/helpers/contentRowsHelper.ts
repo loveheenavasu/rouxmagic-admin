@@ -31,6 +31,18 @@ export async function fetchProjectsByContentRow(
         }
         break;
 
+      case FilterTypeEnum.Genre:
+        containsFilters.push({ key: "genres", value: [row.filter_value] });
+        break;
+
+      case FilterTypeEnum.VibeTags:
+        containsFilters.push({ key: "vibe_tags", value: [row.filter_value] });
+        break;
+
+      case FilterTypeEnum.FlavorTags:
+        containsFilters.push({ key: "flavor_tags", value: [row.filter_value] });
+        break;
+
       case FilterTypeEnum.ContentType:
         if (row.filter_value.includes(",")) {
           // PostgREST or
@@ -40,9 +52,19 @@ export async function fetchProjectsByContentRow(
         }
         break;
 
-      case FilterTypeEnum.Flag:
-        eqFilters.push({ key: row.filter_value as any, value: true });
+      case FilterTypeEnum.Flag: {
+        const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+        const flagValue = (row.filter_value || '').toLowerCase().trim();
+
+        if (knownFlags.includes(flagValue)) {
+          eqFilters.push({ key: row.filter_value as any, value: true });
+        } else {
+          // For custom rows, query by row_type using the row's row_type or label
+          const rowTypeFilter = (row as any).row_type || row.label;
+          ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+        }
         break;
+      }
 
       case FilterTypeEnum.Audiobook:
         ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
@@ -66,13 +88,46 @@ export async function fetchProjectsByContentRow(
         console.warn(`Unknown filter type: ${row.filter_type}`);
     }
 
+    // Apply page-based content type restriction to ensure cross-page rows filter correctly
+    let pageFilterOr = "";
+    if (row.page === "read") {
+      ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
+    } else if (row.page === "listen") {
+      ilikeFilters.push({ key: "content_type", value: "%Song%" });
+    } else if (row.page === "watch" || row.page === "home") {
+      pageFilterOr = "content_type.ilike.%Film%,content_type.ilike.%TV Show%";
+    }
+
+    // --- GLOBAL ROW TYPE FILTER ---
+    // If the row has a row_type (or is a custom Flag row), enforce that projects must match it.
+    const knownFlagsArr = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+    const isKnownFlagRow = row.filter_type === FilterTypeEnum.Flag && knownFlagsArr.includes((row.filter_value || '').toLowerCase().trim());
+
+    if (!isKnownFlagRow) {
+      const rowTypeVal = (row as any).row_type || (row.label && row.label.trim().toLowerCase().replace(/\s+/g, '_'));
+      if (rowTypeVal) {
+        ilikeFilters.push({ key: "row_type", value: `%${rowTypeVal}%` });
+      }
+    }
+
+    // Merge with any custom_or already set by specific filter types
+    let finalOr = (row as any).custom_or;
+    if (pageFilterOr) {
+      if (finalOr) {
+        // combine with AND to restrict to correct types
+        finalOr = `and(or(${finalOr}),or(${pageFilterOr}))`;
+      } else {
+        finalOr = pageFilterOr;
+      }
+    }
+
     // Fetch projects with filters
     const response = await projectsAPI.get({
       eq: eqFilters,
       contains: containsFilters,
       overlaps: overlapsFilters,
       ilike: ilikeFilters,
-      or: (row as any).custom_or,
+      or: finalOr,
       sort: "order_index",
       sortBy: "asc",
     });

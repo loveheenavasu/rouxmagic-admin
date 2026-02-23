@@ -26,7 +26,7 @@ const recipesAPI = Recipes as Required<typeof Recipes>;
 
 export default function RecipesPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [flavorFilter, setFlavorFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -101,15 +101,22 @@ export default function RecipesPage() {
   } = useQuery<Recipe[]>({
     queryKey: ["recipes", searchQuery, categoryFilter, flavorFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
-      if (categoryFilter !== "all") eqFilters.push({ key: "category", value: categoryFilter });
+      const eqFilters: any[] = [];
+      const overlapsFilters: any[] = [];
+
+      if (Array.isArray(categoryFilter) && categoryFilter.length > 0) {
+        overlapsFilters.push({ key: "category", value: categoryFilter });
+      } else if (typeof categoryFilter === 'string' && categoryFilter !== "all") {
+        eqFilters.push({ key: "category", value: categoryFilter });
+      }
 
       const response = await recipesAPI.get({
         eq: eqFilters,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
-        searchFields: ["title"],
+        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
+        or: "is_deleted.eq.false,is_deleted.is.null",
       });
 
       if (response.flag !== Flag.Success || !response.data) {
@@ -135,7 +142,7 @@ export default function RecipesPage() {
           inheritedRecipes.forEach(r => {
             if (!existingIds.has(r.id)) {
               // Apply basic filters to inherited results too
-              if (categoryFilter !== "all" && r.category !== categoryFilter) return;
+              if (categoryFilter.length > 0 && !categoryFilter.includes(r.category as string)) return;
               rows.push(r);
             }
           });

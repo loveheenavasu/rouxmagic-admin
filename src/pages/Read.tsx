@@ -16,20 +16,21 @@ import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
-import { Flag, Project, ContentTypeEnum } from "@/types";
+import { Flag, Project, ContentTypeEnum, ContentRow, FilterTypeEnum } from "@/types";
 import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
 import { StatsRow } from "@/components/StatsRow";
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 import { PageSettingsCard } from "@/components/PageSettingsCard";
 
-const READ_TYPES = ["Audiobook"] as const;
+const READ_TYPES = ["Audiobook", "Book", "Comic"] as const;
 const projectsAPI = Projects;
 
 export default function Read() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
@@ -37,6 +38,7 @@ export default function Read() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]); const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
       if (prev.includes(key)) {
@@ -77,26 +79,102 @@ export default function Read() {
 
   const queryClient = useQueryClient();
 
+  const { data: shelves = [] } = useQuery({
+    queryKey: ["content-rows", "read"],
+    queryFn: async () => {
+      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "read" }, { key: "is_active", value: true }] });
+      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
+    }
+  });
+
   // Fetch read items with server-side filters
   const {
     data: items = [],
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["read-items", searchQuery, contentTypeFilter, genreFilter, vibeFilter],
+    queryKey: ["read-items", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter, selectedShelfId],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted", value: false }];
-      let contentTypeOr: string | undefined = undefined;
-      let currentContentTypes: string[] = [...READ_TYPES];
+      const eqFilters: any[] = [];
+      const containsFilters: any[] = [];
+      const overlapsFilters: any[] = [];
+      const ilikeFilters: any[] = [];
+      let shelfOr: string | undefined = undefined;
 
-      if (contentTypeFilter !== "all") {
-        currentContentTypes = [contentTypeFilter];
+      if (statusFilter.length > 0) {
+        overlapsFilters.push({ key: "status", value: statusFilter });
       }
-      contentTypeOr = currentContentTypes.map(t => `content_type.ilike.%${t}%`).join(",");
+
+      // Apply shelf filter logic
+      if (selectedShelfId !== "all") {
+        const shelf = shelves.find(s => s.id === selectedShelfId);
+        if (shelf) {
+          if (shelf.filter_type === FilterTypeEnum.Flag) {
+            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+
+            if (flagExists) {
+              eqFilters.push({ key: shelf.filter_value, value: true });
+            } else {
+              // For custom rows, query by row_type using the shelf's row_type or label
+              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
+            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
+          } else if (shelf.filter_type === FilterTypeEnum.Song) {
+            ilikeFilters.push({ key: "content_type", value: "%Song%" });
+          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
+            if (shelf.filter_value.includes(",")) {
+              const values = shelf.filter_value.split(",").map(v => v.trim());
+              if (isStatus) {
+                overlapsFilters.push({ key: "status", value: values });
+              } else {
+                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+              }
+            } else {
+              if (isStatus) {
+                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+              } else {
+                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+              }
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
+            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
+            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+          }
+        }
+      }
+
+      if (contentTypeFilter.length > 0) {
+        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        if (shelfOr) {
+          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
+        } else {
+          shelfOr = contentTypePatterns;
+        }
+      }
+
+      // Apply base content type restriction for Read page
+      const pageFilterOr = READ_TYPES.map(t => `content_type.ilike.%${t}%`).join(",");
+      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
+      let finalOr = shelfOr;
+
+      if (finalOr) {
+        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
+      } else {
+        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
+      }
 
       const response = await projectsAPI.get({
         eq: eqFilters,
-        or: contentTypeOr,
+        contains: containsFilters.length > 0 ? containsFilters : undefined,
+        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
+        ilike: ilikeFilters.length > 0 ? ilikeFilters : undefined,
+        or: finalOr,
         search: searchQuery.trim() || undefined,
         searchFields: ["title", "platform", "notes"],
         sort: "order_index",
@@ -206,6 +284,44 @@ export default function Read() {
     },
   });
 
+  // Fetch unique content types for filters
+  const { data: availableTypes = [] } = useQuery({
+    queryKey: ["read-unique-types"],
+    queryFn: async () => {
+      const response = await projectsAPI.get({
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+      });
+
+      if (response.flag !== Flag.Success || !response.data) {
+        return [];
+      }
+
+      const typesSet = new Set<string>();
+      const extractValues = (value: any): string[] => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value.flatMap(extractValues);
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed !== trimmed) return extractValues(parsed);
+          } catch { }
+          return [trimmed];
+        }
+        return [];
+      };
+
+      (response.data as Project[]).forEach((item) => {
+        const cleanValues = extractValues(item.content_type);
+        cleanValues.forEach((val) => {
+          if (typeof val === "string" && val.trim()) typesSet.add(val.trim());
+        });
+      });
+
+      return Array.from(typesSet).sort((a, b) => a.localeCompare(b));
+    },
+  });
+
   // Status options based on all read items
   const { data: availableStatuses = [] } = useQuery<string[]>({
     queryKey: ["read-statuses"],
@@ -218,13 +334,11 @@ export default function Read() {
       if (error || !data) return [];
 
       const statuses = data
-        .map((row: any) => row.status)
-        .filter((s: string | null) => !!s);
-      return [...new Set(statuses)] as string[];
+        .flatMap((row: any) => smartParse(row.status))
+        .filter(Boolean);
+      return [...new Set(statuses)].sort();
     },
   });
-
-  const availableTypes = READ_TYPES as unknown as string[];
 
   const displayFields = Array.from(new Set([
     ...(items.length > 0 ? Object.keys(items[0]) : []),
@@ -256,7 +370,7 @@ export default function Read() {
         inValue: { key: "content_type" as any, value: [...READ_TYPES] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap(p => p.genres || []);
+        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
         return Array.from(new Set(genres)).filter(Boolean).sort();
       }
       return [];
@@ -271,7 +385,7 @@ export default function Read() {
         inValue: { key: "content_type" as any, value: [...READ_TYPES] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        const vibes = (response.data as Project[]).flatMap(p => smartParse(p.vibe_tags));
         return Array.from(new Set(vibes)).filter(Boolean).sort();
       }
       return [];
@@ -337,7 +451,7 @@ export default function Read() {
         items={[
           { label: "Total Items", value: totalItems },
           { label: "Comics", value: totalComics },
-          { label: "Audiobooks", value: totalAudiobooks },
+          { label: "Audiobook", value: totalAudiobooks },
         ]}
         title="Read Library"
         description="Browse comics, books, and audiobooks from your catalog"
@@ -350,9 +464,15 @@ export default function Read() {
         searchPlaceholder="Search by title, platform or notes..."
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        contentTypeFilter={contentTypeFilter}
         onContentTypeFilterChange={setContentTypeFilter}
         availableStatuses={availableStatuses}
         availableTypes={availableTypes}
+        shelves={shelves}
+        selectedShelfId={selectedShelfId}
+        onShelfChange={setSelectedShelfId}
         genreFilter={genreFilter}
         onGenreFilterChange={setGenreFilter}
         availableGenres={availableGenres}
@@ -487,25 +607,7 @@ export default function Read() {
                             <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             (() => {
-                              let values: string[] = [];
-                              if (Array.isArray(value)) {
-                                values = value.map(String);
-                              } else if (typeof value === "string") {
-                                if (value.startsWith("[") && value.endsWith("]")) {
-                                  try {
-                                    const parsed = JSON.parse(value);
-                                    values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                  } catch (e) {
-                                    values = [value];
-                                  }
-                                } else if (value.includes(",")) {
-                                  values = value.split(",").map((v) => v.trim()).filter(Boolean);
-                                } else {
-                                  values = [value];
-                                }
-                              } else {
-                                values = [String(value)];
-                              }
+                              let values = smartParse(value);
 
                               // Capitalize and format for display
                               values = values.map((v) => {
@@ -547,9 +649,10 @@ export default function Read() {
                                   </div>
                                 );
                               }
+                              const displayValue = values.join(", ");
                               return (
-                                <span className="truncate block" title={String(value)}>
-                                  {String(value)}
+                                <span className="truncate block" title={displayValue}>
+                                  {displayValue}
                                 </span>
                               );
                             })()
@@ -581,10 +684,9 @@ export default function Read() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        defaultValues={{
-          content_type:
-            contentTypeFilter !== "all" ? (contentTypeFilter as any) : undefined,
-        }}
+        assignmentPage="read"
+        selectedShelfId={selectedShelfId}
+        defaultValues={{}}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -14,7 +14,9 @@ export enum Tables {
     PageSettings = "page_settings",
     Pairings = "pairings",
     Shop = "shop",
-    ContentRows = "content_rows"
+    ContentRows = "content_rows",
+    NavigationItems = "navigation_items",
+    Songs = "v_songs"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {

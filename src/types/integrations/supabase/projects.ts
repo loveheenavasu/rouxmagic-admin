@@ -17,7 +17,7 @@ export enum ContentTypeEnum {
 
 export interface ProjectMetaData {
   title: string;
-  content_type: ContentTypeEnum;
+  content_type: ContentTypeEnum | string | (ContentTypeEnum | string)[];
   poster_url?: string;
   preview_url?: string;
   audio_url?: string;
@@ -38,6 +38,7 @@ export interface ProjectMetaData {
   deleted_at?: string | null;
   vibe_tags?: string[];
   rating?: string;
+  row_type?: string | null;
 }
 
 export interface ProjectFormData extends Partial<Project> {

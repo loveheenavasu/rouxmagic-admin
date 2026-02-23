@@ -71,14 +71,14 @@ export class CRUDWrapper<
       const { data: apiData, error } = await supabase
         .from(this.table_name)
         .insert(newPayload)
-        .select("*")
-        .maybeSingle();
+        .select("*");
 
       if (error) {
         return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
 
-      return new APIResponse(apiData, Flag.Success).build();
+      const result = Array.isArray(apiData) ? apiData[0] : apiData;
+      return new APIResponse(result || null, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -129,18 +129,20 @@ export class CRUDWrapper<
         }).build();
       }
 
-      const { data, error } = await supabase
+      const { data: apiData, error } = await supabase
         .from(this.table_name)
         .update({ ...newPayload })
         .eq("id", tableId)
-        .select("*")
-        .maybeSingle();
+        .select("*");
+
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-      return new APIResponse(data, Flag.Success).build();
+
+      const result = Array.isArray(apiData) ? apiData[0] : apiData;
+      return new APIResponse(result || null, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -156,14 +158,14 @@ export class CRUDWrapper<
       const { data, error } = await supabase
         .from(this.table_name)
         .select("*")
-        .eq("id", tableId)
-        .maybeSingle();
+        .eq("id", tableId);
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-      return new APIResponse(data, Flag.Success).build();
+      const result = Array.isArray(data) ? data[0] : data;
+      return new APIResponse(result || null, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -195,7 +197,7 @@ export class CRUDWrapper<
         searchFields,
       } = opts;
 
-      const query = supabase.from(this.table_name).select("*");
+      let query: any = supabase.from(this.table_name).select("*");
 
       if (Array.isArray(eq) && eq.length > 0) {
         eq.forEach(({ key, value }) => {
@@ -235,10 +237,10 @@ export class CRUDWrapper<
         query.limit(limit);
       }
       if (single && !maybeSingle) {
-        query.single();
+        query = query.single();
       }
       if (maybeSingle && !single) {
-        query.maybeSingle();
+        query = query.maybeSingle();
       }
 
       if (sort) {
@@ -322,12 +324,12 @@ export class CRUDWrapper<
           deleted_at: !!intent ? null : new Date().toISOString(),
         })
         .eq("id", tableId)
-        .select("*")
-        .maybeSingle();
+        .select("*");
       if (error) {
         return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
-      return new APIResponse(data, Flag.Success).build();
+      const result = Array.isArray(data) ? data[0] : data;
+      return new APIResponse(result || null, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError).build();
     } finally {
