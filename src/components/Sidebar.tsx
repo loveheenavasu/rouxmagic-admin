@@ -57,6 +57,7 @@ const navigation = [
   { name: "Shop", href: "/shop", icon: ShoppingBag },
   { name: "Archive", href: "/archive", icon: Archive },
   { name: "Content Rows", href: "/content-rows", icon: PanelBottom },
+  { name: "Navigation Header", href: "/navigation", icon: PanelBottom },
   { name: "Footer", href: "/footer", icon: PanelBottom },
 ];
 

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { smartParse } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
@@ -41,6 +42,7 @@ interface MediaDialogProps {
   allowedFields?: string[];
   defaultValues?: Partial<ProjectFormData>;
   assignmentPage?: string;
+  selectedShelfId?: string;
 }
 
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -55,6 +57,7 @@ export default function MediaDialog({
   allowedFields,
   defaultValues,
   assignmentPage,
+  selectedShelfId: _selectedShelfId,
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>(
@@ -85,26 +88,47 @@ export default function MediaDialog({
         if (s && !currentStatuses.includes(s as any)) currentStatuses.push(s as any);
       };
 
-      // Update content_type (Single selection)
+      // Update content_type (Single/Multiple selection)
+      const addType = (t: string) => {
+        if (!t) return;
+        let currentTypes = Array.isArray(next.content_type) ? [...next.content_type] : (next.content_type ? [next.content_type] : []);
+        if (!currentTypes.includes(t as any)) currentTypes.push(t as any);
+        next.content_type = currentTypes as any;
+      };
+
       if (filter_type === FilterTypeEnum.ContentType) {
-        next.content_type = filter_value as any;
+        addType(filter_value);
       } else if (filter_type === FilterTypeEnum.Audiobook) {
-        next.content_type = ContentTypeEnum.Audiobook as any;
+        addType(ContentTypeEnum.Audiobook);
       } else if (filter_type === FilterTypeEnum.Song) {
-        next.content_type = ContentTypeEnum.Song as any;
+        addType(ContentTypeEnum.Song);
       } else if (filter_type === FilterTypeEnum.Flag) {
         // Special case: 'Coming Soon' should update status array
         if (label.toLowerCase().includes('coming soon')) {
           addStatus('coming_soon');
           next.in_coming_soon = true;
         } else {
-          // If it's not a boolean flag, we don't have a place for multiple custom labels 
-          // if content_type is a string. We'll set it as content_type for now.
-          next.content_type = label as any;
+          // If it's not a boolean flag, add the label to content_type array
+          addType(label);
         }
       } else if (filter_type === FilterTypeEnum.Status) {
         addStatus(filter_value);
         if (filter_value === 'coming_soon') next.in_coming_soon = true;
+      }
+
+      // --- GLOBAL: Tag row_type for any custom row ---
+      const knownFlagsInApply = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+      const filterValueNormApply = (row.filter_value || '').toLowerCase().trim();
+      const isKnownFlagArr = filter_type === FilterTypeEnum.Flag && knownFlagsInApply.includes(filterValueNormApply);
+
+      if (!isKnownFlagArr) {
+        const rowTypeValue = row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_');
+        const currentVal = String((next as any).row_type || "");
+        const parts = currentVal.split(",").map(p => p.trim()).filter(Boolean);
+        if (!parts.includes(rowTypeValue)) {
+          parts.push(rowTypeValue);
+          (next as any).row_type = parts.join(", ");
+        }
       }
 
       next.status = currentStatuses as any;
@@ -135,8 +159,14 @@ export default function MediaDialog({
       const next = { ...prev };
       let currentStatuses = Array.isArray(next.status) ? [...next.status] : (next.status ? [next.status] : []);
 
-      const removeType = () => {
-        next.content_type = "" as any;
+      const removeType = (t?: string) => {
+        if (!t) {
+          next.content_type = "" as any;
+        } else {
+          let currentTypes = Array.isArray(next.content_type) ? [...next.content_type] : (next.content_type ? [next.content_type] : []);
+          currentTypes = currentTypes.filter(existing => String(existing).toLowerCase() !== String(t).toLowerCase());
+          next.content_type = currentTypes as any;
+        }
       };
 
       const removeStatus = (s: string) => {
@@ -163,21 +193,36 @@ export default function MediaDialog({
         }
       }
 
+      // --- GLOBAL: Clear row_type if it was set by this row ---
+      const knownFlagsRem = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+      const filterValueNormRem = (filter_value || '').toLowerCase().trim();
+      const isKnownFlagRem = filter_type === FilterTypeEnum.Flag && knownFlagsRem.includes(filterValueNormRem);
+
+      if (!isKnownFlagRem) {
+        const rowTypeValue = row.row_type || (row.label || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const currentVal = String((next as any).row_type || "");
+        const parts = currentVal.split(",").map(p => p.trim()).filter(Boolean);
+        const nextParts = parts.filter(p => p !== rowTypeValue);
+        (next as any).row_type = nextParts.length > 0 ? nextParts.join(", ") : "";
+      }
+
       if (filter_type === FilterTypeEnum.Status) {
         removeStatus(filter_value);
         if (filter_value === 'coming_soon') next.in_coming_soon = false;
       }
 
-      if (filter_type === FilterTypeEnum.ContentType || filter_type === FilterTypeEnum.Audiobook || filter_type === FilterTypeEnum.Song) {
-        removeType();
+      if (filter_type === FilterTypeEnum.ContentType) {
+        removeType(filter_value);
+      } else if (filter_type === FilterTypeEnum.Audiobook) {
+        removeType(ContentTypeEnum.Audiobook);
+      } else if (filter_type === FilterTypeEnum.Song) {
+        removeType(ContentTypeEnum.Song);
       }
 
       // Remove the label from content_type for non-Status rows, 
       // EXCEPT 'Coming Soon' which lives in status.
       if (row.label && filter_type !== FilterTypeEnum.Status && !row.label.toLowerCase().includes('coming soon')) {
-        if (next.content_type === row.label) {
-          removeType();
-        }
+        removeType(row.label);
       }
 
       next.status = currentStatuses as any;
@@ -286,7 +331,12 @@ export default function MediaDialog({
     // Normalize helper
     const norm = (val: any) => String(val || "").toLowerCase().trim();
     const hasType = (t: string) => {
-      return norm(formData.content_type) === norm(t);
+      let types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
+      // If it was a comma-separated string, split it for matching
+      if (typeof formData.content_type === 'string' && formData.content_type.includes(",")) {
+        types = formData.content_type.split(",").map(v => v.trim());
+      }
+      return types.some((existing: any) => norm(existing) === norm(t));
     };
     const hasStatus = (s: string) => {
       const statuses = Array.isArray((formData as any).status) ? (formData as any).status : [(formData as any).status];
@@ -304,7 +354,7 @@ export default function MediaDialog({
     }
 
     if (filter_type === FilterTypeEnum.Audiobook) {
-      return hasType(ContentTypeEnum.Audiobook) || hasType("audiobook");
+      return hasType(ContentTypeEnum.Audiobook) || hasType("audiobooks");
     }
 
     if (filter_type === FilterTypeEnum.Song) {
@@ -326,6 +376,11 @@ export default function MediaDialog({
 
       // 3. Check if label is in content_type
       if (hasType(label)) return true;
+
+      // 4. Check if row_type on the project matches this row's row_type
+      const rowTypeValue = row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_');
+      const projectRowTypes = String((formData as any).row_type || "").split(",").map(p => norm(p.trim())).filter(Boolean);
+      if (rowTypeValue && projectRowTypes.includes(norm(rowTypeValue))) return true;
 
       return false;
     }
@@ -453,7 +508,8 @@ export default function MediaDialog({
               "venue_name", "city", "country", "start_date", "end_date",
               "ticket_url", "creators", "writers", "directors", "stars",
               "rating", "total_episodes", "audio_url", "audio_path",
-              "release_status", "release_date", "youtube_id", "audio_preview_url"
+              "release_status", "release_date", "youtube_id", "audio_preview_url",
+              "row_type"
             ];
 
             const fields = Array.from(new Set([
@@ -477,17 +533,15 @@ export default function MediaDialog({
               Object.entries(media).forEach(([key, value]) => {
                 if (allowedFields && !allowedFields.includes(key)) return;
 
-                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags"];
+                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type"];
                 if (arrayFields.includes(key)) {
-                  let arr = value;
-                  if (typeof arr === 'string' && arr.startsWith('[') && arr.endsWith(']')) {
-                    try { arr = JSON.parse(arr); } catch (e) { arr = [arr]; }
-                  }
-                  result[key] = Array.isArray(arr) ? arr : (arr ? [arr] : []);
+                  result[key] = smartParse(value);
                 }
                 else {
-                  result[key] =
-                    value === null || value === undefined ? "" : value;
+                  // If it's corrupted data (nested JSON strings/arrays), unwrap it to plain text
+                  const parsedValues = smartParse(value);
+                  const val = parsedValues.join(", ");
+                  result[key] = (val === "" && (value === null || value === undefined)) ? "" : val;
                 }
               });
 
@@ -511,7 +565,7 @@ export default function MediaDialog({
                 if (arrayFields.includes(key)) {
                   base[key] = [];
                 } else if (key === "content_type") {
-                  base[key] = "";
+                  base[key] = [];
                 } else {
                   base[key] = "";
                 }
@@ -543,7 +597,8 @@ export default function MediaDialog({
     e.preventDefault();
 
     // Validate required fields
-    const isReadCase = [ContentTypeEnum.Audiobook as any].includes(formData.content_type as any);
+    const typesForValidation = smartParse(formData.content_type);
+    const isReadCase = typesForValidation.some(t => String(t) === ContentTypeEnum.Audiobook || String(t).toLowerCase() === "audiobook" || String(t).toLowerCase() === "audiobooks");
 
     const requiredFields = [
       "title",
@@ -559,6 +614,7 @@ export default function MediaDialog({
     const missingFields = requiredFields.filter(field => {
       if (availableFields.includes(field) || ["content_type", "status", "audio_url", "preview_url"].includes(field)) {
         const value = (formData as any)[field];
+        if (Array.isArray(value)) return value.length === 0;
         return value === undefined || value === null || value === "";
       }
       return false;
@@ -592,31 +648,27 @@ export default function MediaDialog({
           "order_index",
           "total_episodes",
           "episode_runtime_minutes",
+          "ownership",
         ].includes(key)
       ) {
-        // Convert numeric strings to integers
-        submitData[key] = value ? parseInt(String(value)) : null;
+        // Convert numeric strings to integers, allowing 0
+        submitData[key] = (value !== null && value !== undefined && value !== "") ? parseInt(String(value), 10) : null;
       } else {
         // Handle other possible array fields
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags"];
+        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type", "row_type"];
         if (arrayFields.includes(key)) {
-          if (Array.isArray(value)) {
-            // Keep as array for backend if backend supports it, otherwise join
-            submitData[key] = value.filter(Boolean);
-          } else if (typeof value === 'string') {
-            const items = value.split(/[,\n]/).map((v) => {
-              const trimmed = v.trim();
-              if (["genres", "vibe_tags"].includes(key) && trimmed) {
-                return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-              }
-              return trimmed;
-            }).filter(Boolean);
-
-            // Deduplicate
-            submitData[key] = Array.from(new Set(items));
+          const parsedArray = smartParse(value);
+          const cleanArray = parsedArray.filter(Boolean);
+          if (key === "content_type" || key === "row_type") {
+            submitData[key] = cleanArray.join(", ");
           } else {
-            submitData[key] = value;
+            submitData[key] = cleanArray;
           }
+        } else if (typeof value === 'string') {
+          // DO NOT split general strings by comma/newline and convert to array.
+          // This was corrupting fields like 'title' and 'platform'.
+          // Only trim the string.
+          submitData[key] = value.trim();
         } else {
           submitData[key] = value;
         }
@@ -735,23 +787,7 @@ export default function MediaDialog({
         ...Array.from(new Set(customTypes)).map(ct => ({ value: ct, label: ct }))
       ];
 
-      const parseArray = (val: any): string[] => {
-        if (Array.isArray(val)) return val.map(String);
-        if (typeof val === "string") {
-          const trimmed = val.trim();
-          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              return Array.isArray(parsed) ? parsed.map(String) : [val];
-            } catch (e) {
-              return [val];
-            }
-          }
-          if (val.includes(",")) return val.split(",").map(v => v.trim()).filter(Boolean);
-          return val ? [val] : [];
-        }
-        return val ? [String(val)] : [];
-      };
+      const parseArray = (val: any): string[] => smartParse(val);
 
       const currentTypes = parseArray(value);
 
@@ -778,7 +814,12 @@ export default function MediaDialog({
                   className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-red-50 hover:text-red-700 hover:border-red-100 cursor-pointer transition-colors"
                   onClick={() => toggleType(t)}
                 >
-                  {t.charAt(0).toUpperCase() + t.slice(1)} <span className="ml-1 opacity-60">×</span>
+                  {(() => {
+                    const option = allOptions.find(o => o.value === t);
+                    if (option) return option.label;
+                    const s = String(t).replace(/_/g, " ");
+                    return s.charAt(0).toUpperCase() + s.slice(1);
+                  })()} <span className="ml-1 opacity-60">×</span>
                 </Badge>
               ))
             )}
@@ -810,23 +851,7 @@ export default function MediaDialog({
         { value: "coming_soon", label: "Coming Soon" },
       ];
 
-      const parseArray = (val: any): string[] => {
-        if (Array.isArray(val)) return val.map(String);
-        if (typeof val === "string") {
-          const trimmed = val.trim();
-          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              return Array.isArray(parsed) ? parsed.map(String) : [val];
-            } catch (e) {
-              return [val];
-            }
-          }
-          if (val.includes(",")) return val.split(",").map(v => v.trim()).filter(Boolean);
-          return val ? [val] : [];
-        }
-        return val ? [String(val)] : [];
-      };
+      const parseArray = (val: any): string[] => smartParse(val);
 
       const currentStatuses = parseArray(value);
 
@@ -934,6 +959,7 @@ export default function MediaDialog({
     const fieldGuide: Record<string, { description: string; example?: string }> = {
       title: { description: "Name of the content as seen in the catalog." },
       content_type: { description: "Classification for routing and playback." },
+      row_type: { description: "Links this item to a specific content row. Auto-set when you select a row from Row Visibility above.", example: "trending_audiobooks" },
       status: { description: "Release status: 'released' is live, 'coming_soon' shows teaser." },
       poster_url: { description: "Primary display image URL." },
       preview_url: { description: "Teaser video or thumbnail URL." },
@@ -962,7 +988,7 @@ export default function MediaDialog({
     };
 
     const isDate = key.endsWith("_at") || key.includes("date") || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value));
-    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags"];
+    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags", "content_type"];
     const isArrayField = knownArrayFields.includes(key);
     const fieldInfo = fieldGuide[key];
 
@@ -989,20 +1015,7 @@ export default function MediaDialog({
 
     // Special: Array fields
     if (isArrayField) {
-      const getDisplayValue = (val: any) => {
-        if (Array.isArray(val)) return val.join(", ");
-        if (typeof val === 'string' && val.trim().startsWith("[") && val.trim().endsWith("]")) {
-          try {
-            const parsed = JSON.parse(val);
-            return Array.isArray(parsed) ? parsed.join(", ") : val;
-          } catch (e) {
-            return val;
-          }
-        }
-        return val || "";
-      };
-
-      const displayValue = getDisplayValue(value);
+      const displayValue = smartParse(value).join(", ");
       return (
         <div key={key} className="col-span-2">
           <Label htmlFor={key} className="font-medium">
@@ -1091,16 +1104,8 @@ export default function MediaDialog({
                       const bucket = "Media";
                       const safeName = file.name.replace(/\s+/g, "_");
                       // Safely determine primary type for folder structure
-                      let primaryType = "generic";
-                      if (formData.content_type) {
-                        if (Array.isArray(formData.content_type)) {
-                          primaryType = String(formData.content_type[0] || "generic");
-                        } else {
-                          primaryType = String(formData.content_type);
-                        }
-                      }
-                      // Sanitize type for folder name (remove brackets, quotes if any remain)
-                      primaryType = primaryType.replace(/[\[\]"]/g, "");
+                      const types = smartParse(formData.content_type);
+                      const primaryType = types.length > 0 ? types[0] : "Generic";
 
                       const path =
                         key === "audio_url" || key === "audio_preview_url"

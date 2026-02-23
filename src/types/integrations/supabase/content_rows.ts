@@ -6,6 +6,7 @@ export enum PageEnum {
   Listen = "listen",
   Read = "read",
   MyList = "mylist",
+  Recipes = "recipes",
 }
 
 export enum FilterTypeEnum {
@@ -29,6 +30,7 @@ export interface ContentRowMetaData {
   order_index: number;
   is_active: boolean;
   max_items?: number | null;
+  row_type?: string | null;
   is_deleted?: boolean;
   deleted_at?: string | null;
 }

@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 import { toast } from "sonner";
 import { ContentTypeEnum } from "@/types";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -50,8 +50,9 @@ export interface ArchivedItem {
   raw: Recipe | Project | Footer | Content;
 }
 
-function getProjectSource(contentType: string): ArchiveSource {
-  switch (contentType) {
+function getProjectSource(contentType: string | string[]): ArchiveSource {
+  const primaryType = Array.isArray(contentType) ? contentType[0] : contentType;
+  switch (primaryType) {
     case ContentTypeEnum.Film:
     case ContentTypeEnum.TvShow:
       return "watch";
@@ -221,13 +222,16 @@ export default function Archive() {
       raw: r,
     }));
 
-    const projectItems: ArchivedItem[] = (projects as Project[]).map((p) => ({
-      source: getProjectSource(p.content_type),
-      id: p.id,
-      title: p.title,
-      subtitle: p.content_type,
-      raw: p,
-    }));
+    const projectItems: ArchivedItem[] = (projects as Project[]).map((p) => {
+      const subtitle = Array.isArray(p.content_type) ? p.content_type.join(", ") : p.content_type;
+      return {
+        source: getProjectSource(p.content_type),
+        id: p.id,
+        title: p.title,
+        subtitle: subtitle,
+        raw: p,
+      };
+    });
 
     const footerItems: ArchivedItem[] = (footers as Footer[]).map((f) => ({
       source: "footer",
@@ -565,26 +569,7 @@ export default function Archive() {
                   {item.source !== "recipe" && "content_type" in item.raw && (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {(() => {
-                        const val = (item.raw as any).content_type;
-                        let values: string[] = [];
-                        if (Array.isArray(val)) {
-                          values = val.map(String);
-                        } else if (typeof val === "string") {
-                          if (val.startsWith("[") && val.endsWith("]")) {
-                            try {
-                              const parsed = JSON.parse(val);
-                              values = Array.isArray(parsed) ? parsed.map(String) : [val];
-                            } catch (e) {
-                              values = [val];
-                            }
-                          } else if (val.includes(",")) {
-                            values = val.split(",").map((v) => v.trim()).filter(Boolean);
-                          } else {
-                            values = [val];
-                          }
-                        } else {
-                          values = [String(val)];
-                        }
+                        const values = smartParse((item.raw as any).content_type);
                         return values.map((v, i) => (
                           <Badge key={`${v}-${i}`} variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-2 font-normal">
                             {v}

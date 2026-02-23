@@ -13,22 +13,24 @@ import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { ContentTypeEnum, Flag, Project } from "@/types";
+import { ContentTypeEnum, Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
 import { toast } from "sonner";
-import { Projects } from "@/api/integrations/supabase/projects/projects";
+import { Songs } from "@/api";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
 
-// Type assertion to ensure Projects methods are available
-const projectsAPI = Projects as Required<typeof Projects>;
+// Type assertion to ensure Songs methods are available
+const songsAPI = Songs as Required<typeof Songs>;
 
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 
 export default function ListenPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [vibeFilter, setVibeFilter] = useState<string>("all");
+  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -73,26 +75,99 @@ export default function ListenPage() {
 
   const queryClient = useQueryClient();
 
+  const { data: shelves = [] } = useQuery({
+    queryKey: ["content-rows", "listen"],
+    queryFn: async () => {
+      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "listen" }, { key: "is_active", value: true }] });
+      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
+    }
+  });
+
   // Fetch all media
   const {
     data: mediaList = [],
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter],
+    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter, selectedShelfId, contentTypeFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [{ key: "is_deleted" as any, value: false }];
+      const eqFilters: any[] = [];
       const containsFilters: any[] = [];
-      const contentTypeOr = `content_type.ilike.%${ContentTypeEnum.Song}`;
+      const overlapsFilters: any[] = [];
+      const ilikeFilters: any[] = [];
+      let shelfOr: string | undefined = undefined;
 
-      if (statusFilter !== "all") {
-        containsFilters.push({ key: "status", value: statusFilter });
+      if (statusFilter.length > 0) {
+        overlapsFilters.push({ key: "status", value: statusFilter });
       }
 
-      const response = await projectsAPI.get({
+      // Apply shelf filter logic
+      if (selectedShelfId !== "all") {
+        const shelf = shelves.find(s => s.id === selectedShelfId);
+        if (shelf) {
+          if (shelf.filter_type === FilterTypeEnum.Flag) {
+            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
+            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+
+            if (flagExists) {
+              eqFilters.push({ key: shelf.filter_value, value: true });
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
+            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
+          } else if (shelf.filter_type === FilterTypeEnum.Song) {
+            ilikeFilters.push({ key: "content_type", value: "%Song%" });
+          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
+            if (shelf.filter_value.includes(",")) {
+              const values = shelf.filter_value.split(",").map(v => v.trim());
+              if (isStatus) {
+                overlapsFilters.push({ key: "status", value: values });
+              } else {
+                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+              }
+            } else {
+              if (isStatus) {
+                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+              } else {
+                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+              }
+            }
+          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
+            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
+            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+          }
+        }
+      }
+
+      if (contentTypeFilter.length > 0) {
+        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        if (shelfOr) {
+          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
+        } else {
+          shelfOr = contentTypePatterns;
+        }
+      }
+
+      // Apply base content type restriction for Listen page - ONLY Songs
+      const pageFilterOr = `content_type.ilike.%${ContentTypeEnum.Song}%`;
+      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
+
+      let finalOr = shelfOr;
+
+      if (finalOr) {
+        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
+      } else {
+        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
+      }
+
+      const response = await songsAPI.get({
         eq: eqFilters as any,
-        contains: containsFilters as any,
-        or: contentTypeOr,
+        contains: containsFilters.length > 0 ? containsFilters : undefined,
+        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
+        ilike: ilikeFilters.length > 0 ? ilikeFilters : undefined,
+        or: finalOr,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -118,7 +193,7 @@ export default function ListenPage() {
 
       // Apply Genre filter
       if (genreFilter !== "all") {
-        data = data.filter(r => {
+        data = data.filter((r: Project) => {
           const gData = r.genres;
           const genres = Array.isArray(gData) ? gData : [];
           return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
@@ -127,7 +202,7 @@ export default function ListenPage() {
 
       // Apply Vibe filter
       if (vibeFilter !== "all") {
-        data = data.filter(r => {
+        data = data.filter((r: Project) => {
           const vData = r.vibe_tags;
           const vibes = Array.isArray(vData) ? vData : [];
           return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
@@ -140,7 +215,7 @@ export default function ListenPage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await projectsAPI.createOne(data);
+      const response = await songsAPI.createOne(data);
       console.log("response::::::", response);
       if (
         (response.flag !== Flag.Success &&
@@ -164,7 +239,7 @@ export default function ListenPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await projectsAPI.updateOneByID(id, data);
+      const response = await songsAPI.updateOneByID(id, data);
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -188,7 +263,7 @@ export default function ListenPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
+      const response = await songsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -225,13 +300,13 @@ export default function ListenPage() {
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["listen-statuses"],
     queryFn: async () => {
-      const response = await projectsAPI.get({
+      const response = await songsAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
         const statuses = (response.data as Project[])
-          .flatMap((item) => item.status)
+          .flatMap((item) => smartParse(item.status))
           .filter(Boolean);
         return [...new Set(statuses)].sort();
       }
@@ -242,12 +317,12 @@ export default function ListenPage() {
   const { data: availableGenres = [] } = useQuery<string[]>({
     queryKey: ["listen-genres"],
     queryFn: async () => {
-      const response = await projectsAPI.get({
+      const response = await songsAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap(p => p.genres || []);
+        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
         return Array.from(new Set(genres)).filter(Boolean).sort();
       }
       return [];
@@ -257,12 +332,12 @@ export default function ListenPage() {
   const { data: availableVibes = [] } = useQuery<string[]>({
     queryKey: ["listen-vibes"],
     queryFn: async () => {
-      const response = await projectsAPI.get({
+      const response = await songsAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song, ContentTypeEnum.Audiobook] }
+        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const vibes = (response.data as Project[]).flatMap(p => p.vibe_tags || []);
+        const vibes = (response.data as Project[]).flatMap(p => smartParse(p.vibe_tags));
         return Array.from(new Set(vibes)).filter(Boolean).sort();
       }
       return [];
@@ -271,7 +346,40 @@ export default function ListenPage() {
 
 
   // Fetch unique types for filters (global, not affected by current filter)
-  // For Listen page we always show songs, so we don't need a type filter dropdown.
+  const { data: availableTypes = [] } = useQuery({
+    queryKey: ["listen-unique-types"],
+    queryFn: async () => {
+      const response = await songsAPI.get({ eq: [] });
+
+      if (response.flag !== Flag.Success || !response.data) {
+        return [];
+      }
+
+      const typesSet = new Set<string>();
+      const extractValues = (value: any): string[] => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value.flatMap(extractValues);
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed !== trimmed) return extractValues(parsed);
+          } catch { }
+          return [trimmed];
+        }
+        return [];
+      };
+
+      (response.data as Project[]).forEach((item) => {
+        const cleanValues = extractValues(item.content_type);
+        cleanValues.forEach((val) => {
+          if (typeof val === "string" && val.trim()) typesSet.add(val.trim());
+        });
+      });
+
+      return Array.from(typesSet).sort((a, b) => a.localeCompare(b));
+    },
+  });
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -368,7 +476,13 @@ export default function ListenPage() {
           onSearchChange={setSearchQuery}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
+          contentTypeFilter={contentTypeFilter}
+          onContentTypeFilterChange={setContentTypeFilter}
           availableStatuses={availableStatuses}
+          availableTypes={availableTypes}
+          shelves={shelves}
+          selectedShelfId={selectedShelfId}
+          onShelfChange={setSelectedShelfId}
           genreFilter={genreFilter}
           onGenreFilterChange={setGenreFilter}
           availableGenres={availableGenres}
@@ -492,25 +606,7 @@ export default function ListenPage() {
                             <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             (() => {
-                              let values: string[] = [];
-                              if (Array.isArray(value)) {
-                                values = value.map(String);
-                              } else if (typeof value === "string") {
-                                if (value.startsWith("[") && value.endsWith("]")) {
-                                  try {
-                                    const parsed = JSON.parse(value);
-                                    values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                  } catch (e) {
-                                    values = [value];
-                                  }
-                                } else if (value.includes(",")) {
-                                  values = value.split(",").map((v) => v.trim()).filter(Boolean);
-                                } else {
-                                  values = [value];
-                                }
-                              } else {
-                                values = [String(value)];
-                              }
+                              let values = smartParse(value);
 
                               // Capitalize and format for display
                               values = values.map((v) => {
@@ -552,9 +648,10 @@ export default function ListenPage() {
                                   </div>
                                 );
                               }
+                              const displayValue = values.join(", ");
                               return (
-                                <span className="truncate block" title={String(value)}>
-                                  {String(value)}
+                                <span className="truncate block" title={displayValue}>
+                                  {displayValue}
                                 </span>
                               );
                             })()
@@ -586,16 +683,9 @@ export default function ListenPage() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         allowedFields={carouselAllowedFields}
-        defaultValues={(() => {
-          const defaults: any = {
-            content_type: ContentTypeEnum.Song, // Default for Listen page
-          };
-
-          // Apply manual filters
-          if (statusFilter !== "all") defaults.status = statusFilter;
-
-          return defaults;
-        })()}
+        assignmentPage="listen"
+        selectedShelfId={selectedShelfId}
+        defaultValues={{}}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
 
