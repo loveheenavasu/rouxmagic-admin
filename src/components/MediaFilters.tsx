@@ -266,25 +266,7 @@ export function MediaFilters({
         />
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center">
-        {/* Shelf Filter */}
-        {onShelfChange && shelves.length > 0 && (
-          <div className="w-full sm:w-48">
-            <Select value={selectedShelfId} onValueChange={onShelfChange}>
-              <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/30">
-                <SelectValue placeholder="Filter by Shelf" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Items</SelectItem>
-                {shelves.map((shelf) => (
-                  <SelectItem key={shelf.id} value={shelf.id}>
-                    {shelf.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+      <div className="flex flex-wrap gap-3 items-center">        
 
         {/* Status Filter */}
         {onStatusFilterChange && (
