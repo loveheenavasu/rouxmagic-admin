@@ -64,6 +64,7 @@ export default function MediaDialog({
     {} as ProjectFormData
   );
   const [availableFields, setAvailableFields] = useState<string[]>([]);
+  const [arrayFieldNames, setArrayFieldNames] = useState<string[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(true);
 
   // Row Assignment Mode state
@@ -487,6 +488,30 @@ export default function MediaDialog({
             : [response.data];
 
           if (projects.length > 0) {
+            const sample = projects[0] as Record<string, any>;
+            const dbArrayFields = Object.entries(sample)
+              .filter(([, v]) => Array.isArray(v))
+              .map(([k]) => k);
+            const STATIC_ARRAY_FIELDS = [
+              "creators",
+              "cast",
+              "directors",
+              "producers",
+              "writers",
+              "tags",
+              "stars",
+              "writer",
+              "director",
+              "star",
+              "status",
+              "genres",
+              "vibe_tags",
+              "flavor_tags",
+              "content_type",
+            ];
+            const allArrayFields = Array.from(
+              new Set([...STATIC_ARRAY_FIELDS, ...dbArrayFields])
+            );
             const KNOWN_FLAGS: string[] = ["in_hero_carousel", "in_theaters"];
             const MANDATORY_EXTRA_FIELDS: string[] = ["genres", "vibe_tags"];
             const ALL_POSSIBLE_FIELDS: string[] = [
@@ -514,6 +539,7 @@ export default function MediaDialog({
                 allowedFields ? allowedFields.includes(key) : true
               );
             setAvailableFields(fields);
+            setArrayFieldNames(allArrayFields);
 
             // Initialize form data
             if (media) {
@@ -528,8 +554,10 @@ export default function MediaDialog({
                   return;
                 }
 
-                const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type"];
-                if (arrayFields.includes(key)) {
+                const arrayFields = arrayFieldNames.length
+                  ? arrayFieldNames
+                  : ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags", "content_type"];
+                if (arrayFields.includes(key) || Array.isArray(value)) {
                   result[key] = smartParse(value);
                 } else {
                   const parsedValues = smartParse(value);
@@ -553,10 +581,10 @@ export default function MediaDialog({
               // Add mode - initialize empty fields
               const base: Record<string, any> = {};
               fields.forEach((key) => {
-                const arrayFields = ["genres", "status", "vibe_tags"];
+                const arrayFields = arrayFieldNames.length
+                  ? arrayFieldNames
+                  : ["genres", "status", "vibe_tags", "flavor_tags", "content_type"];
                 if (arrayFields.includes(key)) {
-                  base[key] = [];
-                } else if (key === "content_type") {
                   base[key] = [];
                 } else if (key === "row_type") {
                   base[key] = ""; // always a plain string
@@ -649,7 +677,25 @@ export default function MediaDialog({
         submitData[key] = (value !== null && value !== undefined && value !== "") ? parseInt(String(value), 10) : null;
       } else {
         // Handle other possible array fields
-        const arrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "content_type"];
+        const arrayFields = arrayFieldNames.length
+          ? arrayFieldNames
+          : [
+              "creators",
+              "cast",
+              "directors",
+              "producers",
+              "writers",
+              "tags",
+              "stars",
+              "writer",
+              "director",
+              "star",
+              "status",
+              "genres",
+              "vibe_tags",
+              "flavor_tags",
+              "content_type",
+            ];
         if (key === "row_type") {
           // row_type is a comma-separated string of row identifiers — store as-is, just clean it up
           const parts = String(value || "")
@@ -762,28 +808,9 @@ export default function MediaDialog({
         { value: ContentTypeEnum.Audiobook, label: "Audiobook" },
       ];
 
-      const knownStatuses = ['coming soon', 'released', 'draft', 'archived', 'scheduled'];
-      const knownFlags = ['now playing', 'coming soon', 'latest releases', 'hero carousel', 'featured', 'new release', 'trending', 'my list', 'mylist'];
-
-      const customTypes = (contentRowFilters as any[])
-        .map(r => r.label)
-        .filter(l => {
-          if (!l) return false;
-          const low = l.toLowerCase();
-          const isStandardType = [
-            ContentTypeEnum.Film,
-            ContentTypeEnum.TvShow,
-            ContentTypeEnum.Song,
-            ContentTypeEnum.Audiobook
-          ].some(t => t.toLowerCase() === low);
-          const isKnown = knownStatuses.includes(low) || knownFlags.some(f => low.includes(f));
-          return !isStandardType && !isKnown;
-        });
-
-      const allOptions = [
-        ...standardTypes,
-        ...Array.from(new Set(customTypes)).map(ct => ({ value: ct, label: ct }))
-      ];
+      // Only show real content types here.
+      // Row labels (content rows) are no longer injected as extra content_type options.
+      const allOptions = standardTypes;
 
       const parseArray = (val: any): string[] => smartParse(val);
 
@@ -986,8 +1013,25 @@ export default function MediaDialog({
     };
 
     const isDate = key.endsWith("_at") || key.includes("date") || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value));
-    const knownArrayFields = ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags", "content_type"];
-    const isArrayField = knownArrayFields.includes(key);
+    const knownArrayFields = [
+      "creators",
+      "cast",
+      "directors",
+      "producers",
+      "writers",
+      "tags",
+      "stars",
+      "writer",
+      "director",
+      "star",
+      "status",
+      "genres",
+      "vibe_tags",
+      "flavor_tags",
+      "content_type",
+      ...arrayFieldNames,
+    ];
+    const isArrayField = knownArrayFields.includes(key) || Array.isArray(value);
     const fieldInfo = fieldGuide[key];
 
     // Special: Date Fields
@@ -1013,7 +1057,10 @@ export default function MediaDialog({
 
     // Special: Array fields
     if (isArrayField) {
-      const displayValue = smartParse(value).join(", ");
+      // When editing, show exactly what the user typed if it's a string.
+      // For existing array values, normalize them once into a comma‑separated string.
+      const displayValue =
+        typeof value === "string" ? value : smartParse(value).join(", ");
       return (
         <div key={key} className="col-span-2">
           <Label htmlFor={key} className="font-medium">
