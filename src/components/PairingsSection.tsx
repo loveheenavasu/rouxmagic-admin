@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { smartParse } from "@/lib/utils";
 import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,18 +40,6 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
     const [isSearching, setIsSearching] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-    const ensureArray = (tags: any): string[] => {
-        if (Array.isArray(tags)) return tags;
-        if (typeof tags === 'string') {
-            try {
-                const parsed = JSON.parse(tags);
-                return Array.isArray(parsed) ? parsed : [tags];
-            } catch (e) {
-                return tags.split(',').map(t => t.trim()).filter(Boolean);
-            }
-        }
-        return [];
-    };
 
     // 1. Fetch existing pairings
     const { data: existingPairings = [], isLoading: pairingsLoading } = useQuery<Pairing[]>({
@@ -272,18 +261,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                             <Badge variant="secondary" className={cn("mt-1.5 text-[10px] h-5", getBadgeClass(pairedItemRef))}>
                                                 {getSourceIcon(pairedItemRef)}
                                                 <span className="ml-1">
-                                                    {(() => {
-                                                        const val = pairedItemRef as any;
-                                                        if (typeof val === 'string' && val.includes('[')) {
-                                                            try {
-                                                                const parsed = JSON.parse(val);
-                                                                return Array.isArray(parsed) ? parsed.join(", ") : val;
-                                                            } catch (e) {
-                                                                return val;
-                                                            }
-                                                        }
-                                                        return val;
-                                                    })()}
+                                                    {smartParse(pairedItemRef).join(", ")}
                                                 </span>
                                             </Badge>
                                         </div>
@@ -303,17 +281,17 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                     <div className="space-y-2">
                                         {pairedItemRef !== PairingSourceEnum.Recipe && (
                                             <div className="flex flex-wrap gap-1">
-                                                {ensureArray(item?.vibe_tags).length > 0 &&
-                                                    ensureArray(item?.vibe_tags).map((tag: any) => (
+                                                {smartParse(item?.vibe_tags).length > 0 &&
+                                                    smartParse(item?.vibe_tags).map((tag: any) => (
                                                         <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-slate-200 text-slate-500 font-normal">
                                                             {tag}
                                                         </Badge>
                                                     ))}
                                                 </div>
                                             )}
-                                            {(pairedItemRef === PairingSourceEnum.Recipe && ensureArray(item?.flavor_tags).length > 0) && (
+                                            {(pairedItemRef === PairingSourceEnum.Recipe && smartParse(item?.flavor_tags).length > 0) && (
                                                 <div className="flex flex-wrap gap-1">
-                                                    {ensureArray(item?.flavor_tags).map((tag: any) => (
+                                                    {smartParse(item?.flavor_tags).map((tag: any) => (
                                                         <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-orange-200 text-orange-600 font-normal bg-orange-50/30">
                                                             {tag}
                                                         </Badge>
