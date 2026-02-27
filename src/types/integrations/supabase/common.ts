@@ -11,6 +11,7 @@ export enum Tables {
     EmailCaptureSettings = "email_capture_settings",
     Footer = "footer",
     FooterSettings = "footer_settings",
+    AboutPage = "about_page",
     PageSettings = "page_settings",
     Pairings = "pairings",
     Shop = "shop",

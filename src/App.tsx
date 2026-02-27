@@ -21,6 +21,7 @@ import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
 import ContentRows from "./pages/ContentRows";
 import NavigationPage from "./pages/NavigationPage";
+import About from "./pages/About";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -135,16 +136,16 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route
-          path="/chapters"
+        <Route
+          path="/about"
           element={
             <ProtectedRoute>
               <Layout>
-                <Chapters />
+                <About />
               </Layout>
             </ProtectedRoute>
           }
-        /> */}
+        />
         <Route
           path="/footer"
           element={
