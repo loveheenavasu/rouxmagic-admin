@@ -15,6 +15,7 @@ import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe } from "@/types";
 import PairingsSection from "@/components/PairingsSection";
+import { smartParse } from "@/lib/utils";
 
 interface RecipeDialogProps {
   open: boolean;
@@ -59,6 +60,9 @@ export default function RecipeDialog({
         setFormData({
           ...emptyForm,
           ...recipe,
+          ...(recipe && {
+            flavor_tags: smartParse(recipe.flavor_tags as any),
+          }),
         });
       } else {
         setFormData(emptyForm);
@@ -77,20 +81,14 @@ export default function RecipeDialog({
     }
 
     const submitData = { ...formData };
-    if (submitData.flavor_tags) {
-      const rawTags = typeof submitData.flavor_tags === 'string'
-        ? (submitData.flavor_tags as string).split(/[,\n]/)
-        : (Array.isArray(submitData.flavor_tags) ? submitData.flavor_tags as string[] : []);
-
-      submitData.flavor_tags = Array.from(new Set(
-        rawTags
-          .map(t => {
-            const trimmed = String(t).trim();
-            return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-          })
-          .filter(Boolean)
-      ));
-    }
+    // Always send a clean string[] — unwrap any stringified/corrupted value
+    submitData.flavor_tags = smartParse(formData.flavor_tags as any)
+      .map((t) => {
+        const trimmed = String(t).trim();
+        return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+      })
+      .filter(Boolean);
+    submitData.flavor_tags = Array.from(new Set(submitData.flavor_tags));
 
     await onSubmit(submitData as any);
   };
@@ -380,20 +378,7 @@ export default function RecipeDialog({
               </Label>
               <Textarea
                 id="flavor_tags"
-                value={(() => {
-                  const val = formData.flavor_tags as any;
-                  if (!val) return "";
-                  if (Array.isArray(val)) return val.join(", ");
-                  if (typeof val === 'string' && val.trim().startsWith("[") && val.trim().endsWith("]")) {
-                    try {
-                      const parsed = JSON.parse(val);
-                      return Array.isArray(parsed) ? parsed.join(", ") : val;
-                    } catch (e) {
-                      return val;
-                    }
-                  }
-                  return String(val);
-                })()}
+                value={smartParse(formData.flavor_tags as any).join(", ")}
                 onChange={(e) => handleChange("flavor_tags", e.target.value)}
                 placeholder="e.g. Spicy, Sweet, Savory"
                 className="mt-1.5 min-h-[80px]"

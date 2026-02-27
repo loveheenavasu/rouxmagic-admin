@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { Flag, Recipe } from "@/types";
+import { smartParse } from "@/lib/utils";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 
@@ -476,26 +477,13 @@ export default function RecipesCarousel() {
                                 <span className="text-muted-foreground text-xs">—</span>
                               ) : (
                                 (() => {
-                                  let values: string[] = [];
-                                  if (Array.isArray(value)) {
-                                    values = value.map(String);
-                                  } else if (typeof value === "string") {
-                                    const trimmed = value.trim();
-                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                                      try {
-                                        const parsed = JSON.parse(trimmed);
-                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                      } catch (e) {
-                                        values = [value];
-                                      }
-                                    } else if (value.includes(",")) {
-                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
-                                    } else {
-                                      values = [value];
-                                    }
-                                  } else {
-                                    values = [String(value)];
-                                  }
+                                  let values = smartParse(value);
+                                  // Capitalize and format for display
+                                  values = values.map((v) => {
+                                    if (!v) return v;
+                                    const s = String(v).replace(/_/g, " ");
+                                    return s.charAt(0).toUpperCase() + s.slice(1);
+                                  });
 
                                   if (["category", "flavor_tags"].includes(key)) {
                                     const MAX_TAGS = 3;
@@ -525,9 +513,10 @@ export default function RecipesCarousel() {
                                       </div>
                                     );
                                   }
+                                  const displayValue = values.join(", ");
                                   return (
-                                    <span className="truncate block" title={String(value)}>
-                                      {String(value)}
+                                    <span className="truncate block" title={displayValue}>
+                                      {displayValue}
                                     </span>
                                   );
                                 })()

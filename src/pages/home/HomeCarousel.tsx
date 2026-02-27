@@ -17,7 +17,7 @@ import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { toast } from "sonner";
 import { Flag, Project } from "@/types";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, smartParse } from "@/lib/utils";
 
 // Type assertion to ensure Projects methods are available
 const projectsAPI = Projects as Required<typeof Projects>;
@@ -519,27 +519,7 @@ export default function HomeCarousel() {
                                 <span className="text-muted-foreground text-xs">—</span>
                               ) : (
                                 (() => {
-                                  let values: string[] = [];
-                                  if (Array.isArray(value)) {
-                                    values = value.map(String);
-                                  } else if (typeof value === "string") {
-                                    const trimmed = value.trim();
-                                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                                      try {
-                                        const parsed = JSON.parse(trimmed);
-                                        values = Array.isArray(parsed) ? parsed.map(String) : [value];
-                                      } catch (e) {
-                                        values = [value];
-                                      }
-                                    } else if (value.includes(",")) {
-                                      values = value.split(",").map((v) => v.trim()).filter(Boolean);
-                                    } else {
-                                      values = [value];
-                                    }
-                                  } else {
-                                    values = [String(value)];
-                                  }
-
+                                  let values = smartParse(value);
                                   // Capitalize and format for display
                                   values = values.map((v) => {
                                     if (!v) return v;
@@ -580,9 +560,10 @@ export default function HomeCarousel() {
                                       </div>
                                     );
                                   }
+                                  const displayValue = values.join(", ");
                                   return (
-                                    <span className="truncate block" title={String(value)}>
-                                      {String(value)}
+                                    <span className="truncate block" title={displayValue}>
+                                      {displayValue}
                                     </span>
                                   );
                                 })()

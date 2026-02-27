@@ -1055,12 +1055,9 @@ export default function MediaDialog({
       );
     }
 
-    // Special: Array fields
+    // Special: Array fields — always show as plain comma-separated text (never stringified JSON)
     if (isArrayField) {
-      // When editing, show exactly what the user typed if it's a string.
-      // For existing array values, normalize them once into a comma‑separated string.
-      const displayValue =
-        typeof value === "string" ? value : smartParse(value).join(", ");
+      const displayValue = smartParse(value).join(", ");
       return (
         <div key={key} className="col-span-2">
           <Label htmlFor={key} className="font-medium">
