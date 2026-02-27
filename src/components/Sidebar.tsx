@@ -18,9 +18,12 @@ import {
   LayoutGrid,
   ImagePlay,
   Utensils,
-  Archive,
+  Trash2,
   PanelBottom,
+  LayoutList,
   ShoppingBag,
+  Info,
+  Link2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -55,9 +58,10 @@ const navigation = [
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Shop", href: "/shop", icon: ShoppingBag },
-  { name: "Archive", href: "/archive", icon: Archive },
-  { name: "Content Rows", href: "/content-rows", icon: PanelBottom },
-  { name: "Navigation Header", href: "/navigation", icon: PanelBottom },
+  { name: "About Page", href: "/about", icon: Info },
+  { name: "Archive", href: "/archive", icon: Trash2 },
+  { name: "Content Rows", href: "/content-rows", icon: LayoutList },
+  { name: "Navigation Header", href: "/navigation", icon: Link2 },
   { name: "Footer", href: "/footer", icon: PanelBottom },
 ];
 
