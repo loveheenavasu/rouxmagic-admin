@@ -29,7 +29,6 @@ export default function ListenPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [genreFilter, setGenreFilter] = useState<string>("all");
-  const [vibeFilter, setVibeFilter] = useState<string>("all");
   const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
@@ -90,7 +89,7 @@ export default function ListenPage() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, genreFilter, vibeFilter, selectedShelfId, contentTypeFilter],
+    queryKey: ["media", searchQuery, statusFilter, genreFilter, selectedShelfId, contentTypeFilter],
     queryFn: async () => {
       const eqFilters: any[] = [];
       const containsFilters: any[] = [];
@@ -200,14 +199,6 @@ export default function ListenPage() {
         });
       }
 
-      // Apply Vibe filter
-      if (vibeFilter !== "all") {
-        data = data.filter((r: Project) => {
-          const vData = r.vibe_tags;
-          const vibes = Array.isArray(vData) ? vData : [];
-          return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
-        });
-      }
       return data;
     },
   });
@@ -216,7 +207,6 @@ export default function ListenPage() {
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await songsAPI.createOne(data);
-      console.log("response::::::", response);
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -328,22 +318,6 @@ export default function ListenPage() {
       return [];
     }
   });
-
-  const { data: availableVibes = [] } = useQuery<string[]>({
-    queryKey: ["listen-vibes"],
-    queryFn: async () => {
-      const response = await songsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const vibes = (response.data as Project[]).flatMap(p => smartParse(p.vibe_tags));
-        return Array.from(new Set(vibes)).filter(Boolean).sort();
-      }
-      return [];
-    }
-  });
-
 
   // Fetch unique types for filters (global, not affected by current filter)
   const { data: availableTypes = [] } = useQuery({
@@ -486,9 +460,6 @@ export default function ListenPage() {
           genreFilter={genreFilter}
           onGenreFilterChange={setGenreFilter}
           availableGenres={availableGenres}
-          vibeFilter={vibeFilter}
-          onVibeFilterChange={setVibeFilter}
-          availableVibes={availableVibes}
         />
       </div>
       {/* Table */}

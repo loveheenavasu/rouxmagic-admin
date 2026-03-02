@@ -3,15 +3,13 @@ import { Project, Recipe, PairingSourceEnum } from '@/types';
 
 export const pairingService = {
   /**
-   * Search projects that match a tag in their own vibe_tags 
+   * Search projects that match tag in their own vibe_tags
    * OR are paired with a recipe that matches the tag in flavor_tags.
-   * OR have a pairing that has the tag in its vibe_tags.
+   * Pairings only have source/target IDs; vibe_tags live in projects, flavor_tags in recipes.
    */
   async searchProjectsByInheritedTag(tag: string): Promise<Project[]> {
     const trimmedTag = tag.trim().toLowerCase();
-    
-    // 1. Get projects that have the tag in their own vibe_tags (Direct)
-    // Using ilike to handle text/json column types where @> fails
+
     const { data: directProjects, error: directError } = await supabase
       .from('projects')
       .select('*')
@@ -20,25 +18,7 @@ export const pairingService = {
 
     if (directError) throw directError;
 
-    // 2. Get projects from Pairings that have this tag in pairing.vibe_tags
-    const { data: vibePairings, error: vibePairingError } = await supabase
-      .from('pairings')
-      .select('*')
-      .ilike('vibe_tags', `%${trimmedTag}%`)
-      .eq('is_deleted', false);
-
-    if (vibePairingError) throw vibePairingError;
-
-    const pairingProjectIds = (vibePairings || []).map(p => {
-       // Return the project ID from the pairing
-       // A pairing has source and target. We need the one that IS a project.
-       // Usually pairings are Recipe <-> Project.
-       if (p.source_ref !== PairingSourceEnum.Recipe) return p.source_id;
-       if (p.target_ref !== PairingSourceEnum.Recipe) return p.target_id;
-       return null;
-    }).filter(Boolean) as string[];
-
-    // 3. Get recipes that have the tag in flavor_tags, and find projects paired with them
+    // Get recipes that have the tag in flavor_tags, find projects paired with them
     // (This is the "Inherited" part - if a Recipe is "Spicy", maybe the paired Project is relevant?)
     // keeping this logic as it was part of the original intent, but fixing the operator
     const { data: recipes, error: recipeError } = await supabase
@@ -50,11 +30,8 @@ export const pairingService = {
     if (recipeError) throw recipeError;
 
     let inheritedProjects: Project[] = [];
-    
-    // IDs from direct pairing matches
-    const allProjectIds = new Set(pairingProjectIds);
+    const allProjectIds = new Set<string>();
 
-    // Add IDs from inherited recipe pairings
     if (recipes && recipes.length > 0) {
       const recipeIds = recipes.map(r => r.id);
       const { data: postings, error: pairingError } = await supabase
@@ -95,14 +72,13 @@ export const pairingService = {
   },
 
   /**
-   * Search recipes that match a tag in their own flavor_tags 
+   * Search recipes that match tag in their own flavor_tags
    * OR are paired with a project that matches the tag in vibe_tags.
-   * OR have a pairing that has the tag in its flavor_tags.
+   * Pairings only have source/target IDs; vibe_tags live in projects, flavor_tags in recipes.
    */
   async searchRecipesByInheritedTag(tag: string): Promise<Recipe[]> {
     const trimmedTag = tag.trim().toLowerCase();
 
-    // 1. Get recipes that have the tag in flavor_tags (Direct)
     const { data: directRecipes, error: directError } = await supabase
       .from('recipes')
       .select('*')
@@ -111,23 +87,7 @@ export const pairingService = {
 
     if (directError) throw directError;
 
-    // 2. Get recipes from Pairings that have this tag in pairing.flavor_tags
-    const { data: flavorPairings, error: flavorPairingError } = await supabase
-      .from('pairings')
-      .select('*')
-      .ilike('flavor_tags', `%${trimmedTag}%`)
-      .eq('is_deleted', false);
-
-    if (flavorPairingError) throw flavorPairingError;
-
-    const pairingRecipeIds = (flavorPairings || []).map(p => {
-        if (p.source_ref === PairingSourceEnum.Recipe) return p.source_id;
-        if (p.target_ref === PairingSourceEnum.Recipe) return p.target_id;
-        return null;
-    }).filter(Boolean) as string[];
-
-
-    // 3. Get projects that have the tag in vibe_tags, and find recipes paired with them
+    // Get projects that have the tag in vibe_tags, find recipes paired with them
     const { data: projects, error: projectError } = await supabase
       .from('projects')
       .select('id')
@@ -137,7 +97,7 @@ export const pairingService = {
     if (projectError) throw projectError;
 
     let inheritedRecipes: Recipe[] = [];
-    const allRecipeIds = new Set(pairingRecipeIds);
+    const allRecipeIds = new Set<string>();
 
     if (projects && projects.length > 0) {
       const projectIds = projects.map(p => p.id);
@@ -176,5 +136,69 @@ export const pairingService = {
     const uniqueRecipes = Array.from(new Map(allRecipes.map(r => [r.id, r])).values());
 
     return uniqueRecipes;
+  },
+
+  /** Get vibe_tags from projects paired with recipes. For Recipes page filter. */
+  async getVibeTagsForRecipes(): Promise<string[]> {
+    const { data: pairings, error: pairError } = await supabase
+      .from('pairings')
+      .select('source_id, source_ref, target_id, target_ref')
+      .eq('is_deleted', false)
+      .or('source_ref.eq.Recipe,target_ref.eq.Recipe');
+
+    if (pairError || !pairings?.length) return [];
+
+    const projectIds = pairings
+      .map(p => (p.source_ref === PairingSourceEnum.Recipe ? p.target_id : p.source_id))
+      .filter(Boolean);
+
+    const { data: projects } = await supabase
+      .from('projects')
+      .select('vibe_tags')
+      .in('id', [...new Set(projectIds)])
+      .eq('is_deleted', false);
+
+    const tags = (projects || []).flatMap(p => {
+      const raw = p.vibe_tags;
+      if (Array.isArray(raw)) return raw.filter(Boolean).map((s: string) => String(s).trim());
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed.filter(Boolean).map((s: string) => String(s).trim()) : [];
+        } catch { return []; }
+      }
+      return [];
+    });
+    return [...new Set(tags)].filter(Boolean).sort();
+  },
+
+  /** Recipe IDs that are paired with a project having this vibe_tag. */
+  async getRecipeIdsWithVibeTag(vibe: string): Promise<string[]> {
+    const trimmed = vibe.trim().toLowerCase();
+    if (!trimmed) return [];
+
+    const { data: projects } = await supabase
+      .from('projects')
+      .select('id')
+      .ilike('vibe_tags', `%${trimmed}%`)
+      .eq('is_deleted', false);
+
+    if (!projects?.length) return [];
+
+    const projectIds = projects.map(p => p.id);
+    const { data: pairings } = await supabase
+      .from('pairings')
+      .select('source_id, source_ref, target_id, target_ref')
+      .eq('is_deleted', false)
+      .or(`source_id.in.(${projectIds.join(',')}),target_id.in.(${projectIds.join(',')})`);
+
+    const recipeIds: string[] = [];
+    (pairings || []).forEach(p => {
+      if (p.source_ref === PairingSourceEnum.Recipe && projectIds.includes(p.target_id))
+        recipeIds.push(p.source_id);
+      else if (p.target_ref === PairingSourceEnum.Recipe && projectIds.includes(p.source_id))
+        recipeIds.push(p.target_id);
+    });
+    return [...new Set(recipeIds)];
   }
 };

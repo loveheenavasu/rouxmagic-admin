@@ -134,7 +134,6 @@ export default function HomeCarousel() {
         sort: "order_index",
         sortBy: "asc",
       });
-      console.log("response11111", response);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess

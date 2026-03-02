@@ -125,11 +125,10 @@ export default function RecipesPage() {
 
       let rows = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
 
-      // Apply Flavor filter
+      // Apply Flavor filter (from recipe's own flavor_tags)
       if (flavorFilter !== "all") {
         rows = rows.filter(r => {
-          const fData = r.flavor_tags;
-          const flavors = Array.isArray(fData) ? fData : [];
+          const flavors = smartParse(r.flavor_tags);
           return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
         });
       }
@@ -167,7 +166,6 @@ export default function RecipesPage() {
           "Failed to create recipe";
         throw new Error(errorMessage);
       }
-      console.log("RESPONSE HERE: ", response)
       return response.data;
     },
     onSuccess: () => {
@@ -250,7 +248,7 @@ export default function RecipesPage() {
       }
 
       const data = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
-      const flavors = data.flatMap((r) => r.flavor_tags || []);
+      const flavors = data.flatMap((r) => smartParse(r.flavor_tags));
       return Array.from(new Set(flavors)).filter(Boolean).sort();
     },
   });
