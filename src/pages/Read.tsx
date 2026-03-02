@@ -38,7 +38,11 @@ export default function Read() {
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]); const toggleSticky = (key: string) => {
+  const [stickyColumns, setStickyColumns] = useState<string[]>([
+    "actions",
+    "title",
+  ]);
+  const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
       if (prev.includes(key)) {
         return prev.filter((col) => col !== key);
@@ -81,10 +85,16 @@ export default function Read() {
   const { data: shelves = [] } = useQuery({
     queryKey: ["content-rows", "read"],
     queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "read" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
+      const { ContentRows } =
+        await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({
+        eq: [
+          { key: "page", value: "read" },
+          { key: "is_active", value: true },
+        ],
+      });
+      return Array.isArray(resp.data) ? (resp.data as ContentRow[]) : [];
+    },
   });
 
   // Fetch read items with server-side filters
@@ -93,7 +103,14 @@ export default function Read() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["read-items", searchQuery, statusFilter, contentTypeFilter, genreFilter, selectedShelfId],
+    queryKey: [
+      "read-items",
+      searchQuery,
+      statusFilter,
+      contentTypeFilter,
+      genreFilter,
+      selectedShelfId,
+    ],
     queryFn: async () => {
       const eqFilters: any[] = [];
       const containsFilters: any[] = [];
@@ -107,49 +124,81 @@ export default function Read() {
 
       // Apply shelf filter logic
       if (selectedShelfId !== "all") {
-        const shelf = shelves.find(s => s.id === selectedShelfId);
+        const shelf = shelves.find((s) => s.id === selectedShelfId);
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
-            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+            const knownFlags = [
+              "in_now_playing",
+              "in_coming_soon",
+              "in_latest_releases",
+              "in_hero_carousel",
+              "featured",
+              "is_downloadable",
+            ];
+            const flagExists = knownFlags.includes(
+              shelf.filter_value.toLowerCase(),
+            );
 
             if (flagExists) {
               eqFilters.push({ key: shelf.filter_value, value: true });
             } else {
               // For custom rows, query by row_type using the shelf's row_type or label
-              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
-              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+              const rowTypeFilter =
+                (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({
+                key: "row_type",
+                value: `%${rowTypeFilter}%`,
+              });
             }
           } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
             ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
           } else if (shelf.filter_type === FilterTypeEnum.Song) {
             ilikeFilters.push({ key: "content_type", value: "%Song%" });
-          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+          } else if (
+            shelf.filter_type === FilterTypeEnum.Status ||
+            shelf.filter_type === FilterTypeEnum.ContentType
+          ) {
             const isStatus = shelf.filter_type === FilterTypeEnum.Status;
             if (shelf.filter_value.includes(",")) {
-              const values = shelf.filter_value.split(",").map(v => v.trim());
+              const values = shelf.filter_value.split(",").map((v) => v.trim());
               if (isStatus) {
                 overlapsFilters.push({ key: "status", value: values });
               } else {
-                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+                shelfOr = values
+                  .map((v) => `content_type.ilike.%${v}%`)
+                  .join(",");
               }
             } else {
               if (isStatus) {
-                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+                containsFilters.push({
+                  key: "status",
+                  value: [shelf.filter_value],
+                });
               } else {
-                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+                ilikeFilters.push({
+                  key: "content_type",
+                  value: `%${shelf.filter_value}%`,
+                });
               }
             }
           } else if (shelf.filter_type === FilterTypeEnum.Genre) {
-            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "genres",
+              value: [shelf.filter_value],
+            });
           } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
-            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "vibe_tags",
+              value: [shelf.filter_value],
+            });
           }
         }
       }
 
       if (contentTypeFilter.length > 0) {
-        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        const contentTypePatterns = contentTypeFilter
+          .map((t) => `content_type.ilike.%${t}%`)
+          .join(",");
         if (shelfOr) {
           shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
         } else {
@@ -158,7 +207,9 @@ export default function Read() {
       }
 
       // Apply base content type restriction for Read page
-      const pageFilterOr = READ_TYPES.map(t => `content_type.ilike.%${t}%`).join(",");
+      const pageFilterOr = READ_TYPES.map(
+        (t) => `content_type.ilike.%${t}%`,
+      ).join(",");
       const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
       let finalOr = shelfOr;
 
@@ -177,11 +228,16 @@ export default function Read() {
         search: searchQuery.trim() || undefined,
         searchFields: ["title", "platform", "notes"],
         sort: "order_index",
-        sortBy: "asc"
+        sortBy: "asc",
       });
 
-      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
-        throw new Error(response.error?.message || "Failed to fetch read content");
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
+        throw new Error(
+          response.error?.message || "Failed to fetch read content",
+        );
       }
 
       const data = response.data;
@@ -189,10 +245,12 @@ export default function Read() {
 
       // Apply Genre filter
       if (genreFilter !== "all") {
-        rows = rows.filter(r => {
+        rows = rows.filter((r) => {
           const gData = r.genres;
           const genres = Array.isArray(gData) ? gData : [];
-          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+          return genres.some(
+            (g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase(),
+          );
         });
       }
 
@@ -225,29 +283,31 @@ export default function Read() {
   });
 
   // Update mutation
-  const updateMutation = useMutation<Project, Error, { id: string; data: any }>({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await projectsAPI.updateOneByID(id, data);
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        throw new Error(response.error?.message || "Failed to update media");
-      }
-      return response.data;
+  const updateMutation = useMutation<Project, Error, { id: string; data: any }>(
+    {
+      mutationFn: async ({ id, data }: { id: string; data: any }) => {
+        const response = await projectsAPI.updateOneByID(id, data);
+        if (
+          (response.flag !== Flag.Success &&
+            response.flag !== Flag.UnknownOrSuccess) ||
+          !response.data
+        ) {
+          throw new Error(response.error?.message || "Failed to update media");
+        }
+        return response.data;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["read-items"] });
+        queryClient.invalidateQueries({ queryKey: ["read-statuses"] });
+        setIsMediaDialogOpen(false);
+        setSelectedMedia(null);
+        toast.success("Content updated successfully!");
+      },
+      onError: (error: Error) => {
+        toast.error(`Failed to update content: ${error.message}`);
+      },
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["read-items"] });
-      queryClient.invalidateQueries({ queryKey: ["read-statuses"] });
-      setIsMediaDialogOpen(false);
-      setSelectedMedia(null);
-      toast.success("Content updated successfully!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update content: ${error.message}`);
-    },
-  });
+  );
 
   // Delete mutation
   const deleteMutation = useMutation<void, Error, string>({
@@ -277,7 +337,7 @@ export default function Read() {
     queryKey: ["read-unique-types"],
     queryFn: async () => {
       const response = await projectsAPI.get({
-        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] },
       });
 
       if (response.flag !== Flag.Success || !response.data) {
@@ -293,7 +353,7 @@ export default function Read() {
           try {
             const parsed = JSON.parse(trimmed);
             if (parsed !== trimmed) return extractValues(parsed);
-          } catch { }
+          } catch {}
           return [trimmed];
         }
         return [];
@@ -328,11 +388,13 @@ export default function Read() {
     },
   });
 
-  const displayFields = Array.from(new Set([
-    ...(items.length > 0 ? Object.keys(items[0]) : []),
-    "genres",
-    "vibe_tags"
-  ])).filter(
+  const displayFields = Array.from(
+    new Set([
+      ...(items.length > 0 ? Object.keys(items[0]) : []),
+      "genres",
+      "vibe_tags",
+    ]),
+  ).filter(
     (key) =>
       ![
         "id",
@@ -341,13 +403,13 @@ export default function Read() {
         "created_at",
         "updated_at",
         "user_id",
-      ].includes(key)
+      ].includes(key),
   );
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
-    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
-    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
+    ...allAvailableFields.filter((key) => stickyColumns.includes(key)),
+    ...allAvailableFields.filter((key) => !stickyColumns.includes(key)),
   ];
 
   const { data: availableGenres = [] } = useQuery<string[]>({
@@ -355,14 +417,16 @@ export default function Read() {
     queryFn: async () => {
       const response = await projectsAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [...READ_TYPES] }
+        inValue: { key: "content_type" as any, value: [...READ_TYPES] },
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
+        const genres = (response.data as Project[]).flatMap((p) =>
+          smartParse(p.genres),
+        );
         return Array.from(new Set(genres)).filter(Boolean).sort();
       }
       return [];
-    }
+    },
   });
 
   const handleAddNew = () => {
@@ -397,10 +461,10 @@ export default function Read() {
 
   const totalItems = items.length;
   const totalComics = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Comic
+    (m) => m.content_type === ContentTypeEnum.Comic,
   ).length;
   const totalAudiobooks = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Audiobook
+    (m) => m.content_type === ContentTypeEnum.Audiobook,
   ).length;
 
   if (error) {
@@ -459,9 +523,19 @@ export default function Read() {
                   key={key}
                   className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap group"
                   sticky={stickyColumns.includes(key) ? "left" : undefined}
-                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                  left={
+                    stickyColumns.includes(key)
+                      ? getStickyOffset(key)
+                      : undefined
+                  }
+                  width={
+                    stickyColumns.includes(key)
+                      ? PINNED_WIDTH
+                      : COLUMN_WIDTHS[key] || 150
+                  }
+                  showShadow={
+                    stickyColumns.indexOf(key) === stickyColumns.length - 1
+                  }
                 >
                   <div className="flex items-center gap-2">
                     {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
@@ -493,144 +567,200 @@ export default function Read() {
                 </TableCell>
               </TableRow>
             ) : items.length ? (
-              [...items].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((item) => {
-                const isSelected = selectedRowId === item.id;
-                return (
-                  <TableRow key={item.id} className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"}`}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedRowId(null);
-                      } else {
-                        setSelectedRowId(item.id);
-                      }
-                    }}
-                    data-state={isSelected ? "selected" : undefined}
-                  >
-                    {orderedFields.map((key) => {
-                      if (key === "actions") {
-                        return (
-                          <TableCell
-                            key="actions"
-                            className="whitespace-nowrap"
-                            sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                            left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
-                            width={PINNED_WIDTH}
-                            showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
-                          >
-                            <div className="flex gap-2">
-                              {(item.content_type === ContentTypeEnum.Audiobook ||
-                                (item as any).content_type === "AudioBook") && (
+              [...items]
+                .sort((a, b) =>
+                  a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0,
+                )
+                .map((item) => {
+                  const isSelected = selectedRowId === item.id;
+                  return (
+                    <TableRow
+                      key={item.id}
+                      className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"}`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedRowId(null);
+                        } else {
+                          setSelectedRowId(item.id);
+                        }
+                      }}
+                      data-state={isSelected ? "selected" : undefined}
+                    >
+                      {orderedFields.map((key) => {
+                        if (key === "actions") {
+                          return (
+                            <TableCell
+                              key="actions"
+                              className="whitespace-nowrap"
+                              sticky={
+                                stickyColumns.includes("actions")
+                                  ? "left"
+                                  : undefined
+                              }
+                              left={
+                                stickyColumns.includes("actions")
+                                  ? getStickyOffset("actions")
+                                  : undefined
+                              }
+                              width={PINNED_WIDTH}
+                              showShadow={
+                                stickyColumns.indexOf("actions") ===
+                                stickyColumns.length - 1
+                              }
+                            >
+                              <div className="flex gap-2">
+                                {(item.content_type ===
+                                  ContentTypeEnum.Audiobook ||
+                                  (item as any).content_type ===
+                                    "AudioBook") && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/chapters?projectId=${item.id}`);
+                                      navigate(
+                                        `/chapters?projectId=${item.id}`,
+                                      );
                                     }}
                                     title="Chapters"
                                   >
                                     <List className="h-4 w-4" />
                                   </Button>
                                 )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(item);
-                                }}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(item);
-                                }}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(item);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(item);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          );
+                        }
+
+                        const value = (item as any)[key];
+                        return (
+                          <TableCell
+                            key={key}
+                            className={cn(
+                              "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                              key === "notes" || key === "description"
+                                ? "max-w-[300px]"
+                                : "max-w-[250px]",
+                            )}
+                            sticky={
+                              stickyColumns.includes(key) ? "left" : undefined
+                            }
+                            left={
+                              stickyColumns.includes(key)
+                                ? getStickyOffset(key)
+                                : undefined
+                            }
+                            width={
+                              stickyColumns.includes(key)
+                                ? PINNED_WIDTH
+                                : COLUMN_WIDTHS[key] || 150
+                            }
+                            showShadow={
+                              stickyColumns.indexOf(key) ===
+                              stickyColumns.length - 1
+                            }
+                          >
+                            {value === null ||
+                            value === undefined ||
+                            value === "" ? (
+                              <span className="text-muted-foreground text-xs">
+                                —
+                              </span>
+                            ) : (
+                              (() => {
+                                let values = smartParse(value);
+
+                                // Capitalize and format for display
+                                values = values.map((v) => {
+                                  if (!v) return v;
+                                  const s = String(v).replace(/_/g, " ");
+                                  return s.charAt(0).toUpperCase() + s.slice(1);
+                                });
+
+                                if (
+                                  [
+                                    "content_type",
+                                    "status",
+                                    "genres",
+                                    "vibe_tags",
+                                  ].includes(key)
+                                ) {
+                                  const MAX_TAGS = 3;
+                                  const visible = values.slice(0, MAX_TAGS);
+                                  const overflow = values.length - MAX_TAGS;
+                                  return (
+                                    <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
+                                      {visible.map((v, i) => (
+                                        <Badge
+                                          key={`${v}-${i}`}
+                                          variant={
+                                            key === "vibe_tags"
+                                              ? "outline"
+                                              : "secondary"
+                                          }
+                                          className={cn(
+                                            "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                            key === "vibe_tags"
+                                              ? "border-slate-200 text-slate-500 bg-transparent"
+                                              : "bg-slate-100 text-slate-600 border-none",
+                                          )}
+                                          title={v}
+                                        >
+                                          {v}
+                                        </Badge>
+                                      ))}
+                                      {overflow > 0 && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
+                                          title={values
+                                            .slice(MAX_TAGS)
+                                            .join(", ")}
+                                        >
+                                          +{overflow}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                const displayValue = values.join(", ");
+                                return (
+                                  <span
+                                    className="truncate block"
+                                    title={displayValue}
+                                  >
+                                    {displayValue}
+                                  </span>
+                                );
+                              })()
+                            )}
                           </TableCell>
                         );
-                      }
-
-                      const value = (item as any)[key];
-                      return (
-                        <TableCell
-                          key={key}
-                          className={cn(
-                            "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                            (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
-                          )}
-                          sticky={stickyColumns.includes(key) ? "left" : undefined}
-                          left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                          width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                          showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
-                        >
-                          {value === null || value === undefined || value === "" ? (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          ) : (
-                            (() => {
-                              let values = smartParse(value);
-
-                              // Capitalize and format for display
-                              values = values.map((v) => {
-                                if (!v) return v;
-                                const s = String(v).replace(/_/g, " ");
-                                return s.charAt(0).toUpperCase() + s.slice(1);
-                              });
-
-                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                const MAX_TAGS = 3;
-                                const visible = values.slice(0, MAX_TAGS);
-                                const overflow = values.length - MAX_TAGS;
-                                return (
-                                  <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                    {visible.map((v, i) => (
-                                      <Badge
-                                        key={`${v}-${i}`}
-                                        variant={key === "vibe_tags" ? "outline" : "secondary"}
-                                        className={cn(
-                                          "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                          key === "vibe_tags"
-                                            ? "border-slate-200 text-slate-500 bg-transparent"
-                                            : "bg-slate-100 text-slate-600 border-none"
-                                        )}
-                                        title={v}
-                                      >
-                                        {v}
-                                      </Badge>
-                                    ))}
-                                    {overflow > 0 && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                        title={values.slice(MAX_TAGS).join(", ")}
-                                      >
-                                        +{overflow}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              const displayValue = values.join(", ");
-                              return (
-                                <span className="truncate block" title={displayValue}>
-                                  {displayValue}
-                                </span>
-                              );
-                            })()
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })
+                      })}
+                    </TableRow>
+                  );
+                })
             ) : (
               <TableRow>
                 <TableCell

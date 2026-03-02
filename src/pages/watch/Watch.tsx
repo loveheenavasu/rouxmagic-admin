@@ -35,7 +35,10 @@ export default function Watch() {
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+  const [stickyColumns, setStickyColumns] = useState<string[]>([
+    "actions",
+    "title",
+  ]);
 
   const toggleSticky = (key: string) => {
     setStickyColumns((prev) => {
@@ -49,9 +52,6 @@ export default function Watch() {
       return [...prev, key];
     });
   };
-
-
-
 
   const PINNED_WIDTH = 200;
   const COLUMN_WIDTHS: Record<string, number> = {
@@ -83,10 +83,16 @@ export default function Watch() {
   const { data: shelves = [] } = useQuery({
     queryKey: ["content-rows", "watch"],
     queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "watch" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
+      const { ContentRows } =
+        await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({
+        eq: [
+          { key: "page", value: "watch" },
+          { key: "is_active", value: true },
+        ],
+      });
+      return Array.isArray(resp.data) ? (resp.data as ContentRow[]) : [];
+    },
   });
 
   // Fetch all media
@@ -109,45 +115,77 @@ export default function Watch() {
 
       // Apply shelf filter logic
       if (selectedShelfId !== "all") {
-        const shelf = shelves.find(s => s.id === selectedShelfId);
+        const shelf = shelves.find((s) => s.id === selectedShelfId);
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
-            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+            const knownFlags = [
+              "in_now_playing",
+              "in_coming_soon",
+              "in_latest_releases",
+              "in_hero_carousel",
+              "featured",
+              "is_downloadable",
+            ];
+            const flagExists = knownFlags.includes(
+              shelf.filter_value.toLowerCase(),
+            );
 
             if (flagExists) {
               eqFilters.push({ key: shelf.filter_value, value: true });
             } else {
               // For custom rows, query by row_type using the shelf's row_type or label
-              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
-              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+              const rowTypeFilter =
+                (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({
+                key: "row_type",
+                value: `%${rowTypeFilter}%`,
+              });
             }
-          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+          } else if (
+            shelf.filter_type === FilterTypeEnum.Status ||
+            shelf.filter_type === FilterTypeEnum.ContentType
+          ) {
             const isStatus = shelf.filter_type === FilterTypeEnum.Status;
             if (shelf.filter_value.includes(",")) {
-              const values = shelf.filter_value.split(",").map(v => v.trim());
+              const values = shelf.filter_value.split(",").map((v) => v.trim());
               if (isStatus) {
                 overlapsFilters.push({ key: "status", value: values });
               } else {
-                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+                shelfOr = values
+                  .map((v) => `content_type.ilike.%${v}%`)
+                  .join(",");
               }
             } else {
               if (isStatus) {
-                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+                containsFilters.push({
+                  key: "status",
+                  value: [shelf.filter_value],
+                });
               } else {
-                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+                ilikeFilters.push({
+                  key: "content_type",
+                  value: `%${shelf.filter_value}%`,
+                });
               }
             }
           } else if (shelf.filter_type === FilterTypeEnum.Genre) {
-            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "genres",
+              value: [shelf.filter_value],
+            });
           } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
-            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "vibe_tags",
+              value: [shelf.filter_value],
+            });
           }
         }
       }
 
       if (contentTypeFilter.length > 0) {
-        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        const contentTypePatterns = contentTypeFilter
+          .map((t) => `content_type.ilike.%${t}%`)
+          .join(",");
         if (shelfOr) {
           shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
         } else {
@@ -180,40 +218,62 @@ export default function Watch() {
         searchFields: ["title"],
       });
 
-      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
         throw new Error(response.error?.message || "Failed to fetch projects");
       }
 
-      let rows = Array.isArray(response.data) ? response.data : [response.data].filter(Boolean) as Project[];
+      let rows = Array.isArray(response.data)
+        ? response.data
+        : ([response.data].filter(Boolean) as Project[]);
 
       // Apply Genre filter (client-side if multiple genres per project)
       if (genreFilter !== "all") {
-        rows = rows.filter(r => {
+        rows = rows.filter((r) => {
           const gData = r.genres as any;
-          const genres = typeof gData === 'string' ? gData.split(',') : (Array.isArray(gData) ? gData : []);
-          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
+          const genres =
+            typeof gData === "string"
+              ? gData.split(",")
+              : Array.isArray(gData)
+                ? gData
+                : [];
+          return genres.some(
+            (g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase(),
+          );
         });
       }
 
       // Handle smart search (including inheritance)
       if (searchQuery.length > 2) {
         try {
-          const inheritedProjects = await pairingService.searchProjectsByInheritedTag(searchQuery);
-          const existingIds = new Set(rows.map(r => r.id));
-          inheritedProjects.forEach(p => {
+          const inheritedProjects =
+            await pairingService.searchProjectsByInheritedTag(searchQuery);
+          const existingIds = new Set(rows.map((r) => r.id));
+          inheritedProjects.forEach((p) => {
             if (!existingIds.has(p.id)) {
               // Apply basic filters to inherited results
               if (statusFilter.length > 0) {
-                const statuses = Array.isArray(p.status) ? p.status : [p.status];
-                if (!statusFilter.some(sf => statuses.includes(sf as any))) return;
+                const statuses = Array.isArray(p.status)
+                  ? p.status
+                  : [p.status];
+                if (!statusFilter.some((sf) => statuses.includes(sf as any)))
+                  return;
               }
               if (contentTypeFilter.length > 0) {
-                const types = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
-                if (!contentTypeFilter.some(cf => types.includes(cf as any))) return;
+                const types = Array.isArray(p.content_type)
+                  ? p.content_type
+                  : [p.content_type];
+                if (!contentTypeFilter.some((cf) => types.includes(cf as any)))
+                  return;
               }
               // If it's inherited but doesn't match content category 'TV Show' or 'Film', skip
-              const pTypes = Array.isArray(p.content_type) ? p.content_type : [p.content_type];
-              if (!pTypes.some(t => ["TV Show", "Film"].includes(String(t)))) return;
+              const pTypes = Array.isArray(p.content_type)
+                ? p.content_type
+                : [p.content_type];
+              if (!pTypes.some((t) => ["TV Show", "Film"].includes(String(t))))
+                return;
 
               rows.push(p);
             }
@@ -297,25 +357,23 @@ export default function Watch() {
     },
   });
 
-  const displayFields = Array.from(new Set([
-    ...(mediaList.length > 0 ? Object.keys(mediaList[0]) : []),
-    "genres",
-    "vibe_tags"
-  ])).filter(
+  const displayFields = Array.from(
+    new Set([
+      ...(mediaList.length > 0 ? Object.keys(mediaList[0]) : []),
+      "genres",
+      "vibe_tags",
+    ]),
+  ).filter(
     (key) =>
-      ![
-        "id",
-        "poster_url",
-        "order_index",
-        "created_at",
-        "updated_at",
-      ].includes(key)
+      !["id", "poster_url", "order_index", "created_at", "updated_at"].includes(
+        key,
+      ),
   );
 
   const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
   const orderedFields = [
-    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
-    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
+    ...allAvailableFields.filter((key) => stickyColumns.includes(key)),
+    ...allAvailableFields.filter((key) => !stickyColumns.includes(key)),
   ];
 
   // Fetch unique statuses for filters (global, not affected by current filter)
@@ -363,14 +421,16 @@ export default function Watch() {
     queryFn: async () => {
       const response = await projectsAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
+        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] },
       });
       if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
+        const genres = (response.data as Project[]).flatMap((p) =>
+          smartParse(p.genres),
+        );
         return Array.from(new Set(genres)).filter(Boolean).sort();
       }
       return [];
-    }
+    },
   });
 
   const handleAddNew = () => {
@@ -405,12 +465,16 @@ export default function Watch() {
 
   // Calculate stats
   const totalFilms = mediaList.filter((m) => {
-    const types = Array.isArray(m.content_type) ? m.content_type : [m.content_type];
-    return types.some(t => String(t) === "Film");
+    const types = Array.isArray(m.content_type)
+      ? m.content_type
+      : [m.content_type];
+    return types.some((t) => String(t) === "Film");
   }).length;
   const totalTVShows = mediaList.filter((m) => {
-    const types = Array.isArray(m.content_type) ? m.content_type : [m.content_type];
-    return types.some(t => String(t) === "TV Show");
+    const types = Array.isArray(m.content_type)
+      ? m.content_type
+      : [m.content_type];
+    return types.some((t) => String(t) === "TV Show");
   }).length;
 
   if (error) {
@@ -467,9 +531,19 @@ export default function Watch() {
                   key={key}
                   className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap group"
                   sticky={stickyColumns.includes(key) ? "left" : undefined}
-                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                  left={
+                    stickyColumns.includes(key)
+                      ? getStickyOffset(key)
+                      : undefined
+                  }
+                  width={
+                    stickyColumns.includes(key)
+                      ? PINNED_WIDTH
+                      : COLUMN_WIDTHS[key] || 150
+                  }
+                  showShadow={
+                    stickyColumns.indexOf(key) === stickyColumns.length - 1
+                  }
                 >
                   <div className="flex items-center gap-2">
                     {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
@@ -501,14 +575,20 @@ export default function Watch() {
                 </TableCell>
               </TableRow>
             ) : !!mediaList?.length ? (
-              [...mediaList].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map(
-                (media) => {
+              [...mediaList]
+                .sort((a, b) =>
+                  a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0,
+                )
+                .map((media) => {
                   const isSelected = selectedRowId === media.id;
                   return (
                     <TableRow
                       key={media.id}
-                      className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
-                        }`}
+                      className={`transition-colors cursor-pointer group ${
+                        isSelected
+                          ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm"
+                          : "hover:bg-slate-50"
+                      }`}
                       onClick={() => {
                         if (isSelected) {
                           setSelectedRowId(null);
@@ -524,10 +604,21 @@ export default function Watch() {
                             <TableCell
                               key="actions"
                               className="whitespace-nowrap"
-                              sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                              left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
+                              sticky={
+                                stickyColumns.includes("actions")
+                                  ? "left"
+                                  : undefined
+                              }
+                              left={
+                                stickyColumns.includes("actions")
+                                  ? getStickyOffset("actions")
+                                  : undefined
+                              }
                               width={PINNED_WIDTH}
-                              showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                              showShadow={
+                                stickyColumns.indexOf("actions") ===
+                                stickyColumns.length - 1
+                              }
                             >
                               <div className="flex gap-2">
                                 <Button
@@ -562,15 +653,34 @@ export default function Watch() {
                             key={key}
                             className={cn(
                               "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                              (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
+                              key === "notes" || key === "description"
+                                ? "max-w-[300px]"
+                                : "max-w-[250px]",
                             )}
-                            sticky={stickyColumns.includes(key) ? "left" : undefined}
-                            left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                            width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                            showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                            sticky={
+                              stickyColumns.includes(key) ? "left" : undefined
+                            }
+                            left={
+                              stickyColumns.includes(key)
+                                ? getStickyOffset(key)
+                                : undefined
+                            }
+                            width={
+                              stickyColumns.includes(key)
+                                ? PINNED_WIDTH
+                                : COLUMN_WIDTHS[key] || 150
+                            }
+                            showShadow={
+                              stickyColumns.indexOf(key) ===
+                              stickyColumns.length - 1
+                            }
                           >
-                            {value === null || value === undefined || value === "" ? (
-                              <span className="text-muted-foreground text-xs">—</span>
+                            {value === null ||
+                            value === undefined ||
+                            value === "" ? (
+                              <span className="text-muted-foreground text-xs">
+                                —
+                              </span>
                             ) : (
                               (() => {
                                 let values = smartParse(value);
@@ -582,7 +692,14 @@ export default function Watch() {
                                   return s.charAt(0).toUpperCase() + s.slice(1);
                                 });
 
-                                if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
+                                if (
+                                  [
+                                    "content_type",
+                                    "status",
+                                    "genres",
+                                    "vibe_tags",
+                                  ].includes(key)
+                                ) {
                                   const MAX_TAGS = 3;
                                   const visible = values.slice(0, MAX_TAGS);
                                   const overflow = values.length - MAX_TAGS;
@@ -591,12 +708,16 @@ export default function Watch() {
                                       {visible.map((v, i) => (
                                         <Badge
                                           key={`${v}-${i}`}
-                                          variant={key === "vibe_tags" ? "outline" : "secondary"}
+                                          variant={
+                                            key === "vibe_tags"
+                                              ? "outline"
+                                              : "secondary"
+                                          }
                                           className={cn(
                                             "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
                                             key === "vibe_tags"
                                               ? "border-slate-200 text-slate-500 bg-transparent"
-                                              : "bg-slate-100 text-slate-600 border-none"
+                                              : "bg-slate-100 text-slate-600 border-none",
                                           )}
                                           title={v}
                                         >
@@ -607,7 +728,9 @@ export default function Watch() {
                                         <Badge
                                           variant="outline"
                                           className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                          title={values.slice(MAX_TAGS).join(", ")}
+                                          title={values
+                                            .slice(MAX_TAGS)
+                                            .join(", ")}
                                         >
                                           +{overflow}
                                         </Badge>
@@ -618,7 +741,10 @@ export default function Watch() {
 
                                 const displayValue = values.join(", ");
                                 return (
-                                  <span className="truncate block" title={displayValue}>
+                                  <span
+                                    className="truncate block"
+                                    title={displayValue}
+                                  >
                                     {displayValue}
                                   </span>
                                 );
@@ -629,8 +755,7 @@ export default function Watch() {
                       })}
                     </TableRow>
                   );
-                }
-              )
+                })
             ) : (
               <TableRow>
                 <TableCell

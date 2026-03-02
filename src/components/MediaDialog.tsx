@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -61,7 +61,7 @@ export default function MediaDialog({
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>(
-    {} as ProjectFormData
+    {} as ProjectFormData,
   );
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const [arrayFieldNames, setArrayFieldNames] = useState<string[]>([]);
@@ -70,43 +70,138 @@ export default function MediaDialog({
   // Row Assignment Mode state
   const [addMode, setAddMode] = useState<"standard" | "row">("standard");
   // Renamed local state to avoid conflict with prop
-  const [localAssignmentPage, setLocalAssignmentPage] = useState<string>(assignmentPage || "home");
+  const [localAssignmentPage, setLocalAssignmentPage] = useState<string>(
+    assignmentPage || "home",
+  );
   const [targetRowId, setTargetRowId] = useState<string>("");
 
   const queryClient = useQueryClient();
+  const userHasModifiedFormRef = useRef(false);
+  const requestedMediaIdRef = useRef<string | null>(null);
+  const savedFormDataCacheRef = useRef<Record<string, ProjectFormData>>({});
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      userHasModifiedFormRef.current = false;
+      setTargetRowId("");
+    }
+  }, [open]);
+
+  // Sync formData from media immediately when opening (edit mode) — shows correct Row Visibility without waiting for fetch
+  useEffect(() => {
+    if (!open || !media || userHasModifiedFormRef.current) return;
+    const mediaId = (media as any)?.id;
+    if (!mediaId) return;
+
+    if (savedFormDataCacheRef.current[mediaId]) {
+      setFormData(savedFormDataCacheRef.current[mediaId]);
+      return;
+    }
+
+    const result: Record<string, any> = {};
+    const arrayFields = [
+      "creators",
+      "cast",
+      "directors",
+      "producers",
+      "writers",
+      "tags",
+      "stars",
+      "writer",
+      "director",
+      "star",
+      "status",
+      "genres",
+      "vibe_tags",
+      "flavor_tags",
+      "content_type",
+    ];
+    Object.entries(media).forEach(([key, value]) => {
+      if (allowedFields && !allowedFields.includes(key)) return;
+      if (key === "row_type") {
+        result[key] = value ?? "";
+        return;
+      }
+      if (typeof value === "boolean") {
+        result[key] = value;
+        return;
+      }
+      if (arrayFields.includes(key) || Array.isArray(value)) {
+        result[key] = smartParse(value);
+      } else {
+        const parsedValues = smartParse(value);
+        const val = parsedValues.join(", ");
+        result[key] =
+          val === "" && (value === null || value === undefined) ? "" : val;
+      }
+    });
+    const currentStatuses = Array.isArray(result.status)
+      ? [...result.status]
+      : result.status
+        ? [result.status]
+        : [];
+    if (
+      result.in_coming_soon === true &&
+      !currentStatuses.includes("coming_soon")
+    )
+      currentStatuses.push("coming_soon");
+    if (currentStatuses.includes("coming_soon")) result.in_coming_soon = true;
+    result.status = currentStatuses;
+    setFormData(result as ProjectFormData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-init when open or media id changes
+  }, [open, (media as any)?.id]);
 
   // MERGE-based apply: adds this row's flags without clearing others
   const applyRowTemplate = (row: any) => {
     if (!row) return;
-
+    userHasModifiedFormRef.current = true;
     const { filter_type, filter_value, label } = row;
-    setFormData(prev => {
+    setFormData((prev) => {
       const next = { ...prev };
       // Ensure status is an array
-      let currentStatuses = Array.isArray(next.status) ? [...next.status] : (next.status ? [next.status] : []);
+      let currentStatuses = Array.isArray(next.status)
+        ? [...next.status]
+        : next.status
+          ? [next.status]
+          : [];
 
       const addStatus = (s: string) => {
-        if (s && !currentStatuses.includes(s as any)) currentStatuses.push(s as any);
+        if (s && !currentStatuses.includes(s as any))
+          currentStatuses.push(s as any);
       };
 
       // Update content_type (Single/Multiple selection)
       const addType = (t: string) => {
         if (!t) return;
-        let currentTypes = Array.isArray(next.content_type) ? [...next.content_type] : (next.content_type ? [next.content_type] : []);
+        let currentTypes = Array.isArray(next.content_type)
+          ? [...next.content_type]
+          : next.content_type
+            ? [next.content_type]
+            : [];
         if (!currentTypes.includes(t as any)) currentTypes.push(t as any);
         next.content_type = currentTypes as any;
       };
 
       if (filter_type === FilterTypeEnum.ContentType) {
-        addType(filter_value);
+        const vals = (filter_value || "").split(",").map((v: string) => v.trim()).filter(Boolean);
+        if (vals.length > 1) vals.forEach((v: string) => addType(v));
+        else addType(filter_value);
       } else if (filter_type === FilterTypeEnum.Audiobook) {
         addType(ContentTypeEnum.Audiobook);
       } else if (filter_type === FilterTypeEnum.Song) {
         addType(ContentTypeEnum.Song);
+      } else if (filter_type === FilterTypeEnum.Listen) {
+        const vals = (filter_value || "").split(",").map((v: string) => v.trim());
+        vals.forEach((v: string) => {
+          if (v.toLowerCase().includes("song")) addType(ContentTypeEnum.Song);
+          if (v.toLowerCase().includes("audiobook")) addType(ContentTypeEnum.Audiobook);
+        });
+        if (vals.length === 0) addType(ContentTypeEnum.Song);
       } else if (filter_type === FilterTypeEnum.Flag) {
         // Special case: 'Coming Soon' should update status array
-        if (label.toLowerCase().includes('coming soon')) {
-          addStatus('coming_soon');
+        if (label.toLowerCase().includes("coming soon")) {
+          addStatus("coming_soon");
           next.in_coming_soon = true;
         } else {
           // If it's not a boolean flag, add the label to content_type array
@@ -114,21 +209,49 @@ export default function MediaDialog({
         }
       } else if (filter_type === FilterTypeEnum.Status) {
         addStatus(filter_value);
-        if (filter_value === 'coming_soon') next.in_coming_soon = true;
+        if (filter_value === "coming_soon") next.in_coming_soon = true;
       }
 
       // --- GLOBAL: Tag row_type for any custom row ---
-      const knownFlagsInApply = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-      const filterValueNormApply = (row.filter_value || '').toLowerCase().trim();
-      const isKnownFlagArr = filter_type === FilterTypeEnum.Flag && knownFlagsInApply.includes(filterValueNormApply);
+      const knownFlagsInApply = [
+        "in_now_playing",
+        "in_coming_soon",
+        "in_latest_releases",
+        "in_hero_carousel",
+        "featured",
+        "is_downloadable",
+      ];
+      const filterValueNormApply = (row.filter_value || "")
+        .toLowerCase()
+        .trim();
+      const isKnownFlagArr =
+        filter_type === FilterTypeEnum.Flag &&
+        knownFlagsInApply.includes(filterValueNormApply);
 
       if (!isKnownFlagArr) {
-        const rowTypeValue = row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_');
+        const rowTypeValue =
+          row.row_type || label.trim().toLowerCase().replace(/\s+/g, "_");
         const currentVal = String((next as any).row_type || "");
-        const parts = currentVal.split(",").map(p => p.trim()).filter(Boolean);
+        const parts = currentVal
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
         if (!parts.includes(rowTypeValue)) {
           parts.push(rowTypeValue);
           (next as any).row_type = parts.join(", ");
+        }
+      }
+
+      const isListenRowApply =
+        filter_type === FilterTypeEnum.Listen ||
+        (row.page || "").toLowerCase() === "listen" ||
+        (label || "").toLowerCase().includes("listen");
+      if (isListenRowApply) {
+        const currentVal = String((next as any).row_type || "");
+        const parts = currentVal.split(",").map((p: string) => p.trim()).filter(Boolean);
+        const filtered = parts.filter((p) => p.toLowerCase() !== "listen_excluded");
+        if (filtered.length !== parts.length) {
+          (next as any).row_type = filtered.join(", ");
         }
       }
 
@@ -136,10 +259,10 @@ export default function MediaDialog({
 
       if (filter_type === FilterTypeEnum.Flag) {
         const norm = (val: string) => val.toLowerCase().trim();
-        const matchedField = availableFields.find(f => {
+        const matchedField = availableFields.find((f) => {
           const nf = norm(f);
           const nv = norm(filter_value);
-          const nvUnder = nv.replace(/\s+/g, '_');
+          const nvUnder = nv.replace(/\s+/g, "_");
           return nf === nv || nf === nvUnder || nf === `in_${nvUnder}`;
         });
 
@@ -155,31 +278,46 @@ export default function MediaDialog({
   // REMOVE: unsets only this row's specific flag/status
   const removeRowTemplate = (row: any) => {
     if (!row) return;
+    userHasModifiedFormRef.current = true;
     const { filter_type, filter_value } = row;
-    setFormData(prev => {
+    setFormData((prev) => {
       const next = { ...prev };
-      let currentStatuses = Array.isArray(next.status) ? [...next.status] : (next.status ? [next.status] : []);
+      let currentStatuses = Array.isArray(next.status)
+        ? [...next.status]
+        : next.status
+          ? [next.status]
+          : [];
 
       const removeType = (t?: string) => {
         if (!t) {
           next.content_type = "" as any;
         } else {
-          let currentTypes = Array.isArray(next.content_type) ? [...next.content_type] : (next.content_type ? [next.content_type] : []);
-          currentTypes = currentTypes.filter(existing => String(existing).toLowerCase() !== String(t).toLowerCase());
+          let currentTypes = Array.isArray(next.content_type)
+            ? [...next.content_type]
+            : next.content_type
+              ? [next.content_type]
+              : [];
+          currentTypes = currentTypes.filter(
+            (existing) =>
+              String(existing).toLowerCase() !== String(t).toLowerCase(),
+          );
           next.content_type = currentTypes as any;
         }
       };
 
       const removeStatus = (s: string) => {
-        currentStatuses = currentStatuses.filter(existing => String(existing).toLowerCase() !== String(s).toLowerCase());
+        currentStatuses = currentStatuses.filter(
+          (existing) =>
+            String(existing).toLowerCase() !== String(s).toLowerCase(),
+        );
       };
 
       if (filter_type === FilterTypeEnum.Flag) {
         const norm = (val: string) => val.toLowerCase().trim();
-        const matchedField = availableFields.find(f => {
+        const matchedField = availableFields.find((f) => {
           const nf = norm(f);
           const nv = norm(filter_value);
-          const nvUnder = nv.replace(/\s+/g, '_');
+          const nvUnder = nv.replace(/\s+/g, "_");
           return nf === nv || nf === nvUnder || nf === `in_${nvUnder}`;
         });
 
@@ -188,41 +326,72 @@ export default function MediaDialog({
         }
 
         // Special case for 'Coming Soon' Flag
-        if ((row.label || '').toLowerCase().includes('coming soon')) {
-          removeStatus('coming_soon');
+        if ((row.label || "").toLowerCase().includes("coming soon")) {
+          removeStatus("coming_soon");
           next.in_coming_soon = false;
         }
       }
 
       // --- GLOBAL: Clear row_type if it was set by this row ---
-      const knownFlagsRem = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-      const filterValueNormRem = (filter_value || '').toLowerCase().trim();
-      const isKnownFlagRem = filter_type === FilterTypeEnum.Flag && knownFlagsRem.includes(filterValueNormRem);
+      const knownFlagsRem = [
+        "in_now_playing",
+        "in_coming_soon",
+        "in_latest_releases",
+        "in_hero_carousel",
+        "featured",
+        "is_downloadable",
+      ];
+      const filterValueNormRem = (filter_value || "").toLowerCase().trim();
+      const isKnownFlagRem =
+        filter_type === FilterTypeEnum.Flag &&
+        knownFlagsRem.includes(filterValueNormRem);
 
       if (!isKnownFlagRem) {
-        const rowTypeValue = row.row_type || (row.label || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const rowTypeValue =
+          row.row_type ||
+          (row.label || "").trim().toLowerCase().replace(/\s+/g, "_");
         const currentVal = String((next as any).row_type || "");
-        const parts = currentVal.split(",").map(p => p.trim()).filter(Boolean);
-        const nextParts = parts.filter(p => p !== rowTypeValue);
-        (next as any).row_type = nextParts.length > 0 ? nextParts.join(", ") : "";
+        const parts = currentVal
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const nextParts = parts.filter((p) => p !== rowTypeValue);
+        (next as any).row_type =
+          nextParts.length > 0 ? nextParts.join(", ") : "";
       }
 
       if (filter_type === FilterTypeEnum.Status) {
         removeStatus(filter_value);
-        if (filter_value === 'coming_soon') next.in_coming_soon = false;
+        if (filter_value === "coming_soon") next.in_coming_soon = false;
       }
 
-      if (filter_type === FilterTypeEnum.ContentType) {
-        removeType(filter_value);
+      const isListenRow =
+        filter_type === FilterTypeEnum.Listen ||
+        (row.page || "").toLowerCase() === "listen" ||
+        (row.label || "").toLowerCase().includes("listen");
+      if (isListenRow) {
+        removeType(ContentTypeEnum.Song);
+        const currentVal = String((next as any).row_type || "");
+        const parts = currentVal.split(",").map((p: string) => p.trim()).filter(Boolean);
+        if (!parts.includes("listen_excluded")) parts.push("listen_excluded");
+        (next as any).row_type = parts.join(", ");
+      } else if (filter_type === FilterTypeEnum.ContentType) {
+        const vals = (filter_value || "").split(",").map((v: string) => v.trim()).filter(Boolean);
+        if (vals.length > 1) vals.forEach((v: string) => removeType(v));
+        else removeType(filter_value);
       } else if (filter_type === FilterTypeEnum.Audiobook) {
         removeType(ContentTypeEnum.Audiobook);
       } else if (filter_type === FilterTypeEnum.Song) {
         removeType(ContentTypeEnum.Song);
       }
 
-      // Remove the label from content_type for non-Status rows, 
+      // Remove the label from content_type for non-Status rows,
       // EXCEPT 'Coming Soon' which lives in status.
-      if (row.label && filter_type !== FilterTypeEnum.Status && !row.label.toLowerCase().includes('coming soon')) {
+      if (
+        row.label &&
+        filter_type !== FilterTypeEnum.Status &&
+        !row.label.toLowerCase().includes("coming soon")
+      ) {
         removeType(row.label);
       }
 
@@ -239,13 +408,18 @@ export default function MediaDialog({
 
   const projectId = (media as any)?.id as string | undefined;
   const showChapters = (() => {
-    const types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
+    const types = Array.isArray(formData.content_type)
+      ? formData.content_type
+      : formData.content_type
+        ? [formData.content_type]
+        : [];
     const norm = (t: any) => String(t || "").toLowerCase();
-    return types.some(t =>
-      norm(t) === "audiobook" ||
-      norm(t) === "tv show" ||
-      norm(t) === "tvshow" ||
-      norm(t) === "tv_show"
+    return types.some(
+      (t) =>
+        norm(t) === "audiobook" ||
+        norm(t) === "tv show" ||
+        norm(t) === "tvshow" ||
+        norm(t) === "tv_show",
     );
   })();
 
@@ -273,11 +447,10 @@ export default function MediaDialog({
 
         throw new Error(
           supabaseError?.message ||
-          response.error?.message ||
-          "Failed to fetch chapters"
+            response.error?.message ||
+            "Failed to fetch chapters",
         );
       }
-
 
       const rows = Array.isArray(response.data)
         ? (response.data as any[])
@@ -285,113 +458,170 @@ export default function MediaDialog({
 
       // Hide deleted chapters if the schema supports soft-delete
       return rows.filter(
-        (r) => !("is_deleted" in r) || r.is_deleted !== true
+        (r) => !("is_deleted" in r) || r.is_deleted !== true,
       ) as Content[];
     },
   });
 
-  // Fetch ALL content_rows to get all filter_values (not just content_type)
-  const { data: contentRowFilters = [], isLoading: isLoadingRowFilters } = useQuery({
-    queryKey: ["content-row-filters", "all"],
-    queryFn: async () => {
-      const { ContentRows } = await import(
-        "@/api/integrations/supabase/content_rows/content_rows"
-      );
-      const resp = await (ContentRows as any).get({
-        eq: [{ key: "is_active", value: true }],
-        sort: "order_index",
-        sortBy: "asc",
-      });
+  // Fetch ALL content_rows (same approach as ContentRows page — no is_active filter to avoid empty results)
+  const { data: contentRowFilters = [], isLoading: isLoadingRowFilters } =
+    useQuery({
+      queryKey: ["content-row-filters", "all"],
+      queryFn: async () => {
+        const { ContentRows } =
+          await import("@/api/integrations/supabase/content_rows/content_rows");
+        const resp = await (ContentRows as any).get({
+          eq: [],
+          sort: "order_index",
+          sortBy: "asc",
+        });
 
-      if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
-        console.error("Failed to fetch content row filters:", resp.error);
-        return [];
-      }
+        if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
+          console.error("Failed to fetch content row filters:", resp.error);
+          return [];
+        }
 
-      const rows = Array.isArray(resp.data)
-        ? resp.data
-        : resp.data
-          ? [resp.data].filter(Boolean)
-          : [];
+        const rows = Array.isArray(resp.data)
+          ? resp.data
+          : resp.data
+            ? [resp.data].filter(Boolean)
+            : [];
 
-      return rows.filter((r: any) =>
-        r.label?.toLowerCase() !== 'my list' &&
-        !['mylist', 'my_list', 'my list'].includes(r.page?.toLowerCase())
-      );
-    },
-    enabled: open,
-    staleTime: 30_000,
-  });
+        return rows
+          .filter((r: any) => !r.is_deleted)
+          .filter(
+            (r: any) =>
+              r.label?.toLowerCase() !== "my list" &&
+              !["mylist", "my_list", "my list"].includes(r.page?.toLowerCase()),
+          );
+      },
+      enabled: open,
+      staleTime: 30_000,
+    });
 
-  // Calculate matched rows based on current formData.
-  // Strategy: only check a row as "matched" if the project has an EXPLICIT assignment to it
-  // (stored in the project's row_type field), EXCEPT for known boolean flags and status rows
-  // which are matched directly against their respective DB fields.
-  const matchedRows = (contentRowFilters as any[]).filter((row) => {
-    if (!formData) return false;
-    const { filter_type, filter_value, label } = row;
+  // Calculate matched rows based on current formData. Memoized to prevent flicker from recalculation.
+  const matchedRows = useMemo(
+    () =>
+      (contentRowFilters as any[]).filter((row) => {
+        if (!formData) return false;
+        const { filter_type, filter_value, label } = row;
 
-    const norm = (val: any) => String(val || "").toLowerCase().trim();
+        const norm = (val: any) =>
+          String(val || "")
+            .toLowerCase()
+            .trim();
 
-    // Project's explicitly-assigned row_type values (populated by applyRowTemplate)
-    const projectRowTypes = String((formData as any).row_type || "")
-      .split(",")
-      .map((p: string) => norm(p.trim()))
-      .filter(Boolean);
+        // Coming Soon row: match when Status includes "coming_soon" or in_coming_soon is true
+        const isComingSoonRow =
+          (label || "").toLowerCase().includes("coming soon") ||
+          norm(filter_value) === "coming_soon" ||
+          norm(filter_value) === "in_coming_soon";
+        if (isComingSoonRow) {
+          const statuses = Array.isArray((formData as any).status)
+            ? (formData as any).status
+            : [(formData as any).status];
+          if (statuses.some((s: any) => norm(s) === "coming_soon")) return true;
+          if (!!(formData as any).in_coming_soon) return true;
+          return false;
+        }
 
-    // This row's own identifier
-    const rowTypeValue = norm(row.row_type || label.trim().toLowerCase().replace(/\s+/g, '_'));
+        // Listen row: match when Song or Audiobook in content_type, unless explicitly excluded.
+        const isListenRow =
+          (filter_type === FilterTypeEnum.Audiobook ||
+            filter_type === FilterTypeEnum.Song ||
+            norm(filter_value).includes("audiobook") ||
+            norm(filter_value).includes("song")) &&
+          ((row.page || "").toLowerCase() === "listen" ||
+            (label || "").toLowerCase().includes("listen"));
+        if (isListenRow) {
+          const excluded =
+            String((formData as any).row_type || "")
+              .split(",")
+              .map((p: string) => norm(p.trim()))
+              .includes("listen_excluded");
+          if (excluded) return false;
+          const types = Array.isArray((formData as any).content_type)
+            ? (formData as any).content_type
+            : (formData as any).content_type
+              ? [(formData as any).content_type]
+              : [];
+          return types.some(
+            (t: any) => norm(t) === "audiobook" || norm(t) === "song"
+          );
+        }
 
-    // Known boolean columns on projects table
-    const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-    const isKnownFlag = filter_type === FilterTypeEnum.Flag &&
-      knownFlags.includes(norm(filter_value).replace(/\s+/g, '_'));
+        // Project's explicitly-assigned row_type values (populated by applyRowTemplate)
+        const projectRowTypes = String((formData as any).row_type || "")
+          .split(",")
+          .map((p: string) => norm(p.trim()))
+          .filter(Boolean);
 
-    // Status rows: check project's status array directly
-    if (filter_type === FilterTypeEnum.Status) {
-      const statuses = Array.isArray((formData as any).status)
-        ? (formData as any).status
-        : [(formData as any).status];
-      return statuses.some((s: any) => norm(s) === norm(filter_value));
-    }
+        // This row's own identifier
+        const rowTypeValue = norm(
+          row.row_type || label.trim().toLowerCase().replace(/\s+/g, "_"),
+        );
 
-    // Known flag rows: check the actual boolean column on the project
-    if (isKnownFlag) {
-      const keyMatch = Object.keys(formData).find((k: string) =>
-        norm(k) === norm(filter_value) ||
-        norm(k) === `in_${norm(filter_value).replace(/\s+/g, '_')}`
-      );
-      if (keyMatch && !!(formData as any)[keyMatch]) return true;
+        // Known boolean columns on projects table
+        const knownFlags = [
+          "in_now_playing",
+          "in_coming_soon",
+          "in_latest_releases",
+          "in_hero_carousel",
+          "featured",
+          "is_downloadable",
+        ];
+        const isKnownFlag =
+          filter_type === FilterTypeEnum.Flag &&
+          knownFlags.includes(norm(filter_value).replace(/\s+/g, "_"));
 
-      // Special case: 'Coming Soon' flag also syncs to status array
-      if ((label || '').toLowerCase().includes('coming soon')) {
-        const statuses = Array.isArray((formData as any).status)
-          ? (formData as any).status
-          : [(formData as any).status];
-        return statuses.some((s: any) => norm(s) === 'coming_soon');
-      }
+        // Status rows: check project's status array directly
+        if (filter_type === FilterTypeEnum.Status) {
+          const statuses = Array.isArray((formData as any).status)
+            ? (formData as any).status
+            : [(formData as any).status];
+          return statuses.some((s: any) => norm(s) === norm(filter_value));
+        }
 
-      return false;
-    }
+        // Known flag rows: check the actual boolean column on the project
+        if (isKnownFlag) {
+          const toKey = (v: string) => norm(v).replace(/\s+/g, "_");
+          const filterKey = toKey(filter_value);
+          const keyMatch = Object.keys(formData).find(
+            (k: string) => toKey(k) === filterKey,
+          );
+          if (keyMatch && !!(formData as any)[keyMatch]) return true;
 
-    // For all other rows (content_type, Audiobook, Song, custom flag rows):
-    // ONLY check if this row's identifier is explicitly in the project's row_type field.
-    // This prevents false positives like all "content_type · Film" rows lighting up
-    // just because a project has Film as its content_type.
-    return rowTypeValue ? projectRowTypes.includes(rowTypeValue) : false;
-  });
+          // Special case: 'Coming Soon' flag also syncs to status array
+          if ((label || "").toLowerCase().includes("coming soon")) {
+            const statuses = Array.isArray((formData as any).status)
+              ? (formData as any).status
+              : [(formData as any).status];
+            return statuses.some((s: any) => norm(s) === "coming_soon");
+          }
+
+          return false;
+        }
+
+        // For all other rows (content_type, Audiobook, Song, custom flag rows):
+        // ONLY check if this row's identifier is explicitly in the project's row_type field.
+        // This prevents false positives like all "content_type · Film" rows lighting up
+        // just because a project has Film as its content_type.
+        return rowTypeValue ? projectRowTypes.includes(rowTypeValue) : false;
+      }),
+    [formData, contentRowFilters],
+  );
 
   // Auto-select row if editing and not set
   useEffect(() => {
     if (open && matchedRows.length > 0 && !targetRowId) {
-      const preferred = matchedRows.find(r => r.page === localAssignmentPage) || matchedRows[0];
+      const preferred =
+        matchedRows.find((r) => r.page === localAssignmentPage) ||
+        matchedRows[0];
       if (preferred) {
         setTargetRowId(preferred.id);
       }
     }
   }, [open, matchedRows.length, localAssignmentPage]);
-
-
 
   const createChapterMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -402,8 +632,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to create chapter"
+            res.error?.message ||
+            "Failed to create chapter",
         );
       }
       return res.data;
@@ -428,8 +658,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to update chapter"
+            res.error?.message ||
+            "Failed to update chapter",
         );
       }
       return res.data;
@@ -455,8 +685,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to delete chapter"
+            res.error?.message ||
+            "Failed to delete chapter",
         );
       }
     },
@@ -473,6 +703,11 @@ export default function MediaDialog({
 
   // Fetch projects to get field structure
   useEffect(() => {
+    if (!open) return;
+    userHasModifiedFormRef.current = false;
+    requestedMediaIdRef.current = (media as any)?.id ?? null;
+    const mediaIdForFetch = (media as any)?.id ?? null;
+
     const fetchFields = async () => {
       try {
         setIsLoadingFields(true);
@@ -510,33 +745,83 @@ export default function MediaDialog({
               "content_type",
             ];
             const allArrayFields = Array.from(
-              new Set([...STATIC_ARRAY_FIELDS, ...dbArrayFields])
+              new Set([...STATIC_ARRAY_FIELDS, ...dbArrayFields]),
             );
-            const KNOWN_FLAGS: string[] = ["in_hero_carousel", "in_theaters"];
+            const KNOWN_FLAGS: string[] = [
+              "in_hero_carousel",
+              "in_theaters",
+              "in_now_playing",
+              "in_coming_soon",
+              "in_latest_releases",
+              "featured",
+              "is_downloadable",
+            ];
             const MANDATORY_EXTRA_FIELDS: string[] = ["genres", "vibe_tags"];
             const ALL_POSSIBLE_FIELDS: string[] = [
-              "title", "status", "platform", "platform_url", "notes", "poster_url",
-              "order_index", "content_type", "platform_name", "poster_preview_url",
-              "preview_url", "order", "slug", "synopsis", "release_year",
-              "runtime_minutes", "external_url", "cta_label", "venue_type",
-              "venue_name", "city", "country", "start_date", "end_date",
-              "ticket_url", "creators", "writers", "directors", "stars",
-              "rating", "total_episodes", "audio_url", "audio_path",
-              "release_status", "release_date", "youtube_id", "audio_preview_url",
-              "row_type"
+              "title",
+              "status",
+              "platform",
+              "platform_url",
+              "notes",
+              "poster_url",
+              "order_index",
+              "content_type",
+              "platform_name",
+              "poster_preview_url",
+              "preview_url",
+              "order",
+              "slug",
+              "synopsis",
+              "release_year",
+              "runtime_minutes",
+              "external_url",
+              "cta_label",
+              "venue_type",
+              "venue_name",
+              "city",
+              "country",
+              "start_date",
+              "end_date",
+              "ticket_url",
+              "creators",
+              "writers",
+              "directors",
+              "stars",
+              "rating",
+              "total_episodes",
+              "audio_url",
+              "audio_path",
+              "release_status",
+              "release_date",
+              "youtube_id",
+              "audio_preview_url",
+              "row_type",
             ];
 
-            const fields = Array.from(new Set([
-              ...Object.keys(projects[0]),
-              ...KNOWN_FLAGS,
-              ...MANDATORY_EXTRA_FIELDS,
-              ...ALL_POSSIBLE_FIELDS
-            ]))
+            const fields = Array.from(
+              new Set([
+                ...Object.keys(projects[0]),
+                ...KNOWN_FLAGS,
+                ...MANDATORY_EXTRA_FIELDS,
+                ...ALL_POSSIBLE_FIELDS,
+              ]),
+            )
               .filter(
-                (key) => !["id", "created_at", "updated_at", "ownership", "episode_runtime_minutes", "screening_status", "deleted_at", "is_deleted", "play_behavior"].includes(key)
+                (key) =>
+                  ![
+                    "id",
+                    "created_at",
+                    "updated_at",
+                    "ownership",
+                    "episode_runtime_minutes",
+                    "screening_status",
+                    "deleted_at",
+                    "is_deleted",
+                    "play_behavior",
+                  ].includes(key),
               )
               .filter((key) =>
-                allowedFields ? allowedFields.includes(key) : true
+                allowedFields ? allowedFields.includes(key) : true,
               );
             setAvailableFields(fields);
             setArrayFieldNames(allArrayFields);
@@ -553,22 +838,53 @@ export default function MediaDialog({
                   result[key] = value ?? "";
                   return;
                 }
+                // Preserve booleans (e.g. in_now_playing, in_hero_carousel) — smartParse converts false to "false" which is truthy
+                if (typeof value === "boolean") {
+                  result[key] = value;
+                  return;
+                }
 
                 const arrayFields = arrayFieldNames.length
                   ? arrayFieldNames
-                  : ["creators", "cast", "directors", "producers", "writers", "tags", "stars", "writer", "director", "star", "status", "genres", "vibe_tags", "flavor_tags", "content_type"];
+                  : [
+                      "creators",
+                      "cast",
+                      "directors",
+                      "producers",
+                      "writers",
+                      "tags",
+                      "stars",
+                      "writer",
+                      "director",
+                      "star",
+                      "status",
+                      "genres",
+                      "vibe_tags",
+                      "flavor_tags",
+                      "content_type",
+                    ];
                 if (arrayFields.includes(key) || Array.isArray(value)) {
                   result[key] = smartParse(value);
                 } else {
                   const parsedValues = smartParse(value);
                   const val = parsedValues.join(", ");
-                  result[key] = (val === "" && (value === null || value === undefined)) ? "" : val;
+                  result[key] =
+                    val === "" && (value === null || value === undefined)
+                      ? ""
+                      : val;
                 }
               });
 
               // Sync in_coming_soon flag and status array
-              const currentStatuses = Array.isArray(result.status) ? [...result.status] : (result.status ? [result.status] : []);
-              if (result.in_coming_soon === true && !currentStatuses.includes("coming_soon")) {
+              const currentStatuses = Array.isArray(result.status)
+                ? [...result.status]
+                : result.status
+                  ? [result.status]
+                  : [];
+              if (
+                result.in_coming_soon === true &&
+                !currentStatuses.includes("coming_soon")
+              ) {
                 currentStatuses.push("coming_soon");
               }
               if (currentStatuses.includes("coming_soon")) {
@@ -576,14 +892,28 @@ export default function MediaDialog({
               }
               result.status = currentStatuses;
 
-              setFormData(result as ProjectFormData);
+              if (
+                !userHasModifiedFormRef.current &&
+                requestedMediaIdRef.current === mediaIdForFetch
+              ) {
+                // ✅ Prefer cached saved data over stale media prop
+                const cached =
+                  savedFormDataCacheRef.current[mediaIdForFetch ?? ""];
+                setFormData(cached ?? (result as ProjectFormData));
+              }
             } else {
               // Add mode - initialize empty fields
               const base: Record<string, any> = {};
               fields.forEach((key) => {
                 const arrayFields = arrayFieldNames.length
                   ? arrayFieldNames
-                  : ["genres", "status", "vibe_tags", "flavor_tags", "content_type"];
+                  : [
+                      "genres",
+                      "status",
+                      "vibe_tags",
+                      "flavor_tags",
+                      "content_type",
+                    ];
                 if (arrayFields.includes(key)) {
                   base[key] = [];
                 } else if (key === "row_type") {
@@ -598,7 +928,12 @@ export default function MediaDialog({
                 Object.assign(base, defaultValues);
               }
 
-              setFormData(base as ProjectFormData);
+              if (
+                !userHasModifiedFormRef.current &&
+                requestedMediaIdRef.current === mediaIdForFetch
+              ) {
+                setFormData(base as ProjectFormData);
+              }
             }
           }
         }
@@ -613,14 +948,19 @@ export default function MediaDialog({
     if (open) {
       fetchFields();
     }
-  }, [open, media]);
+  }, [open, (media as any)?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate required fields
     const typesForValidation = smartParse(formData.content_type);
-    const isReadCase = typesForValidation.some(t => String(t) === ContentTypeEnum.Audiobook || String(t).toLowerCase() === "audiobook" || String(t).toLowerCase() === "audiobooks");
+    const isReadCase = typesForValidation.some(
+      (t) =>
+        String(t) === ContentTypeEnum.Audiobook ||
+        String(t).toLowerCase() === "audiobook" ||
+        String(t).toLowerCase() === "audiobooks",
+    );
 
     const requiredFields = [
       "title",
@@ -630,11 +970,14 @@ export default function MediaDialog({
       "notes",
       "platform",
       "release_year",
-      ...(isReadCase ? ["audio_url"] : ["preview_url"])
+      ...(isReadCase ? ["audio_url"] : ["preview_url"]),
     ];
 
-    const missingFields = requiredFields.filter(field => {
-      if (availableFields.includes(field) || ["content_type", "status", "audio_url", "preview_url"].includes(field)) {
+    const missingFields = requiredFields.filter((field) => {
+      if (
+        availableFields.includes(field) ||
+        ["content_type", "status", "audio_url", "preview_url"].includes(field)
+      ) {
         const value = (formData as any)[field];
         if (Array.isArray(value)) return value.length === 0;
         return value === undefined || value === null || value === "";
@@ -643,9 +986,11 @@ export default function MediaDialog({
     });
 
     if (missingFields.length > 0) {
-      const fieldLabels = missingFields.map(f => f.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+      const fieldLabels = missingFields.map((f) =>
+        f.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      );
       toast.error(
-        `Please fill in all required fields: ${fieldLabels.join(", ")}`
+        `Please fill in all required fields: ${fieldLabels.join(", ")}`,
       );
       return;
     }
@@ -656,7 +1001,15 @@ export default function MediaDialog({
     // Only include fields that have actual values
     Object.entries(formData).forEach(([key, value]) => {
       // Skip internal fields and play_behavior
-      if (["id", "created_at", "updated_at", "play_behavior", "commaSeperatedGenres"].includes(key)) {
+      if (
+        [
+          "id",
+          "created_at",
+          "updated_at",
+          "play_behavior",
+          "commaSeperatedGenres",
+        ].includes(key)
+      ) {
         return;
       }
 
@@ -674,7 +1027,10 @@ export default function MediaDialog({
         ].includes(key)
       ) {
         // Convert numeric strings to integers, allowing 0
-        submitData[key] = (value !== null && value !== undefined && value !== "") ? parseInt(String(value), 10) : null;
+        submitData[key] =
+          value !== null && value !== undefined && value !== ""
+            ? parseInt(String(value), 10)
+            : null;
       } else {
         // Handle other possible array fields
         const arrayFields = arrayFieldNames.length
@@ -697,7 +1053,6 @@ export default function MediaDialog({
               "content_type",
             ];
         if (key === "row_type") {
-          // row_type is a comma-separated string of row identifiers — store as-is, just clean it up
           const parts = String(value || "")
             .split(",")
             .map((p: string) => p.trim())
@@ -711,7 +1066,7 @@ export default function MediaDialog({
           } else {
             submitData[key] = cleanArray;
           }
-        } else if (typeof value === 'string') {
+        } else if (typeof value === "string") {
           submitData[key] = value.trim();
         } else {
           submitData[key] = value;
@@ -719,9 +1074,13 @@ export default function MediaDialog({
       }
     });
 
-
     console.log("Submitting data to database:", submitData);
     await onSubmit(submitData);
+    // ✅ Cache the current formData so reopening reflects saved state
+    const mediaId = (media as any)?.id;
+    if (mediaId) {
+      savedFormDataCacheRef.current[mediaId] = { ...formData };
+    }
   };
 
   const handleChange = (field: keyof ProjectFormData, value: any) => {
@@ -730,9 +1089,12 @@ export default function MediaDialog({
 
       // Sync status -> in_coming_soon flag
       if (field === "status") {
-        const statuses = Array.isArray(value) ? value : (value ? [value] : []);
-        const norm = (v: any) => String(v || "").toLowerCase().trim();
-        const IsComingSoon = statuses.some(s => norm(s) === "coming_soon");
+        const statuses = Array.isArray(value) ? value : value ? [value] : [];
+        const norm = (v: any) =>
+          String(v || "")
+            .toLowerCase()
+            .trim();
+        const IsComingSoon = statuses.some((s) => norm(s) === "coming_soon");
         (next as any).in_coming_soon = IsComingSoon;
       }
 
@@ -776,11 +1138,14 @@ export default function MediaDialog({
     }
   };
 
-
   const renderField = (key: string, value: any) => {
     const isReadCase = (() => {
-      const types = Array.isArray(formData.content_type) ? formData.content_type : (formData.content_type ? [formData.content_type] : []);
-      return types.some(t => String(t).toLowerCase() === "audiobook");
+      const types = Array.isArray(formData.content_type)
+        ? formData.content_type
+        : formData.content_type
+          ? [formData.content_type]
+          : [];
+      return types.some((t) => String(t).toLowerCase() === "audiobook");
     })();
 
     const requiredFields = [
@@ -791,7 +1156,7 @@ export default function MediaDialog({
       "notes",
       "platform",
       "release_year",
-      ...(isReadCase ? ["audio_url"] : ["preview_url"])
+      ...(isReadCase ? ["audio_url"] : ["preview_url"]),
     ];
     const isRequired = requiredFields.includes(key);
 
@@ -818,7 +1183,7 @@ export default function MediaDialog({
 
       const toggleType = (t: string) => {
         const next = currentTypes.includes(t)
-          ? currentTypes.filter(existing => existing !== t)
+          ? currentTypes.filter((existing) => existing !== t)
           : [...currentTypes, t];
         handleChange(key as keyof ProjectFormData, next);
       };
@@ -830,7 +1195,9 @@ export default function MediaDialog({
           </Label>
           <div className="flex flex-wrap gap-2 mb-2">
             {currentTypes.length === 0 ? (
-              <span className="text-xs text-slate-400 italic">No types selected</span>
+              <span className="text-xs text-slate-400 italic">
+                No types selected
+              </span>
             ) : (
               currentTypes.map((t: string) => (
                 <Badge
@@ -840,31 +1207,36 @@ export default function MediaDialog({
                   onClick={() => toggleType(t)}
                 >
                   {(() => {
-                    const option = allOptions.find(o => o.value === t);
+                    const option = allOptions.find((o) => o.value === t);
                     if (option) return option.label;
                     const s = String(t).replace(/_/g, " ");
                     return s.charAt(0).toUpperCase() + s.slice(1);
-                  })()} <span className="ml-1 opacity-60">×</span>
+                  })()}{" "}
+                  <span className="ml-1 opacity-60">×</span>
                 </Badge>
               ))
             )}
           </div>
-          <Select
-            value=""
-            onValueChange={toggleType}
-          >
+          <Select value="" onValueChange={toggleType}>
             <SelectTrigger className="capitalize">
               <SelectValue placeholder="Add another type..." />
             </SelectTrigger>
             <SelectContent>
               {allOptions.map((type) => (
-                <SelectItem key={type.value} value={type.value} disabled={currentTypes.includes(type.value)}>
+                <SelectItem
+                  key={type.value}
+                  value={type.value}
+                  disabled={currentTypes.includes(type.value)}
+                >
                   {type.label} {currentTypes.includes(type.value) ? "✓" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-slate-400 italic">Click a badge above to remove it. Multiple types allow assignment to multiple rows.</p>
+          <p className="text-[10px] text-slate-400 italic">
+            Click a badge above to remove it. Multiple types allow assignment to
+            multiple rows.
+          </p>
         </div>
       );
     }
@@ -894,7 +1266,9 @@ export default function MediaDialog({
           </Label>
           <div className="flex flex-wrap gap-2 mb-2">
             {currentStatuses.length === 0 ? (
-              <span className="text-xs text-slate-400 italic">No statuses selected</span>
+              <span className="text-xs text-slate-400 italic">
+                No statuses selected
+              </span>
             ) : (
               currentStatuses.map((s: string) => (
                 <Badge
@@ -906,27 +1280,32 @@ export default function MediaDialog({
                   {(() => {
                     const sNorm = s.replace(/_/g, " ");
                     return sNorm.charAt(0).toUpperCase() + sNorm.slice(1);
-                  })()} <span className="ml-1 opacity-60">×</span>
+                  })()}{" "}
+                  <span className="ml-1 opacity-60">×</span>
                 </Badge>
               ))
             )}
           </div>
-          <Select
-            value=""
-            onValueChange={toggleStatus}
-          >
+          <Select value="" onValueChange={toggleStatus}>
             <SelectTrigger className="capitalize">
               <SelectValue placeholder="Add another status..." />
             </SelectTrigger>
             <SelectContent>
               {standardStatuses.map((stat) => (
-                <SelectItem key={stat.value} value={stat.value} disabled={currentStatuses.includes(stat.value)}>
+                <SelectItem
+                  key={stat.value}
+                  value={stat.value}
+                  disabled={currentStatuses.includes(stat.value)}
+                >
                   {stat.label} {currentStatuses.includes(stat.value) ? "✓" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-slate-400 italic">Click a badge above to remove it. Multiple statuses allow an item to be in both 'Released' and 'Coming Soon'.</p>
+          <p className="text-[10px] text-slate-400 italic">
+            Click a badge above to remove it. Multiple statuses allow an item to
+            be in both 'Released' and 'Coming Soon'.
+          </p>
         </div>
       );
     }
@@ -979,28 +1358,55 @@ export default function MediaDialog({
       );
     }
 
-
     // Unified Field Guide for simple help text
-    const fieldGuide: Record<string, { description: string; example?: string }> = {
+    const fieldGuide: Record<
+      string,
+      { description: string; example?: string }
+    > = {
       title: { description: "Name of the content as seen in the catalog." },
       content_type: { description: "Classification for routing and playback." },
-      row_type: { description: "Links this item to a specific content row. Auto-set when you select a row from Row Visibility above.", example: "trending_audiobooks" },
-      status: { description: "Release status: 'released' is live, 'coming_soon' shows teaser." },
+      row_type: {
+        description:
+          "Links this item to a specific content row. Auto-set when you select a row from Row Visibility above.",
+        example: "trending_audiobooks",
+      },
+      status: {
+        description:
+          "Release status: 'released' is live, 'coming_soon' shows teaser.",
+      },
       poster_url: { description: "Primary display image URL." },
       preview_url: { description: "Teaser video or thumbnail URL." },
       notes: { description: "Internal notes or brief summary." },
-      platform: { description: "Where is this available? (YouTube, Netflix, etc.)" },
+      platform: {
+        description: "Where is this available? (YouTube, Netflix, etc.)",
+      },
       platform_url: { description: "Direct link to the content platform." },
       release_year: { description: "Year of original release (YYYY)." },
       runtime_minutes: { description: "Total duration in minutes." },
       ownership: { description: "Numeric identifier for licensing/ownership." },
-      creators: { description: "Authors or creators. Enter names separated by commas.", example: "John Doe, Jane Smith" },
-      stars: { description: "Main stars or lead performers. Enter names separated by commas.", example: "Star One, Star Two" },
+      creators: {
+        description: "Authors or creators. Enter names separated by commas.",
+        example: "John Doe, Jane Smith",
+      },
+      stars: {
+        description:
+          "Main stars or lead performers. Enter names separated by commas.",
+        example: "Star One, Star Two",
+      },
       directors: { description: "Directors. Enter names separated by commas." },
       writers: { description: "Writers. Enter names separated by commas." },
-      genres: { description: "Genres for filtering. Enter comma-separated.", example: "Action, Drama" },
-      vibe_tags: { description: "Vibe tags for mood/aesthetic. Enter comma-separated.", example: "Chill, Dark, Uplifting" },
-      flavor_tags: { description: "Flavor tags for recipes. Enter comma-separated.", example: "Spicy, Sweet, Savory" },
+      genres: {
+        description: "Genres for filtering. Enter comma-separated.",
+        example: "Action, Drama",
+      },
+      vibe_tags: {
+        description: "Vibe tags for mood/aesthetic. Enter comma-separated.",
+        example: "Chill, Dark, Uplifting",
+      },
+      flavor_tags: {
+        description: "Flavor tags for recipes. Enter comma-separated.",
+        example: "Spicy, Sweet, Savory",
+      },
       order_index: { description: "Listing priority (lower is higher)." },
       audio_url: { description: "Direct audio file link." },
       audio_preview_url: { description: "Link to audio clip for preview." },
@@ -1009,10 +1415,13 @@ export default function MediaDialog({
       venue_name: { description: "Name of the event venue or location." },
       city: { description: "City where the event or production is located." },
       country: { description: "Country of origin or event location." },
-      ticket_url: { description: "Direct link for purchasing tickets." }
+      ticket_url: { description: "Direct link for purchasing tickets." },
     };
 
-    const isDate = key.endsWith("_at") || key.includes("date") || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value));
+    const isDate =
+      key.endsWith("_at") ||
+      key.includes("date") ||
+      (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value));
     const knownArrayFields = [
       "creators",
       "cast",
@@ -1036,7 +1445,8 @@ export default function MediaDialog({
 
     // Special: Date Fields
     if (isDate) {
-      const dateValue = value && typeof value === 'string' ? value.split('T')[0] : "";
+      const dateValue =
+        value && typeof value === "string" ? value.split("T")[0] : "";
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
@@ -1046,11 +1456,15 @@ export default function MediaDialog({
             id={key}
             type="date"
             value={dateValue}
-            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            onChange={(e) =>
+              handleChange(key as keyof ProjectFormData, e.target.value)
+            }
             className="mt-1.5"
             required={isRequired}
           />
-          <p className="mt-1 text-[10px] text-slate-400 italic">Format: YYYY-MM-DD</p>
+          <p className="mt-1 text-[10px] text-slate-400 italic">
+            Format: YYYY-MM-DD
+          </p>
         </div>
       );
     }
@@ -1061,7 +1475,10 @@ export default function MediaDialog({
       return (
         <div key={key} className="col-span-2">
           <Label htmlFor={key} className="font-medium">
-            {label} <span className="text-[10px] text-slate-400 font-normal ml-1">(Array)</span>
+            {label}{" "}
+            <span className="text-[10px] text-slate-400 font-normal ml-1">
+              (Array)
+            </span>
           </Label>
           <Textarea
             id={key}
@@ -1069,12 +1486,23 @@ export default function MediaDialog({
             onChange={(e) => {
               handleChange(key as keyof ProjectFormData, e.target.value);
             }}
-            placeholder={fieldInfo?.example ? `e.g., ${fieldInfo.example}` : `Enter values separated by commas or new lines`}
+            placeholder={
+              fieldInfo?.example
+                ? `e.g., ${fieldInfo.example}`
+                : `Enter values separated by commas or new lines`
+            }
             className="mt-1.5 min-h-[80px]"
           />
           <div className="mt-1">
-            <p className="text-[10px] text-slate-500">{fieldInfo?.description || "Enter multiple values separated by commas or press Enter for new lines."}</p>
-            {fieldInfo?.example && <p className="text-[9px] text-slate-400 italic">Example: {fieldInfo.example}</p>}
+            <p className="text-[10px] text-slate-500">
+              {fieldInfo?.description ||
+                "Enter multiple values separated by commas or press Enter for new lines."}
+            </p>
+            {fieldInfo?.example && (
+              <p className="text-[9px] text-slate-400 italic">
+                Example: {fieldInfo.example}
+              </p>
+            )}
           </div>
         </div>
       );
@@ -1112,9 +1540,9 @@ export default function MediaDialog({
         </Label>
 
         {key === "poster_url" ||
-          key === "preview_url" ||
-          key === "audio_url" ||
-          key === "audio_preview_url" ? (
+        key === "preview_url" ||
+        key === "audio_url" ||
+        key === "audio_preview_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
@@ -1147,13 +1575,21 @@ export default function MediaDialog({
                       const safeName = file.name.replace(/\s+/g, "_");
                       // Safely determine primary type for folder structure
                       const types = smartParse(formData.content_type);
-                      const primaryType = types.length > 0 ? types[0] : "Generic";
+                      const primaryType =
+                        types.length > 0 ? types[0] : "Generic";
 
                       const path =
                         key === "audio_url" || key === "audio_preview_url"
                           ? `Audio/${primaryType}/${Date.now()}-${safeName}`
-                          : createBucketPath(`${Date.now()}-${safeName}`, primaryType as any);
-                      const publicUrl = await mediaService.uploadFile(file, bucket, path);
+                          : createBucketPath(
+                              `${Date.now()}-${safeName}`,
+                              primaryType as any,
+                            );
+                      const publicUrl = await mediaService.uploadFile(
+                        file,
+                        bucket,
+                        path,
+                      );
                       handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded!`);
                     } catch (error: any) {
@@ -1171,7 +1607,11 @@ export default function MediaDialog({
                 onClick={() => document.getElementById(`file-${key}`)?.click()}
                 className="h-10 px-3 bg-slate-50 border-dashed"
               >
-                {isUploading === key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isUploading === key ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
                 <span className="ml-2 hidden sm:inline">Upload</span>
               </Button>
             </div>
@@ -1180,7 +1620,9 @@ export default function MediaDialog({
           <Textarea
             id={key}
             value={value ?? ""}
-            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            onChange={(e) =>
+              handleChange(key as keyof ProjectFormData, e.target.value)
+            }
             placeholder={`Enter ${label.toLowerCase()}`}
             required={isRequired}
             className="mt-1.5 min-h-[100px]"
@@ -1190,7 +1632,9 @@ export default function MediaDialog({
             id={key}
             type={isNumeric ? "number" : "text"}
             value={value ?? ""}
-            onChange={(e) => handleChange(key as keyof ProjectFormData, e.target.value)}
+            onChange={(e) =>
+              handleChange(key as keyof ProjectFormData, e.target.value)
+            }
             placeholder={`Enter ${label.toLowerCase()}`}
             required={isRequired}
             className="mt-1.5"
@@ -1230,7 +1674,11 @@ export default function MediaDialog({
                   variant={addMode === "standard" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setAddMode("standard")}
-                  className={addMode === "standard" ? "bg-white text-slate-900 shadow-sm hover:bg-white h-7 px-3 text-xs font-semibold" : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"}
+                  className={
+                    addMode === "standard"
+                      ? "bg-white text-slate-900 shadow-sm hover:bg-white h-7 px-3 text-xs font-semibold"
+                      : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"
+                  }
                 >
                   Standard Form
                 </Button>
@@ -1239,7 +1687,11 @@ export default function MediaDialog({
                   variant={addMode === "row" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setAddMode("row")}
-                  className={addMode === "row" ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 h-7 px-3 text-xs font-semibold" : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"}
+                  className={
+                    addMode === "row"
+                      ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 h-7 px-3 text-xs font-semibold"
+                      : "text-slate-500 hover:text-slate-700 h-7 px-3 text-xs font-medium"
+                  }
                 >
                   Add to Row
                 </Button>
@@ -1247,7 +1699,10 @@ export default function MediaDialog({
 
               {addMode === "row" && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                  <Select value={localAssignmentPage} onValueChange={setLocalAssignmentPage}>
+                  <Select
+                    value={localAssignmentPage}
+                    onValueChange={setLocalAssignmentPage}
+                  >
                     <SelectTrigger className="h-9 w-[100px] text-xs capitalize">
                       <SelectValue />
                     </SelectTrigger>
@@ -1258,18 +1713,23 @@ export default function MediaDialog({
                     </SelectContent>
                   </Select>
 
-                  <Select value={targetRowId} onValueChange={(id) => {
-                    setTargetRowId(id);
-                    const row = (contentRowFilters as any[]).find(r => r.id === id);
-                    if (row) applyRowTemplate(row);
-                  }}>
+                  <Select
+                    value={targetRowId}
+                    onValueChange={(id) => {
+                      setTargetRowId(id);
+                      const row = (contentRowFilters as any[]).find(
+                        (r) => r.id === id,
+                      );
+                      if (row) applyRowTemplate(row);
+                    }}
+                  >
                     <SelectTrigger className="h-9 w-[180px] text-xs font-medium">
                       <SelectValue placeholder="Choose Row..." />
                     </SelectTrigger>
                     <SelectContent>
                       {(contentRowFilters as any[])
-                        .filter(r => r.page === localAssignmentPage)
-                        .map(row => (
+                        .filter((r) => r.page === localAssignmentPage)
+                        .map((row) => (
                           <SelectItem key={row.id} value={row.id}>
                             {row.label}
                           </SelectItem>
@@ -1284,26 +1744,31 @@ export default function MediaDialog({
 
         {/* Row Visibility Panel — always shown for both Add and Edit, grouped by page */}
         {(() => {
-          const pageOrder = ['home', 'watch', 'read'];
+          const pageOrder = ["home", "watch", "read"];
           const grouped: Record<string, any[]> = {};
-          (contentRowFilters as any[]).forEach(row => {
-            const pg = row.page || 'other';
+          (contentRowFilters as any[]).forEach((row) => {
+            const pg = row.page || "other";
             if (!grouped[pg]) grouped[pg] = [];
             grouped[pg].push(row);
           });
-          const pages = [...pageOrder.filter(p => grouped[p]), ...Object.keys(grouped).filter(p => !pageOrder.includes(p))];
+          const pages = [
+            ...pageOrder.filter((p) => grouped[p]),
+            ...Object.keys(grouped).filter((p) => !pageOrder.includes(p)),
+          ];
 
           const pageColors: Record<string, string> = {
-            home: 'bg-violet-100 text-violet-700',
-            watch: 'bg-blue-100 text-blue-700',
-            read: 'bg-emerald-100 text-emerald-700',
+            home: "bg-violet-100 text-violet-700",
+            watch: "bg-blue-100 text-blue-700",
+            read: "bg-emerald-100 text-emerald-700",
           };
 
           return (
             <div className="px-6 py-4 bg-slate-50 border-b space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Row Visibility</h3>
+                <h3 className="text-sm font-semibold text-slate-800">
+                  Row Visibility
+                </h3>
                 {!isLoadingRowFilters && (
                   <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
                     {matchedRows.length} active
@@ -1314,18 +1779,34 @@ export default function MediaDialog({
               {/* Loading skeleton */}
               {isLoadingRowFilters ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 animate-pulse">
-                  {[1, 2, 3, 4].map(i => (
+                  {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="h-10 rounded-lg bg-slate-200" />
                   ))}
                 </div>
               ) : pages.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">No active rows configured yet.</p>
+                <p className="text-xs text-slate-400 italic">
+                  No content rows yet. Create them in{" "}
+                  <a
+                    href="/content-rows"
+                    className="text-indigo-600 hover:underline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onOpenChange?.(false);
+                      window.location.href = "/content-rows";
+                    }}
+                  >
+                    Content Rows
+                  </a>
+                  .
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {pages.map(pg => (
+                  {pages.map((pg) => (
                     <div key={pg}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${pageColors[pg] || 'bg-slate-100 text-slate-500'}`}>
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${pageColors[pg] || "bg-slate-100 text-slate-500"}`}
+                        >
                           {pg}
                         </span>
                         <div className="flex-1 h-px bg-slate-200" />
@@ -1333,35 +1814,58 @@ export default function MediaDialog({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {(grouped[pg] || []).map((row: any) => {
-                          const isMatched = matchedRows.some(r => r.id === row.id);
+                          const isMatched = matchedRows.some(
+                            (r) => r.id === row.id,
+                          );
                           return (
-                            <label
+                            <div
                               key={row.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (isMatched) {
+                                  removeRowTemplate(row);
+                                  toast.info(`Removed from "${row.label}"`);
+                                } else {
+                                  applyRowTemplate(row);
+                                  toast.success(`Added to "${row.label}"`);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  if (isMatched) {
+                                    removeRowTemplate(row);
+                                    toast.info(`Removed from "${row.label}"`);
+                                  } else {
+                                    applyRowTemplate(row);
+                                    toast.success(`Added to "${row.label}"`);
+                                  }
+                                }
+                              }}
                               className={`
                                 flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer
                                 transition-all duration-150 select-none
-                                ${isMatched
-                                  ? 'bg-indigo-50 border-indigo-300 shadow-sm shadow-indigo-100'
-                                  : 'bg-white border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30'
+                                ${
+                                  isMatched
+                                    ? "bg-indigo-50 border-indigo-300 shadow-sm shadow-indigo-100"
+                                    : "bg-white border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30"
                                 }
                               `}
                             >
                               <input
                                 type="checkbox"
                                 checked={isMatched}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    applyRowTemplate(row);
-                                    toast.success(`Added to "${row.label}"`);
-                                  } else {
-                                    removeRowTemplate(row);
-                                    toast.info(`Removed from "${row.label}"`);
-                                  }
-                                }}
-                                className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                                readOnly
+                                tabIndex={-1}
+                                className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0 pointer-events-none"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className={`text-xs font-semibold truncate ${isMatched ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                <p
+                                  className={`text-xs font-semibold truncate ${isMatched ? "text-indigo-700" : "text-slate-700"}`}
+                                >
                                   {row.label}
                                 </p>
                                 <p className="text-[10px] text-slate-400 truncate">
@@ -1369,9 +1873,11 @@ export default function MediaDialog({
                                 </p>
                               </div>
                               {isMatched && (
-                                <span className="text-indigo-500 text-[10px] font-bold flex-shrink-0">✓ ON</span>
+                                <span className="text-indigo-500 text-[10px] font-bold flex-shrink-0">
+                                  ✓ ON
+                                </span>
                               )}
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
@@ -1400,9 +1906,12 @@ export default function MediaDialog({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-bold text-slate-800">Assign to Content Row</h3>
+                  <h3 className="text-xl font-bold text-slate-800">
+                    Assign to Content Row
+                  </h3>
                   <p className="text-sm text-slate-500 max-w-[280px] mx-auto leading-relaxed">
-                    Select a row template above. We'll pre-fill the specific flags and types automatically.
+                    Select a row template above. We'll pre-fill the specific
+                    flags and types automatically.
                   </p>
                 </div>
                 <div className="flex justify-center gap-2">
@@ -1416,11 +1925,17 @@ export default function MediaDialog({
                 {availableFields
                   .filter((key) => {
                     // Internal/Legacy field filtering
-                    if (key.startsWith("in_") || key === "featured" || key === "is_downloadable") return false;
+                    if (
+                      key.startsWith("in_") ||
+                      key === "featured" ||
+                      key === "is_downloadable"
+                    )
+                      return false;
 
                     // Tag visibility is primarily controlled by availableFields (which respects allowedFields)
                     // We just need to make sure we don't return false for them here unless we really want them hidden.
-                    if (['flavor_tags', 'vibe_tags', 'genres'].includes(key)) return true;
+                    if (["flavor_tags", "vibe_tags", "genres"].includes(key))
+                      return true;
 
                     return true;
                   })
@@ -1433,10 +1948,9 @@ export default function MediaDialog({
                   </h4>
 
                   {["in_hero_carousel", "in_theaters"].map((key) =>
-                    renderField(key, (formData as any)[key])
+                    renderField(key, (formData as any)[key]),
                   )}
                 </div>
-
               </div>
             )}
 
@@ -1450,19 +1964,25 @@ export default function MediaDialog({
                 onAddChapter={openAddChapter}
                 onEditChapter={openEditChapter}
                 onDeleteChapter={openDeleteChapter}
-                parentContentType={Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type}
+                parentContentType={
+                  Array.isArray(formData.content_type)
+                    ? formData.content_type[0]
+                    : formData.content_type
+                }
               />
             )}
-
 
             {/* Pairings section */}
             {projectId && (
               <PairingsSection
                 sourceId={projectId}
-                sourceRef={(Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type) as unknown as PairingSourceEnum}
+                sourceRef={
+                  (Array.isArray(formData.content_type)
+                    ? formData.content_type[0]
+                    : formData.content_type) as unknown as PairingSourceEnum
+                }
               />
             )}
-
 
             <div className="flex justify-end gap-3 pb-2 pt-10">
               <Button
@@ -1497,7 +2017,11 @@ export default function MediaDialog({
                 updateChapterMutation.isPending
               }
               defaultProjectId={projectId ?? null}
-              parentContentType={Array.isArray(formData.content_type) ? formData.content_type[0] : formData.content_type}
+              parentContentType={
+                Array.isArray(formData.content_type)
+                  ? formData.content_type[0]
+                  : formData.content_type
+              }
             />
 
             <DeleteConfirmationDialog

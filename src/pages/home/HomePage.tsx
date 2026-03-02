@@ -40,7 +40,10 @@ const HomePage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
+  const [stickyColumns, setStickyColumns] = useState<string[]>([
+    "actions",
+    "title",
+  ]);
   const [activeConfigTab, setActiveConfigTab] = useState("email");
 
   const toggleSticky = (key: string) => {
@@ -59,14 +62,17 @@ const HomePage = () => {
   const { data: shelves = [] } = useQuery({
     queryKey: ["content-rows", "home"],
     queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "home" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
+      const { ContentRows } =
+        await import("@/api/integrations/supabase/content_rows/content_rows");
+      const resp = await (ContentRows as any).get({
+        eq: [
+          { key: "page", value: "home" },
+          { key: "is_active", value: true },
+        ],
+      });
+      return Array.isArray(resp.data) ? (resp.data as ContentRow[]) : [];
+    },
   });
-
-
-
 
   const PINNED_WIDTH = 200;
   const COLUMN_WIDTHS: Record<string, number> = {
@@ -91,7 +97,6 @@ const HomePage = () => {
     }
     return offset;
   };
-
 
   const queryClient = useQueryClient();
 
@@ -161,9 +166,7 @@ const HomePage = () => {
         });
       });
 
-      return Array.from(typesSet).sort((a, b) =>
-        a.localeCompare(b)
-      );
+      return Array.from(typesSet).sort((a, b) => a.localeCompare(b));
     },
   });
 
@@ -178,7 +181,7 @@ const HomePage = () => {
       debouncedSearchQuery,
       statusFilter,
       contentTypeFilter,
-      selectedShelfId
+      selectedShelfId,
     ],
     queryFn: async () => {
       const eqFilters: any[] = [];
@@ -193,19 +196,32 @@ const HomePage = () => {
 
       // Apply shelf filter logic
       if (selectedShelfId !== "all") {
-        const shelf = shelves.find(s => s.id === selectedShelfId);
+        const shelf = shelves.find((s) => s.id === selectedShelfId);
         if (shelf) {
           if (shelf.filter_type === FilterTypeEnum.Flag) {
-            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
+            const knownFlags = [
+              "in_now_playing",
+              "in_coming_soon",
+              "in_latest_releases",
+              "in_hero_carousel",
+              "featured",
+              "is_downloadable",
+            ];
+            const flagExists = knownFlags.includes(
+              shelf.filter_value.toLowerCase(),
+            );
 
             if (flagExists) {
               eqFilters.push({ key: shelf.filter_value, value: true });
             } else if (shelf.page !== "listen") {
               // For custom rows, query by row_type using the shelf's row_type or label
               // Only for pages where row_type exists
-              const rowTypeFilter = (shelf as any).row_type || (shelf as any).label;
-              ilikeFilters.push({ key: "row_type", value: `%${rowTypeFilter}%` });
+              const rowTypeFilter =
+                (shelf as any).row_type || (shelf as any).label;
+              ilikeFilters.push({
+                key: "row_type",
+                value: `%${rowTypeFilter}%`,
+              });
             }
           } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
             ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
@@ -215,35 +231,57 @@ const HomePage = () => {
             // Since Listen is Song OR Audiobook, and we can only have one OR in CRUDWrapper easily,
             // we'll use a hack or just stick to one for now if ANDed
             // Actually, we can just use the 'or' property for complex ones.
-          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
+          } else if (
+            shelf.filter_type === FilterTypeEnum.Status ||
+            shelf.filter_type === FilterTypeEnum.ContentType
+          ) {
             const isStatus = shelf.filter_type === FilterTypeEnum.Status;
             if (shelf.filter_value.includes(",")) {
-              const values = shelf.filter_value.split(",").map(v => v.trim());
+              const values = shelf.filter_value.split(",").map((v) => v.trim());
               if (isStatus) {
                 overlapsFilters.push({ key: "status", value: values });
               } else {
-                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
+                shelfOr = values
+                  .map((v) => `content_type.ilike.%${v}%`)
+                  .join(",");
               }
             } else {
               if (isStatus) {
-                containsFilters.push({ key: "status", value: [shelf.filter_value] });
+                containsFilters.push({
+                  key: "status",
+                  value: [shelf.filter_value],
+                });
               } else {
-                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
+                ilikeFilters.push({
+                  key: "content_type",
+                  value: `%${shelf.filter_value}%`,
+                });
               }
             }
           } else if (shelf.filter_type === FilterTypeEnum.Genre) {
-            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "genres",
+              value: [shelf.filter_value],
+            });
           } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
-            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "vibe_tags",
+              value: [shelf.filter_value],
+            });
           } else if (shelf.filter_type === FilterTypeEnum.FlavorTags) {
-            containsFilters.push({ key: "flavor_tags", value: [shelf.filter_value] });
+            containsFilters.push({
+              key: "flavor_tags",
+              value: [shelf.filter_value],
+            });
           }
         }
       }
 
       if (contentTypeFilter.length > 0) {
         // Build multiple ilike patterns joined by OR
-        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
+        const contentTypePatterns = contentTypeFilter
+          .map((t) => `content_type.ilike.%${t}%`)
+          .join(",");
         if (shelfOr) {
           shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
         } else {
@@ -252,7 +290,8 @@ const HomePage = () => {
       }
 
       // Apply base content type restriction for Home page
-      const pageFilterOr = "content_type.ilike.%Film%,content_type.ilike.%TV Show%";
+      const pageFilterOr =
+        "content_type.ilike.%Film%,content_type.ilike.%TV Show%";
       const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
       let finalOr = shelfOr;
 
@@ -274,27 +313,45 @@ const HomePage = () => {
         searchFields: ["title", "platform", "notes"],
       });
 
-      if (response.flag !== Flag.Success && response.flag !== Flag.UnknownOrSuccess) {
+      if (
+        response.flag !== Flag.Success &&
+        response.flag !== Flag.UnknownOrSuccess
+      ) {
         throw new Error(response.error?.message || "Failed to fetch projects");
       }
 
-      let rows = Array.isArray(response.data) ? (response.data as Project[]) : [];
+      let rows = Array.isArray(response.data)
+        ? (response.data as Project[])
+        : [];
 
       // Handle smart search (including inheritance)
       if (debouncedSearchQuery.length > 2) {
         try {
-          const inheritedProjects = await pairingService.searchProjectsByInheritedTag(debouncedSearchQuery);
-          const existingIds = new Set(rows.map(r => r.id));
-          inheritedProjects.forEach(p => {
+          const inheritedProjects =
+            await pairingService.searchProjectsByInheritedTag(
+              debouncedSearchQuery,
+            );
+          const existingIds = new Set(rows.map((r) => r.id));
+          inheritedProjects.forEach((p) => {
             if (!existingIds.has(p.id)) {
               // Apply basic filters to inherited results
               if (statusFilter.length > 0) {
-                const statuses = Array.isArray(p.status) ? p.status : (typeof p.status === 'string' ? smartParse(p.status) : []);
-                if (!statusFilter.some(sf => statuses.includes(sf as any))) return;
+                const statuses = Array.isArray(p.status)
+                  ? p.status
+                  : typeof p.status === "string"
+                    ? smartParse(p.status)
+                    : [];
+                if (!statusFilter.some((sf) => statuses.includes(sf as any)))
+                  return;
               }
               if (contentTypeFilter.length > 0) {
-                const types = Array.isArray(p.content_type) ? p.content_type : (typeof p.content_type === 'string' ? smartParse(p.content_type) : []);
-                if (!contentTypeFilter.some(cf => types.includes(cf as any))) return;
+                const types = Array.isArray(p.content_type)
+                  ? p.content_type
+                  : typeof p.content_type === "string"
+                    ? smartParse(p.content_type)
+                    : [];
+                if (!contentTypeFilter.some((cf) => types.includes(cf as any)))
+                  return;
               }
               rows.push(p);
             }
@@ -324,11 +381,13 @@ const HomePage = () => {
     { key: "notes", label: "Notes" },
   ];
 
-  const allAvailableFields = displayFields.map(field => field.key);
-  const availableStatuses = Array.from(new Set(projects.flatMap(p => smartParse(p.status)).filter(Boolean))).sort();
+  const allAvailableFields = displayFields.map((field) => field.key);
+  const availableStatuses = Array.from(
+    new Set(projects.flatMap((p) => smartParse(p.status)).filter(Boolean)),
+  ).sort();
   const orderedFields = [
-    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
-    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
+    ...allAvailableFields.filter((key) => stickyColumns.includes(key)),
+    ...allAvailableFields.filter((key) => !stickyColumns.includes(key)),
   ];
 
   // Create mutation
@@ -496,11 +555,16 @@ const HomePage = () => {
           </TabsList>
         </div>
 
-
-
-        <TabsContent value="settings" className="mt-0 outline-none animate-in fade-in duration-300">
+        <TabsContent
+          value="settings"
+          className="mt-0 outline-none animate-in fade-in duration-300"
+        >
           <div className="bg-white rounded-lg p-6 border border-slate-200">
-            <Tabs value={activeConfigTab} onValueChange={setActiveConfigTab} className="w-full">
+            <Tabs
+              value={activeConfigTab}
+              onValueChange={setActiveConfigTab}
+              className="w-full"
+            >
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200">
@@ -512,7 +576,9 @@ const HomePage = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-slate-800">
-                      {activeConfigTab === "email" ? "Email Capture Configuration" : "Pricing Page Header"}
+                      {activeConfigTab === "email"
+                        ? "Email Capture Configuration"
+                        : "Pricing Page Header"}
                     </h2>
                     <p className="text-xs text-slate-500">
                       {activeConfigTab === "email"
@@ -554,9 +620,10 @@ const HomePage = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="library" className="mt-0 outline-none space-y-6 animate-in fade-in slide-in-from-left-2 duration-300">
-
-
+        <TabsContent
+          value="library"
+          className="mt-0 outline-none space-y-6 animate-in fade-in slide-in-from-left-2 duration-300"
+        >
           {/* Main Content Area */}
           <Card className="border-none shadow-sm overflow-hidden bg-white">
             <div className="p-6 space-y-4">
@@ -584,13 +651,28 @@ const HomePage = () => {
                         <TableHead
                           key={key}
                           className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
-                          sticky={stickyColumns.includes(key) ? "left" : undefined}
-                          left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                          width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                          showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                          sticky={
+                            stickyColumns.includes(key) ? "left" : undefined
+                          }
+                          left={
+                            stickyColumns.includes(key)
+                              ? getStickyOffset(key)
+                              : undefined
+                          }
+                          width={
+                            stickyColumns.includes(key)
+                              ? PINNED_WIDTH
+                              : COLUMN_WIDTHS[key] || 150
+                          }
+                          showShadow={
+                            stickyColumns.indexOf(key) ===
+                            stickyColumns.length - 1
+                          }
                         >
                           <div className="flex items-center gap-2">
-                            {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
+                            {key === "actions"
+                              ? "Actions"
+                              : key.replace(/_/g, " ")}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -622,127 +704,198 @@ const HomePage = () => {
                         </TableCell>
                       </TableRow>
                     ) : projects.length > 0 ? (
-                      [...projects].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((project: Project) => {
-                        const isSelected = selectedRowId === project.id;
-                        return (
-                          <TableRow
-                            key={project.id}
-                            className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
+                      [...projects]
+                        .sort((a, b) =>
+                          a.id === selectedRowId
+                            ? -1
+                            : b.id === selectedRowId
+                              ? 1
+                              : 0,
+                        )
+                        .map((project: Project) => {
+                          const isSelected = selectedRowId === project.id;
+                          return (
+                            <TableRow
+                              key={project.id}
+                              className={`transition-colors cursor-pointer group ${
+                                isSelected
+                                  ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm"
+                                  : "hover:bg-slate-50"
                               }`}
-                            onClick={() => setSelectedRowId(isSelected ? null : project.id)}
-                            data-state={isSelected ? "selected" : undefined}
-                          >
-                            {orderedFields.map((key) => {
-                              if (key === "actions") {
+                              onClick={() =>
+                                setSelectedRowId(isSelected ? null : project.id)
+                              }
+                              data-state={isSelected ? "selected" : undefined}
+                            >
+                              {orderedFields.map((key) => {
+                                if (key === "actions") {
+                                  return (
+                                    <TableCell
+                                      key="actions"
+                                      className="whitespace-nowrap"
+                                      sticky={
+                                        stickyColumns.includes("actions")
+                                          ? "left"
+                                          : undefined
+                                      }
+                                      left={
+                                        stickyColumns.includes("actions")
+                                          ? getStickyOffset("actions")
+                                          : undefined
+                                      }
+                                      width={PINNED_WIDTH}
+                                      showShadow={
+                                        stickyColumns.indexOf("actions") ===
+                                        stickyColumns.length - 1
+                                      }
+                                    >
+                                      <div className="flex gap-1">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEdit(project);
+                                          }}
+                                          className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(project);
+                                          }}
+                                          className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  );
+                                }
+
+                                const value = (project as any)[key];
                                 return (
                                   <TableCell
-                                    key="actions"
-                                    className="whitespace-nowrap"
-                                    sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                                    left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
-                                    width={PINNED_WIDTH}
-                                    showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                                    key={key}
+                                    className={cn(
+                                      "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
+                                      key === "notes" || key === "description"
+                                        ? "max-w-[300px]"
+                                        : "max-w-[250px]",
+                                    )}
+                                    sticky={
+                                      stickyColumns.includes(key)
+                                        ? "left"
+                                        : undefined
+                                    }
+                                    left={
+                                      stickyColumns.includes(key)
+                                        ? getStickyOffset(key)
+                                        : undefined
+                                    }
+                                    width={
+                                      stickyColumns.includes(key)
+                                        ? PINNED_WIDTH
+                                        : COLUMN_WIDTHS[key] || 150
+                                    }
+                                    showShadow={
+                                      stickyColumns.indexOf(key) ===
+                                      stickyColumns.length - 1
+                                    }
                                   >
-                                    <div className="flex gap-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleEdit(project);
-                                        }}
-                                        className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDelete(project);
-                                        }}
-                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
+                                    {value === null ||
+                                    value === undefined ||
+                                    value === "" ? (
+                                      <span className="text-muted-foreground text-xs">
+                                        —
+                                      </span>
+                                    ) : (
+                                      (() => {
+                                        let values = smartParse(value);
+                                        // Capitalize and format for display
+                                        values = values.map((v) => {
+                                          if (!v) return v;
+                                          const s = String(v).replace(
+                                            /_/g,
+                                            " ",
+                                          );
+                                          return (
+                                            s.charAt(0).toUpperCase() +
+                                            s.slice(1)
+                                          );
+                                        });
+
+                                        if (
+                                          [
+                                            "content_type",
+                                            "status",
+                                            "genres",
+                                            "vibe_tags",
+                                          ].includes(key)
+                                        ) {
+                                          const MAX_TAGS = 3;
+                                          const visible = values.slice(
+                                            0,
+                                            MAX_TAGS,
+                                          );
+                                          const overflow =
+                                            values.length - MAX_TAGS;
+                                          return (
+                                            <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
+                                              {visible.map((v, i) => (
+                                                <Badge
+                                                  key={`${v}-${i}`}
+                                                  variant={
+                                                    key === "vibe_tags"
+                                                      ? "outline"
+                                                      : "secondary"
+                                                  }
+                                                  className={cn(
+                                                    "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
+                                                    key === "vibe_tags"
+                                                      ? "border-slate-200 text-slate-500 bg-transparent"
+                                                      : "bg-slate-100 text-slate-600 border-none",
+                                                  )}
+                                                  title={v}
+                                                >
+                                                  {v}
+                                                </Badge>
+                                              ))}
+                                              {overflow > 0 && (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
+                                                  title={values
+                                                    .slice(MAX_TAGS)
+                                                    .join(", ")}
+                                                >
+                                                  +{overflow}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          );
+                                        }
+                                        const displayValue = values.join(", ");
+                                        return (
+                                          <span
+                                            className="truncate block"
+                                            title={displayValue}
+                                          >
+                                            {displayValue}
+                                          </span>
+                                        );
+                                      })()
+                                    )}
                                   </TableCell>
                                 );
-                              }
-
-                              const value = (project as any)[key];
-                              return (
-                                <TableCell
-                                  key={key}
-                                  className={cn(
-                                    "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                                    (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
-                                  )}
-                                  sticky={stickyColumns.includes(key) ? "left" : undefined}
-                                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
-                                >
-                                  {value === null || value === undefined || value === "" ? (
-                                    <span className="text-muted-foreground text-xs">—</span>
-                                  ) : (
-                                    (() => {
-                                      let values = smartParse(value);
-                                      // Capitalize and format for display
-                                      values = values.map((v) => {
-                                        if (!v) return v;
-                                        const s = String(v).replace(/_/g, " ");
-                                        return s.charAt(0).toUpperCase() + s.slice(1);
-                                      });
-
-                                      if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                        const MAX_TAGS = 3;
-                                        const visible = values.slice(0, MAX_TAGS);
-                                        const overflow = values.length - MAX_TAGS;
-                                        return (
-                                          <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                            {visible.map((v, i) => (
-                                              <Badge
-                                                key={`${v}-${i}`}
-                                                variant={key === "vibe_tags" ? "outline" : "secondary"}
-                                                className={cn(
-                                                  "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                                  key === "vibe_tags"
-                                                    ? "border-slate-200 text-slate-500 bg-transparent"
-                                                    : "bg-slate-100 text-slate-600 border-none"
-                                                )}
-                                                title={v}
-                                              >
-                                                {v}
-                                              </Badge>
-                                            ))}
-                                            {overflow > 0 && (
-                                              <Badge
-                                                variant="outline"
-                                                className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                                title={values.slice(MAX_TAGS).join(", ")}
-                                              >
-                                                +{overflow}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        );
-                                      }
-                                      const displayValue = values.join(", ");
-                                      return (
-                                        <span className="truncate block" title={displayValue}>
-                                          {displayValue}
-                                        </span>
-                                      );
-                                    })()
-                                  )}
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        );
-                      })
+                              })}
+                            </TableRow>
+                          );
+                        })
                     ) : (
                       <TableRow>
                         <TableCell
@@ -756,11 +909,10 @@ const HomePage = () => {
                   </TableBody>
                 </Table>
               </div>
-            </div >
-          </Card >
+            </div>
+          </Card>
         </TabsContent>
       </Tabs>
-
 
       <MediaDialog
         open={isMediaDialogOpen}
@@ -785,7 +937,7 @@ const HomePage = () => {
         }
         isDeleting={deleteMutation.isPending}
       />
-    </div >
+    </div>
   );
 };
 
