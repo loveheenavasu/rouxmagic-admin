@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { smartParse } from "@/lib/utils";
-import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle } from "lucide-react";
+import { Plus, Search, Trash2, Loader2, Utensils, Film, Music, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,10 +23,36 @@ import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
 import { Flag, Pairing, PairingSourceEnum, Project } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ENV } from "@/config";
 
 const pairingsAPI = Pairings as Required<typeof Pairings>;
 const projectsAPI = Projects as Required<typeof Projects>;
 const recipesAPI = Recipes as Required<typeof Recipes>;
+
+const refEq = (a: any, b: string) => String(a || "").trim() === String(b || "").trim();
+
+/** Displays tags from the paired item (recipe.flavor_tags or project.vibe_tags). */
+function PairingTagsDisplay({ item, pairedItemRef }: { item: any; pairedItemRef: string }) {
+    const isRecipe = refEq(pairedItemRef, PairingSourceEnum.Recipe);
+    const tags = isRecipe ? smartParse(item?.flavor_tags) : smartParse(item?.vibe_tags);
+    if (!tags.length) return null;
+    return (
+        <div className="flex flex-wrap gap-1 mt-2">
+            {tags.map((tag: string) => (
+                <Badge
+                    key={tag}
+                    variant="outline"
+                    className={cn(
+                        "text-[9px] px-1 py-0 h-4 font-normal",
+                        isRecipe ? "border-orange-200 text-orange-600 bg-orange-50/30" : "border-slate-200 text-slate-500"
+                    )}
+                >
+                    {tag}
+                </Badge>
+            ))}
+        </div>
+    );
+}
 
 interface PairingsSectionProps {
     sourceId: string;
@@ -66,9 +92,8 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
 
             const results: any[] = [];
 
-            // Group by target type to minimize API calls
             const pairedItemData = existingPairings.map(p => {
-                const isCurrentSource = p.source_id === sourceId;
+                const isCurrentSource = String(p.source_id) === String(sourceId);
                 return {
                     id: isCurrentSource ? p.target_id : p.source_id,
                     ref: isCurrentSource ? p.target_ref : p.source_ref
@@ -76,15 +101,18 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
             });
 
             const projectIds = pairedItemData
-                .filter(p => p.ref !== PairingSourceEnum.Recipe)
-                .map(p => p.id);
+                .filter(p => !refEq(p.ref, PairingSourceEnum.Recipe))
+                .map(p => String(p.id).trim())
+                .filter(Boolean);
 
             const recipeIds = pairedItemData
-                .filter(p => p.ref === PairingSourceEnum.Recipe)
-                .map(p => p.id);
+                .filter(p => refEq(p.ref, PairingSourceEnum.Recipe))
+                .map(p => String(p.id).trim())
+                .filter(Boolean);
 
             if (projectIds.length > 0) {
                 const res = await projectsAPI.get({
+                    eq: [{ key: "is_deleted" as any, value: false }],
                     inValue: { key: "id" as any, value: projectIds }
                 } as any);
                 if (res.flag === Flag.Success && res.data) {
@@ -95,6 +123,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
 
             if (recipeIds.length > 0) {
                 const res = await recipesAPI.get({
+                    eq: [{ key: "is_deleted" as any, value: false }],
                     inValue: { key: "id" as any, value: recipeIds }
                 } as any);
                 if (res.flag === Flag.Success && res.data) {
@@ -164,14 +193,12 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
 
     const createPairingMutation = useMutation({
         mutationFn: async (targetId: string) => {
-            // Prevent duplicate pairings
             if (existingPairings && existingPairings.some((p: Pairing) =>
                 (p.source_id === sourceId && p.target_id === targetId) ||
                 (p.source_id === targetId && p.target_id === sourceId)
             )) {
                 throw new Error("Already paired");
             }
-
             const res = await pairingsAPI.createOne({
                 source_id: sourceId,
                 source_ref: sourceRef,
@@ -246,10 +273,10 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                     </div>
                 ) : (
                     existingPairings.map((pairing: Pairing) => {
-                        const isCurrentSource = pairing.source_id === sourceId;
+                        const isCurrentSource = String(pairing.source_id) === String(sourceId);
                         const pairedItemId = isCurrentSource ? pairing.target_id : pairing.source_id;
                         const pairedItemRef = isCurrentSource ? pairing.target_ref : pairing.source_ref;
-                        const item = pairedItems.find((i: any) => i.id === pairedItemId);
+                        const item = pairedItems.find((i: any) => String(i?.id) === String(pairedItemId));
                         return (
                             <Card key={pairing.id} className="overflow-hidden border-slate-200 hover:shadow-sm transition-shadow">
                                 <CardContent className="p-4">
@@ -266,6 +293,19 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                             </Badge>
                                         </div>
                                         <div className="flex gap-1">
+                                            {refEq(pairedItemRef, PairingSourceEnum.Recipe) && item?.slug && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                                    title="View recipe (uses slug)"
+                                                    asChild
+                                                >
+                                                    <a href={`${ENV.PUBLIC_SITE_URL}/recipes/${item.slug}`} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                    </a>
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -278,27 +318,7 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        {pairedItemRef !== PairingSourceEnum.Recipe && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {smartParse(item?.vibe_tags).length > 0 &&
-                                                    smartParse(item?.vibe_tags).map((tag: any) => (
-                                                        <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-slate-200 text-slate-500 font-normal">
-                                                            {tag}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {(pairedItemRef === PairingSourceEnum.Recipe && smartParse(item?.flavor_tags).length > 0) && (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {smartParse(item?.flavor_tags).map((tag: any) => (
-                                                        <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 border-orange-200 text-orange-600 font-normal bg-orange-50/30">
-                                                            {tag}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                    <PairingTagsDisplay item={item} pairedItemRef={pairedItemRef} />
                                 </CardContent>
                             </Card>
                         );

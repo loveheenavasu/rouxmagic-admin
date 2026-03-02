@@ -29,7 +29,6 @@ export default function Watch() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
   const [genreFilter, setGenreFilter] = useState<string>("all");
-  const [vibeFilter, setVibeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -96,7 +95,7 @@ export default function Watch() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, vibeFilter, selectedShelfId],
+    queryKey: ["media", searchQuery, statusFilter, contentTypeFilter, genreFilter, selectedShelfId],
     queryFn: async () => {
       const eqFilters: any[] = [];
       const containsFilters: any[] = [];
@@ -195,17 +194,6 @@ export default function Watch() {
           return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
         });
       }
-
-      // Apply Vibe filter
-      if (vibeFilter !== "all") {
-        rows = rows.filter(r => {
-          const vData = r.vibe_tags;
-          const vibes = Array.isArray(vData) ? vData : [];
-          return vibes.some((v: string) => v.trim().toLowerCase() === vibeFilter.toLowerCase());
-        });
-      }
-
-
 
       // Handle smart search (including inheritance)
       if (searchQuery.length > 2) {
@@ -385,24 +373,6 @@ export default function Watch() {
     }
   });
 
-
-  const { data: availableVibes = [] } = useQuery<string[]>({
-    queryKey: ["available-vibes"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: ["TV Show", "Film"] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const vibes = (response.data as Project[]).flatMap(p => smartParse(p.vibe_tags));
-        return Array.from(new Set(vibes)).filter(Boolean).sort();
-      }
-      return [];
-    }
-  });
-
-
-
   const handleAddNew = () => {
     setSelectedMedia(null);
     setIsMediaDialogOpen(true);
@@ -455,9 +425,6 @@ export default function Watch() {
       </div>
     );
   }
-  {
-    console.log("selectedMedia", selectedMedia);
-  }
 
   return (
     <div className="space-y-6">
@@ -488,9 +455,6 @@ export default function Watch() {
         genreFilter={genreFilter}
         onGenreFilterChange={setGenreFilter}
         availableGenres={availableGenres}
-        vibeFilter={vibeFilter}
-        onVibeFilterChange={setVibeFilter}
-        availableVibes={availableVibes}
       />
 
       {/* Table */}

@@ -47,12 +47,6 @@ export function MediaFilters({
   genreFilter,
   onGenreFilterChange,
   availableGenres = [],
-  vibeFilter: _vibeFilter,
-  onVibeFilterChange: _onVibeFilterChange,
-  availableVibes: _availableVibes = [],
-  flavorFilter: _flavorFilter,
-  onFlavorFilterChange: _onFlavorFilterChange,
-  availableFlavors: _availableFlavors = [],
 }: MediaFiltersProps) {
   const location = useLocation();
   const pathname = location.pathname.toLowerCase();
