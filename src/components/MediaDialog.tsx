@@ -242,19 +242,6 @@ export default function MediaDialog({
         }
       }
 
-      const isListenRowApply =
-        filter_type === FilterTypeEnum.Listen ||
-        (row.page || "").toLowerCase() === "listen" ||
-        (label || "").toLowerCase().includes("listen");
-      if (isListenRowApply) {
-        const currentVal = String((next as any).row_type || "");
-        const parts = currentVal.split(",").map((p: string) => p.trim()).filter(Boolean);
-        const filtered = parts.filter((p) => p.toLowerCase() !== "listen_excluded");
-        if (filtered.length !== parts.length) {
-          (next as any).row_type = filtered.join(", ");
-        }
-      }
-
       next.status = currentStatuses as any;
 
       if (filter_type === FilterTypeEnum.Flag) {
@@ -371,10 +358,7 @@ export default function MediaDialog({
         (row.label || "").toLowerCase().includes("listen");
       if (isListenRow) {
         removeType(ContentTypeEnum.Song);
-        const currentVal = String((next as any).row_type || "");
-        const parts = currentVal.split(",").map((p: string) => p.trim()).filter(Boolean);
-        if (!parts.includes("listen_excluded")) parts.push("listen_excluded");
-        (next as any).row_type = parts.join(", ");
+        removeType(ContentTypeEnum.Audiobook);
       } else if (filter_type === FilterTypeEnum.ContentType) {
         const vals = (filter_value || "").split(",").map((v: string) => v.trim()).filter(Boolean);
         if (vals.length > 1) vals.forEach((v: string) => removeType(v));
@@ -525,7 +509,7 @@ export default function MediaDialog({
           return false;
         }
 
-        // Listen row: match when Song or Audiobook in content_type, unless explicitly excluded.
+        // Listen row: match when Song or Audiobook in content_type.
         const isListenRow =
           (filter_type === FilterTypeEnum.Audiobook ||
             filter_type === FilterTypeEnum.Song ||
@@ -534,12 +518,6 @@ export default function MediaDialog({
           ((row.page || "").toLowerCase() === "listen" ||
             (label || "").toLowerCase().includes("listen"));
         if (isListenRow) {
-          const excluded =
-            String((formData as any).row_type || "")
-              .split(",")
-              .map((p: string) => norm(p.trim()))
-              .includes("listen_excluded");
-          if (excluded) return false;
           const types = Array.isArray((formData as any).content_type)
             ? (formData as any).content_type
             : (formData as any).content_type
