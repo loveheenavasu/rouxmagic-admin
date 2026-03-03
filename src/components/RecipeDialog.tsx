@@ -378,7 +378,13 @@ export default function RecipeDialog({
               </Label>
               <Textarea
                 id="flavor_tags"
-                value={smartParse(formData.flavor_tags as any).join(", ")}
+                value={
+                  typeof formData.flavor_tags === "string"
+                    ? formData.flavor_tags
+                    : Array.isArray(formData.flavor_tags)
+                      ? formData.flavor_tags.join(", ")
+                      : smartParse(formData.flavor_tags as any).join(", ")
+                }
                 onChange={(e) => handleChange("flavor_tags", e.target.value)}
                 placeholder="e.g. Spicy, Sweet, Savory"
                 className="mt-1.5 min-h-[80px]"
