@@ -446,10 +446,10 @@ const ContentRowsPage = () => {
     let filterType = FilterTypeEnum.ContentType;
 
     if (page === PageEnum.Read) {
-      filterType = FilterTypeEnum.Audiobook;
+      filterType = FilterTypeEnum.ContentType;
       filterValue = "Audiobook";
     } else if (page === PageEnum.Listen) {
-      filterType = FilterTypeEnum.Song;
+      filterType = FilterTypeEnum.ContentType;
       filterValue = "Song";
     } else if (page === PageEnum.Watch || page === PageEnum.Home) {
       filterType = FilterTypeEnum.ContentType;
@@ -1057,8 +1057,98 @@ const ContentRowsPage = () => {
               </div>
 
               <div className="space-y-2 col-span-1 md:col-span-2">
+                <Label htmlFor="filter_type">Filter Type</Label>
+                <Select
+                  value={formData.filter_type}
+                  onValueChange={(val: FilterTypeEnum) => {
+                    const newType = val as FilterTypeEnum;
+                    const tagTypes = [
+                      FilterTypeEnum.Genre,
+                      FilterTypeEnum.VibeTags,
+                      FilterTypeEnum.FlavorTags,
+                    ];
+                    let newValue = formData.filter_value;
+                    if (tagTypes.includes(newType)) {
+                      newValue = "";
+                    } else if (newType === FilterTypeEnum.ContentType) {
+                      newValue =
+                        formData.page === PageEnum.Listen ? "Song" : "Film";
+                    } else if (newType === FilterTypeEnum.Flag) {
+                      newValue = "";
+                    }
+                    setFormData({
+                      ...formData,
+                      filter_type: newType,
+                      filter_value: newValue,
+                    });
+                  }}
+                >
+                  <SelectTrigger className="bg-slate-50 border-slate-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formData.page === PageEnum.Read && (
+                      <SelectItem value={FilterTypeEnum.ContentType}>
+                        Audiobook
+                      </SelectItem>
+                    )}
+                    {(formData.page === PageEnum.Watch || formData.page === PageEnum.Home) && (
+                      <>
+                        <SelectItem value={FilterTypeEnum.ContentType}>Content Type</SelectItem>
+                        <SelectItem value={FilterTypeEnum.Genre}>Genre</SelectItem>
+                        <SelectItem value={FilterTypeEnum.VibeTags}>Vibe Tags</SelectItem>
+                        <SelectItem value={FilterTypeEnum.Flag}>Flag</SelectItem>
+                      </>
+                    )}
+                    {formData.page === PageEnum.Listen && (
+                      <>
+                        <SelectItem value={FilterTypeEnum.ContentType}>Content Type</SelectItem>
+                        <SelectItem value={FilterTypeEnum.Genre}>Genre</SelectItem>
+                        <SelectItem value={FilterTypeEnum.VibeTags}>Vibe Tags</SelectItem>
+                      </>
+                    )}
+                    {formData.page === PageEnum.Recipes && (
+                      <SelectItem value={FilterTypeEnum.FlavorTags}>Flavor Tags</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 col-span-1 md:col-span-2">
                 <Label htmlFor="filter_value">Filter Value *</Label>
                 {(() => {
+                  // Genre, VibeTags, FlavorTags, Flag: free-text Input (spaces and commas allowed)
+                  const freeTextFilterTypes = [
+                    FilterTypeEnum.Genre,
+                    FilterTypeEnum.VibeTags,
+                    FilterTypeEnum.FlavorTags,
+                    FilterTypeEnum.Flag,
+                  ];
+                  if (freeTextFilterTypes.includes(formData.filter_type)) {
+                    return (
+                      <Input
+                        id="filter_value"
+                        value={formData.filter_value}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            filter_value: e.target.value,
+                          })
+                        }
+                        placeholder={
+                          formData.filter_type === FilterTypeEnum.Genre
+                            ? "e.g. Drama, Sci Fi, Comedy"
+                            : formData.filter_type === FilterTypeEnum.VibeTags
+                              ? "e.g. Chill, Dark, Uplifting"
+                              : formData.filter_type === FilterTypeEnum.Flag
+                                ? "e.g. in_hero_carousel, in_coming_soon"
+                                : "e.g. Snacks, Drinks, Spicy, Sweet"
+                        }
+                        className="bg-white border-slate-200"
+                      />
+                    );
+                  }
+
                   if (formData.page === PageEnum.Read) {
                     return (
                       <Input
@@ -1126,7 +1216,7 @@ const ContentRowsPage = () => {
                             filter_value: e.target.value,
                           })
                         }
-                        placeholder="e.g. Snacks, Drinks"
+                        placeholder="e.g. Snacks, Drinks, Spicy, Sweet"
                         className="bg-white border-slate-200"
                       />
                     );
