@@ -4,17 +4,18 @@ import Stripe from "npm:stripe";
 import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
-  "Deno.env.get("STRIPE_SECRET_KEY")"!,
+  //@ts-ignore
+  Deno.env.get("STRIPE_SECRET_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
-  }
+  },
 );
 
 const supabase = createClient(
   //@ts-ignore
   Deno.env.get("SUPABASE_URL"),
   //@ts-ignore
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
 );
 
 const corsHeaders = {
@@ -133,7 +134,7 @@ Deno.serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (err) {
     console.error("SetupIntent error:", err);
@@ -148,7 +149,7 @@ Deno.serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   }
 });

@@ -2,10 +2,11 @@
 import Stripe from "npm:stripe";
 //@ts-ignore
 const stripe = new Stripe(
-  "Deno.env.get("STRIPE_SECRET_KEY")"!,
+  //@ts-ignore
+  Deno.env.get("STRIPE_SECRET_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
-  }
+  },
 );
 
 const corsHeaders = {
@@ -21,7 +22,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-
     const prices = await stripe.prices.list({
       active: true,
       expand: ["data.product"],
@@ -35,19 +35,16 @@ Deno.serve(async (req) => {
       productId: price.product.id,
       productName: price.product.name,
       description: price.product.description,
-      product_metadata: price.product
+      product_metadata: price.product,
     }));
 
-    return new Response(
-      JSON.stringify(formatted),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-        status: 200,
-      }
-    );
+    return new Response(JSON.stringify(formatted), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+      status: 200,
+    });
   } catch (err) {
     //@ts-ignore
     return new Response(JSON.stringify({ error: err.message }), {

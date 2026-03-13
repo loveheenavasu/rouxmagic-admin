@@ -4,10 +4,11 @@ import Stripe from "npm:stripe";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const stripe = new Stripe(
-  "Deno.env.get("STRIPE_SECRET_KEY")",
+  //@ts-ignore
+  Deno.env.get("STRIPE_SECRET_KEY")!,
   {
-    apiVersion: "2024-06-20",
-  }
+    apiVersion: "2025-03-31.basil",
+  },
 );
 
 const corsHeaders = {
@@ -19,7 +20,6 @@ const corsHeaders = {
 
 //@ts-ignore
 serve(async (req: any) => {
-
   // Handle preflight request
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -37,7 +37,7 @@ serve(async (req: any) => {
             ...corsHeaders,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
     }
 
@@ -69,7 +69,7 @@ serve(async (req: any) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (error) {
     return new Response(
@@ -83,7 +83,7 @@ serve(async (req: any) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   }
 });

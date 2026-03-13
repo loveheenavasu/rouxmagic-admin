@@ -5,17 +5,17 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
   //@ts-ignore
-  "Deno.env.get("STRIPE_SECRET_KEY")"!,
+  Deno.env.get("STRIPE_SECRET_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
-  }
+  },
 );
 
 const supabase = createClient(
   //@ts-ignore
   Deno.env.get("SUPABASE_URL")!,
   //@ts-ignore
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
 const corsHeaders = {
@@ -26,7 +26,6 @@ const corsHeaders = {
 
 //@ts-ignore
 Deno.serve(async (req) => {
-
   /**
    * Handle preflight
    */
@@ -38,7 +37,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-
     const authHeader = req.headers.get("authorization");
 
     if (!authHeader) {
@@ -50,7 +48,7 @@ Deno.serve(async (req) => {
             ...corsHeaders,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
     }
 
@@ -65,16 +63,13 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser(accessToken);
 
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid access token" }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Invalid access token" }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
     }
 
     /**
@@ -83,29 +78,27 @@ Deno.serve(async (req) => {
     const { data: subscription, error } = await supabase
       .from("subscriptions")
       .select("*")
-      .eq("user_id", user.id).eq("status", "active")
+      .eq("user_id", user.id)
+      .eq("status", "active")
       .maybeSingle();
 
-      console.log(JSON.stringify({subscription, error}), null, 2)
+    console.log(JSON.stringify({ subscription, error }), null, 2);
 
     if (error || !subscription) {
-      return new Response(
-        JSON.stringify({ error: "Subscription not found" }),
-        {
-          status: 404,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Subscription not found" }), {
+        status: 404,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
     }
 
     /**
      * Retrieve subscription from Stripe
      */
     const stripeSubscription = await stripe.subscriptions.retrieve(
-      subscription.stripe_subscription_id
+      subscription.stripe_subscription_id,
     );
 
     return new Response(
@@ -119,11 +112,9 @@ Deno.serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
-
   } catch (err) {
-
     console.error("Get subscription error:", err);
 
     return new Response(
@@ -135,8 +126,7 @@ Deno.serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   }
-
 });

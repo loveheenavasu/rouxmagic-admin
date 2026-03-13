@@ -4,10 +4,11 @@ import Stripe from "npm:stripe";
 import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
-  "Deno.env.get("STRIPE_SECRET_KEY")"!,
+  //@ts-ignore
+  Deno.env.get("STRIPE_SECRET_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
-  }
+  },
 );
 
 // Supabase client with service role key
@@ -15,7 +16,7 @@ const supabase = createClient(
   //@ts-ignore
   Deno.env.get("SUPABASE_URL"),
   //@ts-ignore
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
 );
 
 // CORS headers
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
