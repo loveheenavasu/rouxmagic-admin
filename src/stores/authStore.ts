@@ -5,11 +5,6 @@ import { UserRole } from "@/types";
 import { toast } from "sonner";
 
 // Hardcoded credentials
-const ADMIN_CREDENTIALS = {
-  email: "camron.j81@gmail.com",
-  password: "123456",
-};
-
 interface User {
   email: string;
   name: string;
