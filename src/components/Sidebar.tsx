@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Film,
+  Users,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -18,12 +20,8 @@ import {
   LayoutGrid,
   ImagePlay,
   Utensils,
-  Trash2,
+  Archive,
   PanelBottom,
-  LayoutList,
-  ShoppingBag,
-  Info,
-  Link2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -57,12 +55,10 @@ const navigation = [
   },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
-  { name: "Shop", href: "/shop", icon: ShoppingBag },
-  { name: "About Page", href: "/about", icon: Info },
-  { name: "Archive", href: "/archive", icon: Trash2 },
-  { name: "Content Rows", href: "/content-rows", icon: LayoutList },
-  { name: "Navigation Header", href: "/navigation", icon: Link2 },
+  { name: "Archive", href: "/archive", icon: Archive },
   { name: "Footer", href: "/footer", icon: PanelBottom },
+  { name: "Users", href: "/users", icon: Users },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -83,7 +79,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-4 left-4 z-[55]">
+      <div className="lg:hidden fixed top-4 left-4 z-50">
         <Button
           variant="outline"
           size="icon"
@@ -100,7 +96,7 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-[45] bg-card border-r transition-all duration-300 ease-in-out lg:translate-x-0 overflow-visible",
+          "fixed inset-y-0 left-0 z-40 bg-card border-r transition-all duration-300 ease-in-out lg:translate-x-0 overflow-visible",
           isMobileOpen
             ? "translate-x-0 w-64"
             : "-translate-x-full lg:translate-x-0",
@@ -180,7 +176,7 @@ export default function Sidebar() {
           <nav
             className={cn(
               "flex-1 p-4 space-y-1",
-              sidebarCollapsed ? "px-2" : "overflow-y-auto"
+              sidebarCollapsed ? "px-2" : ""
             )}
           >
             {navigation.map((item) => {
@@ -321,17 +317,15 @@ export default function Sidebar() {
             </Button>
           </div>
         </div>
-      </aside >
+      </aside>
 
       {/* Mobile overlay */}
-      {
-        isMobileOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-[44] lg:hidden"
-            onClick={() => setIsMobileOpen(false)}
-          />
-        )
-      }
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
     </>
   );
 }

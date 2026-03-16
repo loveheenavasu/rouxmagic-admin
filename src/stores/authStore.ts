@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// Hardcoded credentials
 const ADMIN_CREDENTIALS = {
-  email: import.meta.env.VITE_ADMIN_EMAIL,
-  password: import.meta.env.VITE_ADMIN_PASSWORD,
+  email: 'camron.j81@gmail.com',
+  password: '123456',
 };
 
 interface User {

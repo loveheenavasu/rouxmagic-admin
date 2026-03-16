@@ -10,69 +10,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Edit, Trash2, Loader2 } from "lucide-react";
 import { Recipes } from "@/api/integrations/supabase/recipes/recipes";
-import { pairingService } from "@/services/pairingService";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import RecipeDialog from "@/components/RecipeDialog";
 import { toast } from "sonner";
 import { Flag, Recipe } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
-import { MediaFilters } from "@/components/MediaFilters";
-import { cn, smartParse } from "@/lib/utils";
 
 const recipesAPI = Recipes as Required<typeof Recipes>;
 
 export default function RecipesPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [flavorFilter, setFlavorFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
-  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]);
-
-  const toggleSticky = (key: string) => {
-    setStickyColumns((prev) => {
-      if (prev.includes(key)) {
-        return prev.filter((col) => col !== key);
-      }
-      if (prev.length >= 2) {
-        toast.info("Maximum 2 columns can be pinned");
-        return prev;
-      }
-      return [...prev, key];
-    });
-  };
-
-
-  const PINNED_WIDTH = 200;
-  const COLUMN_WIDTHS: Record<string, number> = {
-    actions: PINNED_WIDTH,
-    title: PINNED_WIDTH,
-    category: 150,
-    slug: 150,
-    preview_url: 150,
-    ingredients: 150,
-    instructions: 150,
-    short_description: 150,
-    image_url: 150,
-    video_url: 150,
-  };
-
-  const getStickyOffset = (columnKey: string): number => {
-    const index = stickyColumns.indexOf(columnKey);
-    if (index === -1) return 0;
-
-    let offset = 0;
-    for (let i = 0; i < index; i++) {
-      offset += PINNED_WIDTH;
-    }
-    return offset;
-  };
 
   const queryClient = useQueryClient();
 
@@ -81,14 +36,17 @@ export default function RecipesPage() {
     queryFn: async () => {
       const response = await recipesAPI.get({
         eq: [{ key: "is_deleted" as any, value: false }],
-        limit: 1000,
+        limit: 200,
       });
 
       if (response.flag !== Flag.Success || !response.data) {
         return [];
       }
 
-      const data = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
+      const data = Array.isArray(response.data)
+        ? (response.data as Recipe[])
+        : ([response.data] as Recipe[]);
+
       const cats = data.map((r) => r.category).filter(Boolean);
       return Array.from(new Set(cats)).sort();
     },
@@ -99,58 +57,39 @@ export default function RecipesPage() {
     isLoading,
     error,
   } = useQuery<Recipe[]>({
-    queryKey: ["recipes", searchQuery, categoryFilter, flavorFilter],
+    queryKey: ["recipes", searchQuery, categoryFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [];
-      const overlapsFilters: any[] = [];
-
-      if (Array.isArray(categoryFilter) && categoryFilter.length > 0) {
-        overlapsFilters.push({ key: "category", value: categoryFilter });
-      } else if (typeof categoryFilter === 'string' && categoryFilter !== "all") {
-        eqFilters.push({ key: "category", value: categoryFilter });
-      }
+      const eqFilters = [
+        ...(categoryFilter !== "all"
+          ? [{ key: "category" as const, value: categoryFilter }]
+          : []),
+        { key: "is_deleted" as any, value: false },
+      ];
 
       const response = await recipesAPI.get({
         eq: eqFilters,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
-        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
-        or: "is_deleted.eq.false,is_deleted.is.null",
+        searchFields: ["title"],
       });
 
       if (response.flag !== Flag.Success || !response.data) {
-        throw new Error(response.error?.message || "Failed to fetch recipes");
+        const supabaseError = response.error?.output as
+          | { message?: string }
+          | undefined;
+        const errorMessage =
+          supabaseError?.message ||
+          response.error?.message ||
+          "Failed to fetch recipes";
+        throw new Error(errorMessage);
       }
 
-      let rows = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
+      const data = Array.isArray(response.data)
+        ? (response.data as Recipe[])
+        : ([response.data] as Recipe[]);
 
-      // Apply Flavor filter (from recipe's own flavor_tags)
-      if (flavorFilter !== "all") {
-        rows = rows.filter(r => {
-          const flavors = smartParse(r.flavor_tags);
-          return flavors.some((f: string) => f.trim().toLowerCase() === flavorFilter.toLowerCase());
-        });
-      }
-
-      // Handle smart search (including inheritance)
-      if (searchQuery.length > 2) {
-        try {
-          const inheritedRecipes = await pairingService.searchRecipesByInheritedTag(searchQuery);
-          const existingIds = new Set(rows.map(r => r.id));
-          inheritedRecipes.forEach(r => {
-            if (!existingIds.has(r.id)) {
-              // Apply basic filters to inherited results too
-              if (categoryFilter.length > 0 && !categoryFilter.includes(r.category as string)) return;
-              rows.push(r);
-            }
-          });
-        } catch (e) {
-          console.error("Error fetching inherited recipes:", e);
-        }
-      }
-
-      return rows;
+      return data;
     },
   });
   const createMutation = useMutation({
@@ -166,6 +105,7 @@ export default function RecipesPage() {
           "Failed to create recipe";
         throw new Error(errorMessage);
       }
+      console.log("RESPONSE HERE: ", response)
       return response.data;
     },
     onSuccess: () => {
@@ -235,24 +175,6 @@ export default function RecipesPage() {
     },
   });
 
-  const { data: availableFlavors = [] } = useQuery<string[]>({
-    queryKey: ["recipe-flavors"],
-    queryFn: async () => {
-      const response = await recipesAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        limit: 1000,
-      });
-
-      if (response.flag !== Flag.Success || !response.data) {
-        return [];
-      }
-
-      const data = Array.isArray(response.data) ? (response.data as Recipe[]) : [response.data as Recipe];
-      const flavors = data.flatMap((r) => smartParse(r.flavor_tags));
-      return Array.from(new Set(flavors)).filter(Boolean).sort();
-    },
-  });
-
   const handleAddNew = () => {
     setSelectedRecipe(null);
     setIsDialogOpen(true);
@@ -260,7 +182,6 @@ export default function RecipesPage() {
 
   const handleEdit = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
-    setSelectedRowId(recipe.id);
     setIsDialogOpen(true);
   };
 
@@ -302,14 +223,7 @@ export default function RecipesPage() {
     "ingredients",
     "instructions",
     "short_description",
-    "flavor_tags",
     "image_url",
-    "video_url",
-  ];
-  const allAvailableFields = ["actions", ...displayFields];
-  const orderedFields = [
-    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
-    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
   ];
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -321,48 +235,46 @@ export default function RecipesPage() {
 
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <div className="p-6 space-y-4">
-          <MediaFilters
-            searchPlaceholder="Search recipes by title, ingredients..."
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            contentTypeFilter={categoryFilter}
-            onContentTypeFilterChange={setCategoryFilter}
-            availableTypes={categories}
-            flavorFilter={flavorFilter}
-            onFlavorFilterChange={setFlavorFilter}
-            availableFlavors={availableFlavors}
-          />
+          <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+            <div className="flex-1">
+              <Input
+                placeholder="Search recipes by title..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="w-full md:w-56">
+              <select
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="all">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-          <div className="rounded-xl border border-slate-100 overflow-hidden">
+          <div className="rounded-xl border border-slate-100 overflow-hidden overflow-x-auto">
             <Table>
-              <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
+              <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  {orderedFields.map((key) => (
+                  {displayFields.map((key) => (
                     <TableHead
                       key={key}
-                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap group"
-                      sticky={stickyColumns.includes(key) ? "left" : undefined}
-                      left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                      width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                    // showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                      className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 whitespace-nowrap px-4"
                     >
-                      <div className="flex items-center gap-2">
-                        {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                          onClick={() => toggleSticky(key)}
-                        >
-                          {stickyColumns.includes(key) ? (
-                            <PinOff className="h-3 w-3" />
-                          ) : (
-                            <Pin className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
+                      {key.replace(/_/g, " ")}
                     </TableHead>
                   ))}
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-4 text-right px-4">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -379,124 +291,54 @@ export default function RecipesPage() {
                     </TableCell>
                   </TableRow>
                 ) : recipes.length > 0 ? (
-                  [...recipes].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((recipe: Recipe) => {
-                    const isSelected = selectedRowId === recipe.id;
-                    return (
-                      <TableRow
-                        key={recipe.id}
-                        className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
-                          }`}
-                        onClick={() => setSelectedRowId(isSelected ? null : recipe.id)}
-                        data-state={isSelected ? "selected" : undefined}
-                      >
-                        {orderedFields.map((key) => {
-                          if (key === "actions") {
-                            return (
-                              <TableCell
-                                key="actions"
-                                className="whitespace-nowrap"
-                                sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                                left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
-                                width={PINNED_WIDTH}
-                                showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
+                  recipes.map((recipe: Recipe) => (
+
+                    <TableRow
+                      key={recipe.id}
+                      className="hover:bg-slate-50/50 transition-colors"
+                    >
+                      {displayFields.map((key) => {
+                        const value = (recipe as any)[key];
+                        return (
+                          <TableCell
+                            key={key}
+                            className="text-slate-600 font-medium px-4 max-w-[260px] truncate"
+                          >
+                            {value === null || value === undefined ? (
+                              <span className="text-slate-300 text-xs">—</span>
+                            ) : (
+                              <span
+                                className="truncate block"
+                                title={String(value)}
                               >
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEdit(recipe);
-                                    }}
-                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(recipe);
-                                    }}
-                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-
-                          const value = (recipe as any)[key];
-                          return (
-                            <TableCell
-                              key={key}
-                              className={cn(
-                                "text-slate-600 font-medium group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                                (key === "notes" || key === "description" || key === "short_description" || key === "ingredients" || key === "instructions") ? "max-w-[300px]" : "max-w-[250px]"
-                              )}
-                              sticky={stickyColumns.includes(key) ? "left" : undefined}
-                              left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                              width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                              showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
-                            >
-                              {value === null || value === undefined || value === "" ? (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              ) : (
-                                (() => {
-                                  const values = smartParse(value).map((v) => {
-                                    if (!v) return v;
-                                    const s = String(v).replace(/_/g, " ");
-                                    return s.charAt(0).toUpperCase() + s.slice(1);
-                                  });
-
-                                  if (["category", "flavor_tags"].includes(key)) {
-                                    const MAX_TAGS = 3;
-                                    const visible = values.slice(0, MAX_TAGS);
-                                    const overflow = values.length - MAX_TAGS;
-                                    return (
-                                      <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                        {visible.map((v, i) => (
-                                          <Badge
-                                            key={`${v}-${i}`}
-                                            variant={key === "flavor_tags" ? "outline" : "secondary"}
-                                            className={cn(
-                                              "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                              key === "flavor_tags"
-                                                ? "border-orange-200 text-orange-600 bg-orange-50/30"
-                                                : "bg-slate-100 text-slate-600 border-none"
-                                            )}
-                                            title={v}
-                                          >
-                                            {v}
-                                          </Badge>
-                                        ))}
-                                        {overflow > 0 && (
-                                          <Badge
-                                            variant="outline"
-                                            className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                            title={values.slice(MAX_TAGS).join(", ")}
-                                          >
-                                            +{overflow}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <span className="truncate block" title={values.join(", ")}>
-                                      {values.join(", ")}
-                                    </span>
-                                  );
-                                })()
-                              )}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    );
-                  })
+                                {String(value)}
+                              </span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="text-right px-4 whitespace-nowrap">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(recipe)}
+                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(recipe)}
+                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : (
                   <TableRow>
                     <TableCell

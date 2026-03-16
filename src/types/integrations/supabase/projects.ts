@@ -3,7 +3,6 @@ import { CommonSchema, GetTableOpts } from "./common";
 export enum ProjectStatusEnum {
   Released = "released",
   ComingSoon = "coming_soon",
-  Created = "created",
 }
 
 export enum ContentTypeEnum {
@@ -17,11 +16,10 @@ export enum ContentTypeEnum {
 
 export interface ProjectMetaData {
   title: string;
-  content_type: ContentTypeEnum | string | (ContentTypeEnum | string)[];
+  content_type: ContentTypeEnum;
   poster_url?: string;
   preview_url?: string;
-  audio_url?: string;
-  status: ProjectStatusEnum[];
+  status: ProjectStatusEnum;
   release_year?: number;
   runtime_minutes?: number;
   notes?: string;
@@ -31,14 +29,10 @@ export interface ProjectMetaData {
   in_now_playing: boolean;
   in_coming_soon: boolean;
   in_latest_releases: boolean;
-  in_hero_carousel: boolean;
   order_index?: number;
   platform_name?: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
-  vibe_tags?: string[];
-  rating?: string;
-  row_type?: string | null;
 }
 
 export interface ProjectFormData extends Partial<Project> {

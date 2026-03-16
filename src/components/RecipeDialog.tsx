@@ -15,7 +15,6 @@ import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe } from "@/types";
 import PairingsSection from "@/components/PairingsSection";
-import { smartParse } from "@/lib/utils";
 
 interface RecipeDialogProps {
   open: boolean;
@@ -32,17 +31,15 @@ const emptyForm: RecipeFormData = {
   short_description: "",
   ingredients: "",
   instructions: "",
+  download_url: null,
   category: RecipeCategory.Snacks,
   paired_project_id: "",
   paired_type: null,
   suggested_pairings: null,
   cook_time_estimate: null,
   preview_url: "",
-  video_url: null,
-  order_index: undefined,
   is_deleted: false,
   deleted_at: null,
-  flavor_tags: [],
 };
 
 export default function RecipeDialog({
@@ -57,15 +54,14 @@ export default function RecipeDialog({
 
   useEffect(() => {
     if (open) {
+      if (recipe) {
         setFormData({
           ...emptyForm,
           ...recipe,
-          ...(recipe && {
-            flavor_tags: smartParse(recipe.flavor_tags as any),
-          }),
         });
       } else {
         setFormData(emptyForm);
+      }
     }
   }, [open, recipe]);
 
@@ -80,17 +76,7 @@ export default function RecipeDialog({
       return;
     }
 
-    const submitData = { ...formData };
-    // Always send a clean string[] — unwrap any stringified/corrupted value
-    submitData.flavor_tags = smartParse(formData.flavor_tags as any)
-      .map((t) => {
-        const trimmed = String(t).trim();
-        return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-      })
-      .filter(Boolean);
-    submitData.flavor_tags = Array.from(new Set(submitData.flavor_tags));
-
-    await onSubmit(submitData as any);
+    await onSubmit(formData);
   };
 
   return (
@@ -148,22 +134,6 @@ export default function RecipeDialog({
                 placeholder="e.g. Dessert, Cocktail"
                 className="mt-1.5"
                 required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="order_index" className="font-medium">
-                Order Index
-              </Label>
-              <Input
-                id="order_index"
-                type="number"
-                value={formData.order_index ?? ""}
-                onChange={(e) =>
-                  handleChange("order_index", parseInt(e.target.value) || undefined)
-                }
-                placeholder="e.g. 1"
-                className="mt-1.5"
               />
             </div>
 
@@ -265,7 +235,8 @@ export default function RecipeDialog({
                         toast.success("Preview uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Preview upload failed: ${error?.message || "Unknown error"
+                          `Preview upload failed: ${
+                            error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -293,69 +264,50 @@ export default function RecipeDialog({
               </div>
             </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="video_url" className="font-medium">
-                Video URL
+            <div>
+              <Label htmlFor="download_url" className="font-medium">
+                Download URL
               </Label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  id="video_url"
-                  value={formData.video_url || ""}
-                  onChange={(e) => handleChange("video_url", e.target.value)}
-                  placeholder="Main video URL or upload"
-                  className="flex-1"
-                />
-                <div className="relative">
-                  <Input
-                    type="file"
-                    className="hidden"
-                    id="file-video_url"
-                    accept="video/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        setIsUploading("video_url");
-                        const bucket = "Media";
-                        const safeName = file.name.replace(/\s+/g, "_");
-                        const path = `Recipes/videos/${Date.now()}-${safeName}`;
-                        const publicUrl = await mediaService.uploadFile(
-                          file,
-                          bucket,
-                          path,
-                        );
-                        handleChange("video_url", publicUrl);
-                        toast.success("Video uploaded successfully!");
-                      } catch (error: any) {
-                        toast.error(
-                          `Video upload failed: ${error?.message || "Unknown error"
-                          }`,
-                        );
-                      } finally {
-                        setIsUploading(null);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isUploading === "video_url"}
-                    onClick={() =>
-                      document.getElementById("file-video_url")?.click()
-                    }
-                    className="h-10 px-3 bg-slate-50 border-dashed"
-                  >
-                    {isUploading === "video_url" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    <span className="ml-2 hidden sm:inline">Upload</span>
-                  </Button>
-                </div>
-              </div>
+              <Input
+                id="download_url"
+                value={formData.download_url ?? ""}
+                onChange={(e) =>
+                  handleChange("download_url", e.target.value || null)
+                }
+                placeholder="Optional download link"
+                className="mt-1.5"
+              />
             </div>
 
+            <div>
+              <Label htmlFor="paired_project_id" className="font-medium">
+                Paired Project ID
+              </Label>
+              <Input
+                id="paired_project_id"
+                value={formData.paired_project_id}
+                onChange={(e) =>
+                  handleChange("paired_project_id", e.target.value)
+                }
+                placeholder="Optional related project id"
+                className="mt-1.5"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="paired_type" className="font-medium">
+                Paired Type
+              </Label>
+              <Input
+                id="paired_type"
+                value={formData.paired_type ?? ""}
+                onChange={(e) =>
+                  handleChange("paired_type", e.target.value || null)
+                }
+                placeholder="e.g. Film, Episode"
+                className="mt-1.5"
+              />
+            </div>
 
             <div>
               <Label htmlFor="cook_time_estimate" className="font-medium">
@@ -372,22 +324,18 @@ export default function RecipeDialog({
               />
             </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="flavor_tags" className="font-medium">
-                Flavor Tags
+            <div>
+              <Label htmlFor="suggested_pairings" className="font-medium">
+                Suggested Pairings
               </Label>
-              <Textarea
-                id="flavor_tags"
-                value={
-                  typeof formData.flavor_tags === "string"
-                    ? formData.flavor_tags
-                    : Array.isArray(formData.flavor_tags)
-                      ? formData.flavor_tags.join(", ")
-                      : smartParse(formData.flavor_tags as any).join(", ")
+              <Input
+                id="suggested_pairings"
+                value={formData.suggested_pairings ?? ""}
+                onChange={(e) =>
+                  handleChange("suggested_pairings", e.target.value || null)
                 }
-                onChange={(e) => handleChange("flavor_tags", e.target.value)}
-                placeholder="e.g. Spicy, Sweet, Savory"
-                className="mt-1.5 min-h-[80px]"
+                placeholder="e.g. Pairs well with..."
+                className="mt-1.5"
               />
             </div>
           </div>

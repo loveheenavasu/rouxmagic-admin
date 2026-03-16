@@ -14,14 +14,12 @@ import Watch from "./pages/watch";
 import WatchCarousel from "./pages/watch/WatchCarousal";
 import Recipes from "./pages/recipes";
 import RecipesCarousel from "./pages/recipes/RecipesCarousel";
-import Shop from "./pages/Shop";
 import Listen from "./pages/Listen";
 import Read from "./pages/Read";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
-import ContentRows from "./pages/ContentRows";
-import NavigationPage from "./pages/NavigationPage";
-import About from "./pages/About";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -126,22 +124,32 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/shop"
+        {/* <Route
+          path="/chapters"
           element={
             <ProtectedRoute>
               <Layout>
-                <Shop />
+                <Chapters />
+              </Layout>
+            </ProtectedRoute>
+          }
+        /> */}
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Users />
               </Layout>
             </ProtectedRoute>
           }
         />
         <Route
-          path="/about"
+          path="/settings"
           element={
             <ProtectedRoute>
               <Layout>
-                <About />
+                <Settings />
               </Layout>
             </ProtectedRoute>
           }
@@ -152,26 +160,6 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Footer />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/navigation"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <NavigationPage />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/content-rows"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <ContentRows />
               </Layout>
             </ProtectedRoute>
           }

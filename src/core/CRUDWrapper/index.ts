@@ -51,19 +51,13 @@ export class CRUDWrapper<
 
         payload = {
           ...rest,
-        };
-        if (commaSeperatedGenres !== undefined) {
-          const items = commaSeperatedGenres
+          genres: commaSeperatedGenres
             ? commaSeperatedGenres
                 .split(",")
-                .map((g) => {
-                  const trimmed = g.trim();
-                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-                })
+                .map((g) => g.trim())
                 .filter(Boolean)
-            : [];
-          payload.genres = Array.from(new Set(items));
-        }
+            : [],
+        };
       }
 
       const newPayload = deleteUnwantedValues(payload, ["undefined","emptystrings"]);
@@ -71,14 +65,14 @@ export class CRUDWrapper<
       const { data: apiData, error } = await supabase
         .from(this.table_name)
         .insert(newPayload)
-        .select("*");
+        .select("*")
+        .maybeSingle();
 
       if (error) {
         return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
 
-      const result = Array.isArray(apiData) ? apiData[0] : apiData;
-      return new APIResponse(result || null, Flag.Success).build();
+      return new APIResponse(apiData, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -103,20 +97,13 @@ export class CRUDWrapper<
 
         payload = {
           ...rest,
-        };
-
-        if (commaSeperatedGenres !== undefined) {
-          const items = commaSeperatedGenres
+          genres: commaSeperatedGenres
             ? commaSeperatedGenres
                 .split(",")
-                .map((g) => {
-                  const trimmed = g.trim();
-                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-                })
+                .map((g) => g.trim())
                 .filter(Boolean)
-            : [];
-          payload.genres = Array.from(new Set(items));
-        }
+            : [],
+        };
       }
       const newPayload = deleteUnwantedValues(payload, [
         "undefined",
@@ -129,20 +116,18 @@ export class CRUDWrapper<
         }).build();
       }
 
-      const { data: apiData, error } = await supabase
+      const { data, error } = await supabase
         .from(this.table_name)
         .update({ ...newPayload })
         .eq("id", tableId)
-        .select("*");
-
+        .select("*")
+        .maybeSingle();
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-
-      const result = Array.isArray(apiData) ? apiData[0] : apiData;
-      return new APIResponse(result || null, Flag.Success).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -158,14 +143,14 @@ export class CRUDWrapper<
       const { data, error } = await supabase
         .from(this.table_name)
         .select("*")
-        .eq("id", tableId);
+        .eq("id", tableId)
+        .maybeSingle();
       if (error) {
         return new APIResponse(null, Flag.APIError, {
           output: error,
         }).build();
       }
-      const result = Array.isArray(data) ? data[0] : data;
-      return new APIResponse(result || null, Flag.Success).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError, {
         output: error,
@@ -184,9 +169,6 @@ export class CRUDWrapper<
       const {
         eq,
         or,
-        contains,
-        overlaps,
-        ilike,
         inValue,
         limit,
         single,
@@ -197,31 +179,11 @@ export class CRUDWrapper<
         searchFields,
       } = opts;
 
-      let query: any = supabase.from(this.table_name).select("*");
+      const query = supabase.from(this.table_name).select("*");
 
       if (Array.isArray(eq) && eq.length > 0) {
         eq.forEach(({ key, value }) => {
           query.eq(key as string, value);
-        });
-      }
-
-      if (Array.isArray(contains) && contains.length > 0) {
-        contains.forEach(({ key, value }) => {
-          // If value is an array, check for overlap or contains
-          // .contains in Supabase for arrays checks if all items in value are in the target column
-          query.contains(key as string, Array.isArray(value) ? value : [value]);
-        });
-      }
-
-      if (Array.isArray(overlaps) && overlaps.length > 0) {
-        overlaps.forEach(({ key, value }) => {
-          query.overlaps(key as string, value);
-        });
-      }
-
-      if (Array.isArray(ilike) && ilike.length > 0) {
-        ilike.forEach(({ key, value }) => {
-          query.ilike(key as string, value);
         });
       }
 
@@ -237,10 +199,10 @@ export class CRUDWrapper<
         query.limit(limit);
       }
       if (single && !maybeSingle) {
-        query = query.single();
+        query.single();
       }
       if (maybeSingle && !single) {
-        query = query.maybeSingle();
+        query.maybeSingle();
       }
 
       if (sort) {
@@ -265,8 +227,6 @@ export class CRUDWrapper<
       const { data, error } = await query;
       if (error) {
         return new APIResponse(null, Flag.APIError, {
-          message: error.message,
-          hints: (error as any).hint,
           output: error,
         }).build();
       }
@@ -324,12 +284,12 @@ export class CRUDWrapper<
           deleted_at: !!intent ? null : new Date().toISOString(),
         })
         .eq("id", tableId)
-        .select("*");
+        .select("*")
+        .maybeSingle();
       if (error) {
         return new APIResponse(null, Flag.APIError, { output: error }).build();
       }
-      const result = Array.isArray(data) ? data[0] : data;
-      return new APIResponse(result || null, Flag.Success).build();
+      return new APIResponse(data, Flag.Success).build();
     } catch (error) {
       return new APIResponse(null, Flag.InternalError).build();
     } finally {

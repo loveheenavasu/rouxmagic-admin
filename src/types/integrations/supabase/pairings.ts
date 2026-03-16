@@ -5,6 +5,8 @@ export enum PairingSourceEnum {
   TvShow = "TV Show",
   Song = "Song",
   Audiobook = "Audiobook",
+  Comic = "Comic",
+  Book = "Book",
   Recipe = "Recipe"
 }
 
@@ -15,14 +17,10 @@ export interface PairingsMetaData {
   target_ref: PairingSourceEnum;
   is_deleted?: boolean;
   deleted_at?: string | null;
-  vibe_tags?: string[];
-  flavor_tags?: string[];
 }
 
 export interface PairingFormData extends PairingsMetaData {
-    updated_at?:CommonSchema["updated_at"];
-    vibe_tags?: string[];
-    flavor_tags?: string[];
+    updated_at?:CommonSchema["updated_at"]
 }
 
 export type GetPairingsBy = keyof Pairing

@@ -9,79 +9,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Trash2, Loader2, Pin, PinOff } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Edit, Trash2, Loader2 } from "lucide-react";
 import MediaDialog from "@/components/MediaDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import { ContentTypeEnum, Flag, Project, ContentRow, FilterTypeEnum } from "@/types";
+import { ContentTypeEnum, Flag, Project } from "@/types";
 import { toast } from "sonner";
-import { Songs } from "@/api";
+import { Projects } from "@/api/integrations/supabase/projects/projects";
 import { MediaFilters } from "@/components/MediaFilters";
 import { StatsRow } from "@/components/StatsRow";
 
-// Type assertion to ensure Songs methods are available
-const songsAPI = Songs as Required<typeof Songs>;
+// Type assertion to ensure Projects methods are available
+const projectsAPI = Projects as Required<typeof Projects>;
 
-import { cn, smartParse } from "@/lib/utils";
-
-export default function ListenPage() {
+export default function Watch() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
-  const [genreFilter, setGenreFilter] = useState<string>("all");
-  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
-  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [stickyColumns, setStickyColumns] = useState<string[]>(["actions", "title"]); const toggleSticky = (key: string) => {
-    setStickyColumns((prev) => {
-      if (prev.includes(key)) {
-        return prev.filter((col) => col !== key);
-      }
-      if (prev.length >= 2) {
-        toast.info("Maximum 2 columns can be pinned");
-        return prev;
-      }
-      return [...prev, key];
-    });
-  };
-
-  const PINNED_WIDTH = 200;
-  const COLUMN_WIDTHS: Record<string, number> = {
-    actions: PINNED_WIDTH,
-    title: PINNED_WIDTH,
-    content_type: 150,
-    status: 150,
-    platform: 150,
-    release_year: 120,
-    runtime_minutes: 150,
-    notes: 300,
-  };
-
-  // Calculate left offset for sticky columns
-  const getStickyOffset = (columnKey: string): number => {
-    const index = stickyColumns.indexOf(columnKey);
-    if (index === -1) return 0;
-
-    let offset = 0;
-    for (let i = 0; i < index; i++) {
-      offset += PINNED_WIDTH;
-    }
-    return offset;
-  };
 
   const queryClient = useQueryClient();
-
-  const { data: shelves = [] } = useQuery({
-    queryKey: ["content-rows", "listen"],
-    queryFn: async () => {
-      const { ContentRows } = await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({ eq: [{ key: "page", value: "listen" }, { key: "is_active", value: true }] });
-      return Array.isArray(resp.data) ? resp.data as ContentRow[] : [];
-    }
-  });
 
   // Fetch all media
   const {
@@ -89,84 +37,21 @@ export default function ListenPage() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: ["media", searchQuery, statusFilter, genreFilter, selectedShelfId, contentTypeFilter],
+    queryKey: ["media", searchQuery, statusFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [];
-      const containsFilters: any[] = [];
-      const overlapsFilters: any[] = [];
-      const ilikeFilters: any[] = [];
-      let shelfOr: string | undefined = undefined;
+      const eqFilters: { key: "status" | "content_type"; value: any }[] = [
+        { key: "content_type", value: ContentTypeEnum.Song },
+      ];
 
-      if (statusFilter.length > 0) {
-        overlapsFilters.push({ key: "status", value: statusFilter });
+      if (statusFilter !== "all") {
+        eqFilters.push({ key: "status", value: statusFilter });
       }
 
-      // Apply shelf filter logic
-      if (selectedShelfId !== "all") {
-        const shelf = shelves.find(s => s.id === selectedShelfId);
-        if (shelf) {
-          if (shelf.filter_type === FilterTypeEnum.Flag) {
-            const knownFlags = ['in_now_playing', 'in_coming_soon', 'in_latest_releases', 'in_hero_carousel', 'featured', 'is_downloadable'];
-            const flagExists = knownFlags.includes(shelf.filter_value.toLowerCase());
-
-            if (flagExists) {
-              eqFilters.push({ key: shelf.filter_value, value: true });
-            }
-          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
-            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
-          } else if (shelf.filter_type === FilterTypeEnum.Song) {
-            ilikeFilters.push({ key: "content_type", value: "%Song%" });
-          } else if (shelf.filter_type === FilterTypeEnum.Status || shelf.filter_type === FilterTypeEnum.ContentType) {
-            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
-            if (shelf.filter_value.includes(",")) {
-              const values = shelf.filter_value.split(",").map(v => v.trim());
-              if (isStatus) {
-                overlapsFilters.push({ key: "status", value: values });
-              } else {
-                shelfOr = values.map(v => `content_type.ilike.%${v}%`).join(",");
-              }
-            } else {
-              if (isStatus) {
-                containsFilters.push({ key: "status", value: [shelf.filter_value] });
-              } else {
-                ilikeFilters.push({ key: "content_type", value: `%${shelf.filter_value}%` });
-              }
-            }
-          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
-            containsFilters.push({ key: "genres", value: [shelf.filter_value] });
-          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
-            containsFilters.push({ key: "vibe_tags", value: [shelf.filter_value] });
-          }
-        }
-      }
-
-      if (contentTypeFilter.length > 0) {
-        const contentTypePatterns = contentTypeFilter.map(t => `content_type.ilike.%${t}%`).join(",");
-        if (shelfOr) {
-          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
-        } else {
-          shelfOr = contentTypePatterns;
-        }
-      }
-
-      // Apply base content type restriction for Listen page - ONLY Songs
-      const pageFilterOr = `content_type.ilike.%${ContentTypeEnum.Song}%`;
-      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
-
-      let finalOr = shelfOr;
-
-      if (finalOr) {
-        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
-      } else {
-        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
-      }
-
-      const response = await songsAPI.get({
-        eq: eqFilters as any,
-        contains: containsFilters.length > 0 ? containsFilters : undefined,
-        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
-        ilike: ilikeFilters.length > 0 ? ilikeFilters : undefined,
-        or: finalOr,
+      const response = await projectsAPI.get({
+        eq: [
+          ...eqFilters,
+          { key: "is_deleted" as any, value: false }
+        ] as any,
         sort: "created_at",
         sortBy: "dec",
         search: searchQuery || undefined,
@@ -186,18 +71,9 @@ export default function ListenPage() {
         throw new Error(errorMessage);
       }
 
-      let data = Array.isArray(response.data)
+      const data = Array.isArray(response.data)
         ? response.data
         : ([response.data].filter(Boolean) as Project[]);
-
-      // Apply Genre filter
-      if (genreFilter !== "all") {
-        data = data.filter((r: Project) => {
-          const gData = r.genres;
-          const genres = Array.isArray(gData) ? gData : [];
-          return genres.some((g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase());
-        });
-      }
 
       return data;
     },
@@ -206,7 +82,8 @@ export default function ListenPage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await songsAPI.createOne(data);
+      const response = await projectsAPI.createOne(data);
+      console.log("response::::::", response);
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -229,7 +106,7 @@ export default function ListenPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await songsAPI.updateOneByID(id, data);
+      const response = await projectsAPI.updateOneByID(id, data);
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
@@ -253,7 +130,7 @@ export default function ListenPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await songsAPI.toogleSoftDeleteOneByID(id, true);
+      const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
         response.flag !== Flag.Success &&
         response.flag !== Flag.UnknownOrSuccess
@@ -274,86 +151,33 @@ export default function ListenPage() {
 
   const filteredMedia = mediaList;
 
-  const displayFields = Array.from(new Set([
-    ...(mediaList.length > 0 ? Object.keys(mediaList[0]) : []),
-    "genres",
-    "vibe_tags"
-  ])).filter((key) => key !== "id");
-
-  const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
-  const orderedFields = [
-    ...allAvailableFields.filter(key => stickyColumns.includes(key)),
-    ...allAvailableFields.filter(key => !stickyColumns.includes(key))
-  ];
+  const displayFields =
+    mediaList.length > 0
+      ? Object.keys(mediaList[0]).filter((key) => key !== "id")
+      : ["title", "content_type", "status", "release_year", "platform"];
 
   // Fetch unique statuses for filters (global, not affected by current filter)
   const { data: availableStatuses = [] } = useQuery({
-    queryKey: ["listen-statuses"],
+    queryKey: ["unique-statuses"],
     queryFn: async () => {
-      const response = await songsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const statuses = (response.data as Project[])
-          .flatMap((item) => smartParse(item.status))
-          .filter(Boolean);
-        return [...new Set(statuses)].sort();
+      const response = await projectsAPI.get({ eq: [] });
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        return [];
       }
-      return [];
+      const statuses = (response.data as Project[])
+        .map((item) => item.status)
+        .filter(Boolean);
+      return [...new Set(statuses)].sort();
     },
-  });
-
-  const { data: availableGenres = [] } = useQuery<string[]>({
-    queryKey: ["listen-genres"],
-    queryFn: async () => {
-      const response = await songsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [ContentTypeEnum.Song] }
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap(p => smartParse(p.genres));
-        return Array.from(new Set(genres)).filter(Boolean).sort();
-      }
-      return [];
-    }
   });
 
   // Fetch unique types for filters (global, not affected by current filter)
-  const { data: availableTypes = [] } = useQuery({
-    queryKey: ["listen-unique-types"],
-    queryFn: async () => {
-      const response = await songsAPI.get({ eq: [] });
-
-      if (response.flag !== Flag.Success || !response.data) {
-        return [];
-      }
-
-      const typesSet = new Set<string>();
-      const extractValues = (value: any): string[] => {
-        if (!value) return [];
-        if (Array.isArray(value)) return value.flatMap(extractValues);
-        if (typeof value === "string") {
-          const trimmed = value.trim();
-          try {
-            const parsed = JSON.parse(trimmed);
-            if (parsed !== trimmed) return extractValues(parsed);
-          } catch { }
-          return [trimmed];
-        }
-        return [];
-      };
-
-      (response.data as Project[]).forEach((item) => {
-        const cleanValues = extractValues(item.content_type);
-        cleanValues.forEach((val) => {
-          if (typeof val === "string" && val.trim()) typesSet.add(val.trim());
-        });
-      });
-
-      return Array.from(typesSet).sort((a, b) => a.localeCompare(b));
-    },
-  });
+  // For Listen page we always show songs, so we don't need a type filter dropdown.
+  const availableTypes: string[] = [];
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -362,7 +186,6 @@ export default function ListenPage() {
 
   const handleEdit = (media: Project) => {
     setSelectedMedia(media);
-    setSelectedRowId(media.id);
     setIsMediaDialogOpen(true);
   };
 
@@ -391,13 +214,12 @@ export default function ListenPage() {
     "preview_type",
     "audio_url",
     "audio_path",
+    "youtube_id",
 
     // Metadata / feeds
     "slug",
     "platform_name",
-    "genres",
-    "vibe_tags",
-    "flavor_tags",
+    "vibes",
     "status",
     "release_status",
     "in_now_playing",
@@ -414,7 +236,10 @@ export default function ListenPage() {
   };
 
   // Calculate stats
-  const totalSongs = mediaList.filter((m) => m.content_type === "Song").length;
+  const totalFilms = mediaList.filter((m) => m.content_type === "Film").length;
+  const totalTVShows = mediaList.filter(
+    (m) => m.content_type === "TV Show"
+  ).length;
 
   if (error) {
     return (
@@ -434,7 +259,8 @@ export default function ListenPage() {
       <StatsRow
         items={[
           { label: "Total Items", value: mediaList?.length },
-          { label: "Songs", value: totalSongs },
+          { label: "Films", value: totalFilms },
+          { label: "TV Shows", value: totalTVShows },
         ]}
         title="Listen Library"
         description="Manage songs and audiobooks in your catalog"
@@ -443,56 +269,29 @@ export default function ListenPage() {
 
       {/* Search and Filter Section */}
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        <MediaFilters
-          searchPlaceholder="Search by title..."
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          contentTypeFilter={contentTypeFilter}
-          onContentTypeFilterChange={setContentTypeFilter}
-          availableStatuses={availableStatuses}
-          availableTypes={availableTypes}
-          shelves={shelves}
-          selectedShelfId={selectedShelfId}
-          onShelfChange={setSelectedShelfId}
-          genreFilter={genreFilter}
-          onGenreFilterChange={setGenreFilter}
-          availableGenres={availableGenres}
-        />
-      </div>
+      <MediaFilters
+        searchPlaceholder="Search by title..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        availableStatuses={availableStatuses}
+        availableTypes={availableTypes}
+      />
       {/* Table */}
       <div className="rounded-md border">
         <Table>
-          <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
+          <TableHeader>
             <TableRow>
-              {orderedFields.map((key) => (
+              {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap group"
-                  sticky={stickyColumns.includes(key) ? "left" : undefined}
-                  left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                  width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                  showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
                 >
-                  <div className="flex items-center gap-2">
-                    {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                      onClick={() => toggleSticky(key)}
-                    >
-                      {stickyColumns.includes(key) ? (
-                        <PinOff className="h-3 w-3" />
-                      ) : (
-                        <Pin className="h-3 w-3" />
-                      )}
-                    </Button>
-                  </div>
+                  {key.replace(/_/g, " ")}
                 </TableHead>
               ))}
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -506,133 +305,42 @@ export default function ListenPage() {
                 </TableCell>
               </TableRow>
             ) : !!filteredMedia?.length ? (
-              [...filteredMedia].sort((a, b) => a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0).map((media) => {
-                const isSelected = selectedRowId === media.id;
-                return (
-                  <TableRow
-                    key={media.id}
-                    className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"
-                      }`}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedRowId(null);
-                      } else {
-                        setSelectedRowId(media.id);
-                      }
-                    }}
-                    data-state={isSelected ? "selected" : undefined}
-                  >
-                    {orderedFields.map((key) => {
-                      if (key === "actions") {
-                        return (
-                          <TableCell
-                            key="actions"
-                            className="whitespace-nowrap"
-                            sticky={stickyColumns.includes("actions") ? "left" : undefined}
-                            left={stickyColumns.includes("actions") ? getStickyOffset("actions") : undefined}
-                            width={PINNED_WIDTH}
-                            showShadow={stickyColumns.indexOf("actions") === stickyColumns.length - 1}
-                          >
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(media);
-                                }}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(media);
-                                }}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        );
-                      }
-
-                      const value = media[key as keyof Project];
-                      return (
-                        <TableCell
-                          key={key}
-                          className={cn(
-                            "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                            (key === "notes" || key === "description") ? "max-w-[300px]" : "max-w-[250px]"
-                          )}
-                          sticky={stickyColumns.includes(key) ? "left" : undefined}
-                          left={stickyColumns.includes(key) ? getStickyOffset(key) : undefined}
-                          width={stickyColumns.includes(key) ? PINNED_WIDTH : (COLUMN_WIDTHS[key] || 150)}
-                          showShadow={stickyColumns.indexOf(key) === stickyColumns.length - 1}
-                        >
-                          {value === null || value === undefined || value === "" ? (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          ) : (
-                            (() => {
-                              let values = smartParse(value);
-
-                              // Capitalize and format for display
-                              values = values.map((v) => {
-                                if (!v) return v;
-                                const s = String(v).replace(/_/g, " ");
-                                return s.charAt(0).toUpperCase() + s.slice(1);
-                              });
-
-                              if (["content_type", "status", "genres", "vibe_tags"].includes(key)) {
-                                const MAX_TAGS = 3;
-                                const visible = values.slice(0, MAX_TAGS);
-                                const overflow = values.length - MAX_TAGS;
-                                return (
-                                  <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                    {visible.map((v, i) => (
-                                      <Badge
-                                        key={`${v}-${i}`}
-                                        variant={key === "vibe_tags" ? "outline" : "secondary"}
-                                        className={cn(
-                                          "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                          key === "vibe_tags"
-                                            ? "border-slate-200 text-slate-500 bg-transparent"
-                                            : "bg-slate-100 text-slate-600 border-none"
-                                        )}
-                                        title={v}
-                                      >
-                                        {v}
-                                      </Badge>
-                                    ))}
-                                    {overflow > 0 && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                        title={values.slice(MAX_TAGS).join(", ")}
-                                      >
-                                        +{overflow}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              const displayValue = values.join(", ");
-                              return (
-                                <span className="truncate block" title={displayValue}>
-                                  {displayValue}
-                                </span>
-                              );
-                            })()
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                )
-              })
+              filteredMedia.map((media) => (
+                <TableRow key={media.id}>
+                  {displayFields.map((key) => {
+                    const value = media[key as keyof Project];
+                    return (
+                      <TableCell key={key} className="max-w-[200px] truncate">
+                        {value === null || value === undefined ? (
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
+                        ) : (
+                          <span title={String(value)}>{String(value)}</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(media)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(media)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
             ) : (
               <TableRow>
                 <TableCell
@@ -653,11 +361,8 @@ export default function ListenPage() {
         onOpenChange={setIsMediaDialogOpen}
         media={selectedMedia as any}
         onSubmit={handleSubmit}
-        allowedFields={carouselAllowedFields}
-        assignmentPage="listen"
-        selectedShelfId={selectedShelfId}
-        defaultValues={{}}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        allowedFields={carouselAllowedFields}
       />
 
       {/* Delete Confirmation Dialog */}

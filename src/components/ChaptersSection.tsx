@@ -77,12 +77,17 @@ export default function ChaptersSection({
                         <Table>
                             <TableHeader className="bg-slate-50/50">
                                 <TableRow>
-                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4" sticky="left">
+                                    <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
                                         Title
                                     </TableHead>
                                     {isTvShow && (
                                         <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
                                             S/E
+                                        </TableHead>
+                                    )}
+                                    {isAudiobook && (
+                                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
+                                            Platform
                                         </TableHead>
                                     )}
                                     <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-3 whitespace-nowrap px-4">
@@ -103,7 +108,7 @@ export default function ChaptersSection({
                                 ) : chapters.length ? (
                                     chapters.map((c) => (
                                         <TableRow key={c.id} className="hover:bg-slate-50/50">
-                                            <TableCell className="px-4 py-3 max-w-[260px] truncate" sticky="left">
+                                            <TableCell className="px-4 py-3 max-w-[260px] truncate">
                                                 <span
                                                     className="font-medium text-slate-800"
                                                     title={c.title}
@@ -114,6 +119,11 @@ export default function ChaptersSection({
                                             {isTvShow && (
                                                 <TableCell className="px-4 py-3 whitespace-nowrap text-slate-600">
                                                     S{c.season_number ?? "-"} E{c.episode_number ?? "-"}
+                                                </TableCell>
+                                            )}
+                                            {isAudiobook && (
+                                                <TableCell className="px-4 py-3 whitespace-nowrap text-slate-600">
+                                                    {c.platform ?? <span className="text-slate-300 text-xs">—</span>}
                                                 </TableCell>
                                             )}
                                             <TableCell className="px-4 py-3 max-w-[260px] truncate">
@@ -146,7 +156,7 @@ export default function ChaptersSection({
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => onDeleteChapter(c)}
-                                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                                        className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>

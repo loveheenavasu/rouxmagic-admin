@@ -8,16 +8,8 @@ export enum Tables {
     Projects = "projects",
     Recipes = "recipes",
     Contents = "contents",
-    EmailCaptureSettings = "email_capture_settings",
     Footer = "footer",
-    FooterSettings = "footer_settings",
-    AboutPage = "about_page",
-    PageSettings = "page_settings",
-    Pairings = "pairings",
-    Shop = "shop",
-    ContentRows = "content_rows",
-    NavigationItems = "navigation_items",
-    Songs = "v_songs"
+    Pairings = "pairings"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
@@ -28,10 +20,7 @@ export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
   single?: boolean;
   maybeSingle?: boolean;
   or?: string;
-  contains?: { key: GetBy; value: any }[];
-  overlaps?: { key: GetBy; value: any[] }[];
-  ilike?: { key: GetBy; value: string }[];
-  inValue?: { key: keyof FormData, value: any[] }
+  inValue?:{key: keyof FormData, value: any[]}
   search?: string;
   searchFields?: SearchField[];
 }

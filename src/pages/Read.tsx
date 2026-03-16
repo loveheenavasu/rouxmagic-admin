@@ -9,93 +9,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Edit, Trash2, List, Pin, PinOff } from "lucide-react";
+import { Loader2, Edit, Trash2, List } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MediaFilters } from "@/components/MediaFilters";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import { supabase } from "@/lib";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
-import { Flag, Project, ContentTypeEnum, ContentRow, FilterTypeEnum } from "@/types";
+import { Flag, Project, ContentTypeEnum } from "@/types";
 import { toast } from "sonner";
 import MediaDialog from "@/components/MediaDialog";
 import { StatsRow } from "@/components/StatsRow";
-import { cn, smartParse } from "@/lib/utils";
-import { PageSettingsCard } from "@/components/PageSettingsCard";
 
-const READ_TYPES = ["Audiobook", "Book", "Comic"] as const;
-const projectsAPI = Projects;
+const READ_TYPES = ["Comic", "Book", "Audiobook"] as const;
+const projectsAPI = Projects as Required<typeof Projects>;
 
 export default function Read() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [contentTypeFilter, setContentTypeFilter] = useState<string[]>([]);
-  const [genreFilter, setGenreFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mediaToDelete, setMediaToDelete] = useState<Project | null>(null);
-  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [selectedShelfId, setSelectedShelfId] = useState<string>("all");
-  const [stickyColumns, setStickyColumns] = useState<string[]>([
-    "actions",
-    "title",
-  ]);
-  const toggleSticky = (key: string) => {
-    setStickyColumns((prev) => {
-      if (prev.includes(key)) {
-        return prev.filter((col) => col !== key);
-      }
-      if (prev.length >= 2) {
-        toast.info("Maximum 2 columns can be pinned");
-        return prev;
-      }
-      return [...prev, key];
-    });
-  };
-
-  const PINNED_WIDTH = 200;
-  const COLUMN_WIDTHS: Record<string, number> = {
-    actions: PINNED_WIDTH,
-    title: PINNED_WIDTH,
-    content_type: 150,
-    status: 150,
-    platform: 150,
-    platform_name: 150,
-    release_year: 120,
-    runtime_minutes: 150,
-    notes: 300,
-  };
-
-  // Calculate left offset for sticky columns
-  const getStickyOffset = (columnKey: string): number => {
-    const index = stickyColumns.indexOf(columnKey);
-    if (index === -1) return 0;
-
-    let offset = 0;
-    for (let i = 0; i < index; i++) {
-      offset += PINNED_WIDTH;
-    }
-    return offset;
-  };
 
   const queryClient = useQueryClient();
-
-  const { data: shelves = [] } = useQuery({
-    queryKey: ["content-rows", "read"],
-    queryFn: async () => {
-      const { ContentRows } =
-        await import("@/api/integrations/supabase/content_rows/content_rows");
-      const resp = await (ContentRows as any).get({
-        eq: [
-          { key: "page", value: "read" },
-          { key: "is_active", value: true },
-        ],
-      });
-      return Array.isArray(resp.data) ? (resp.data as ContentRow[]) : [];
-    },
-  });
 
   // Fetch read items with server-side filters
   const {
@@ -103,163 +41,44 @@ export default function Read() {
     isLoading,
     error,
   } = useQuery<Project[]>({
-    queryKey: [
-      "read-items",
-      searchQuery,
-      statusFilter,
-      contentTypeFilter,
-      genreFilter,
-      selectedShelfId,
-    ],
+    queryKey: ["read-items", searchQuery, statusFilter, contentTypeFilter],
     queryFn: async () => {
-      const eqFilters: any[] = [];
-      const containsFilters: any[] = [];
-      const overlapsFilters: any[] = [];
-      const ilikeFilters: any[] = [];
-      let shelfOr: string | undefined = undefined;
+      const search = searchQuery.trim();
 
-      if (statusFilter.length > 0) {
-        overlapsFilters.push({ key: "status", value: statusFilter });
+      let query = supabase
+        .from("projects")
+        .select("*")
+        .in("content_type", READ_TYPES as any)
+        .eq("is_deleted", false)
+        .order("order_index", { ascending: true });
+
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
       }
 
-      // Apply shelf filter logic
-      if (selectedShelfId !== "all") {
-        const shelf = shelves.find((s) => s.id === selectedShelfId);
-        if (shelf) {
-          if (shelf.filter_type === FilterTypeEnum.Flag) {
-            const knownFlags = [
-              "in_now_playing",
-              "in_coming_soon",
-              "in_latest_releases",
-              "in_hero_carousel",
-              "featured",
-              "is_downloadable",
-            ];
-            const flagExists = knownFlags.includes(
-              shelf.filter_value.toLowerCase(),
-            );
-
-            if (flagExists) {
-              eqFilters.push({ key: shelf.filter_value, value: true });
-            } else {
-              // For custom rows, query by row_type using the shelf's row_type or label
-              const rowTypeFilter =
-                (shelf as any).row_type || (shelf as any).label;
-              ilikeFilters.push({
-                key: "row_type",
-                value: `%${rowTypeFilter}%`,
-              });
-            }
-          } else if (shelf.filter_type === FilterTypeEnum.Audiobook) {
-            ilikeFilters.push({ key: "content_type", value: "%Audiobook%" });
-          } else if (shelf.filter_type === FilterTypeEnum.Song) {
-            ilikeFilters.push({ key: "content_type", value: "%Song%" });
-          } else if (
-            shelf.filter_type === FilterTypeEnum.Status ||
-            shelf.filter_type === FilterTypeEnum.ContentType
-          ) {
-            const isStatus = shelf.filter_type === FilterTypeEnum.Status;
-            if (shelf.filter_value.includes(",")) {
-              const values = shelf.filter_value.split(",").map((v) => v.trim());
-              if (isStatus) {
-                overlapsFilters.push({ key: "status", value: values });
-              } else {
-                shelfOr = values
-                  .map((v) => `content_type.ilike.%${v}%`)
-                  .join(",");
-              }
-            } else {
-              if (isStatus) {
-                containsFilters.push({
-                  key: "status",
-                  value: [shelf.filter_value],
-                });
-              } else {
-                ilikeFilters.push({
-                  key: "content_type",
-                  value: `%${shelf.filter_value}%`,
-                });
-              }
-            }
-          } else if (shelf.filter_type === FilterTypeEnum.Genre) {
-            containsFilters.push({
-              key: "genres",
-              value: [shelf.filter_value],
-            });
-          } else if (shelf.filter_type === FilterTypeEnum.VibeTags) {
-            containsFilters.push({
-              key: "vibe_tags",
-              value: [shelf.filter_value],
-            });
-          }
-        }
+      if (contentTypeFilter !== "all") {
+        query = query.eq("content_type", contentTypeFilter);
       }
 
-      if (contentTypeFilter.length > 0) {
-        const contentTypePatterns = contentTypeFilter
-          .map((t) => `content_type.ilike.%${t}%`)
-          .join(",");
-        if (shelfOr) {
-          shelfOr = `and(or(${shelfOr}),or(${contentTypePatterns}))`;
-        } else {
-          shelfOr = contentTypePatterns;
-        }
-      }
-
-      // Apply base content type restriction for Read page
-      const pageFilterOr = READ_TYPES.map(
-        (t) => `content_type.ilike.%${t}%`,
-      ).join(",");
-      const visibilityFilter = "is_deleted.eq.false,is_deleted.is.null";
-      let finalOr = shelfOr;
-
-      if (finalOr) {
-        finalOr = `and(or(${finalOr}),or(${pageFilterOr}),or(${visibilityFilter}))`;
-      } else {
-        finalOr = `and(or(${pageFilterOr}),or(${visibilityFilter}))`;
-      }
-
-      const response = await projectsAPI.get({
-        eq: eqFilters,
-        contains: containsFilters.length > 0 ? containsFilters : undefined,
-        overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
-        ilike: ilikeFilters.length > 0 ? ilikeFilters : undefined,
-        or: finalOr,
-        search: searchQuery.trim() || undefined,
-        searchFields: ["title", "platform", "notes"],
-        sort: "order_index",
-        sortBy: "asc",
-      });
-
-      if (
-        response.flag !== Flag.Success &&
-        response.flag !== Flag.UnknownOrSuccess
-      ) {
-        throw new Error(
-          response.error?.message || "Failed to fetch read content",
+      if (search) {
+        const pattern = `%${search}%`;
+        query = query.or(
+          `title.ilike.${pattern},platform.ilike.${pattern},notes.ilike.${pattern}`
         );
       }
 
-      const data = response.data;
-      let rows = (Array.isArray(data) ? data : data ? [data] : []) as Project[];
+      const { data, error } = await query;
 
-      // Apply Genre filter
-      if (genreFilter !== "all") {
-        rows = rows.filter((r) => {
-          const gData = r.genres;
-          const genres = Array.isArray(gData) ? gData : [];
-          return genres.some(
-            (g: string) => g.trim().toLowerCase() === genreFilter.toLowerCase(),
-          );
-        });
+      if (error) {
+        throw new Error(error.message || "Failed to fetch read content");
       }
 
-      return rows;
+      return (data || []) as Project[];
     },
   });
 
   // Create mutation
-  const createMutation = useMutation<Project, Error, any>({
+  const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await projectsAPI.createOne(data);
       if (
@@ -283,34 +102,32 @@ export default function Read() {
   });
 
   // Update mutation
-  const updateMutation = useMutation<Project, Error, { id: string; data: any }>(
-    {
-      mutationFn: async ({ id, data }: { id: string; data: any }) => {
-        const response = await projectsAPI.updateOneByID(id, data);
-        if (
-          (response.flag !== Flag.Success &&
-            response.flag !== Flag.UnknownOrSuccess) ||
-          !response.data
-        ) {
-          throw new Error(response.error?.message || "Failed to update media");
-        }
-        return response.data;
-      },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["read-items"] });
-        queryClient.invalidateQueries({ queryKey: ["read-statuses"] });
-        setIsMediaDialogOpen(false);
-        setSelectedMedia(null);
-        toast.success("Content updated successfully!");
-      },
-      onError: (error: Error) => {
-        toast.error(`Failed to update content: ${error.message}`);
-      },
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const response = await projectsAPI.updateOneByID(id, data);
+      if (
+        (response.flag !== Flag.Success &&
+          response.flag !== Flag.UnknownOrSuccess) ||
+        !response.data
+      ) {
+        throw new Error(response.error?.message || "Failed to update media");
+      }
+      return response.data;
     },
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["read-items"] });
+      queryClient.invalidateQueries({ queryKey: ["read-statuses"] });
+      setIsMediaDialogOpen(false);
+      setSelectedMedia(null);
+      toast.success("Content updated successfully!");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update content: ${error.message}`);
+    },
+  });
 
   // Delete mutation
-  const deleteMutation = useMutation<void, Error, string>({
+  const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await projectsAPI.toogleSoftDeleteOneByID(id, true);
       if (
@@ -332,44 +149,6 @@ export default function Read() {
     },
   });
 
-  // Fetch unique content types for filters
-  const { data: availableTypes = [] } = useQuery({
-    queryKey: ["read-unique-types"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        inValue: { key: "content_type" as any, value: [...READ_TYPES] },
-      });
-
-      if (response.flag !== Flag.Success || !response.data) {
-        return [];
-      }
-
-      const typesSet = new Set<string>();
-      const extractValues = (value: any): string[] => {
-        if (!value) return [];
-        if (Array.isArray(value)) return value.flatMap(extractValues);
-        if (typeof value === "string") {
-          const trimmed = value.trim();
-          try {
-            const parsed = JSON.parse(trimmed);
-            if (parsed !== trimmed) return extractValues(parsed);
-          } catch {}
-          return [trimmed];
-        }
-        return [];
-      };
-
-      (response.data as Project[]).forEach((item) => {
-        const cleanValues = extractValues(item.content_type);
-        cleanValues.forEach((val) => {
-          if (typeof val === "string" && val.trim()) typesSet.add(val.trim());
-        });
-      });
-
-      return Array.from(typesSet).sort((a, b) => a.localeCompare(b));
-    },
-  });
-
   // Status options based on all read items
   const { data: availableStatuses = [] } = useQuery<string[]>({
     queryKey: ["read-statuses"],
@@ -382,52 +161,30 @@ export default function Read() {
       if (error || !data) return [];
 
       const statuses = data
-        .flatMap((row: any) => smartParse(row.status))
-        .filter(Boolean);
-      return [...new Set(statuses)].sort();
+        .map((row: any) => row.status)
+        .filter((s: string | null) => !!s);
+      return [...new Set(statuses)] as string[];
     },
   });
 
-  const displayFields = Array.from(
-    new Set([
-      ...(items.length > 0 ? Object.keys(items[0]) : []),
-      "genres",
-      "vibe_tags",
-    ]),
-  ).filter(
-    (key) =>
-      ![
-        "id",
-        "poster_url",
-        "order_index",
-        "created_at",
-        "updated_at",
-        "user_id",
-      ].includes(key),
-  );
+  const availableTypes = READ_TYPES as unknown as string[];
 
-  const allAvailableFields = Array.from(new Set(["actions", ...displayFields]));
-  const orderedFields = [
-    ...allAvailableFields.filter((key) => stickyColumns.includes(key)),
-    ...allAvailableFields.filter((key) => !stickyColumns.includes(key)),
-  ];
-
-  const { data: availableGenres = [] } = useQuery<string[]>({
-    queryKey: ["read-genres"],
-    queryFn: async () => {
-      const response = await projectsAPI.get({
-        eq: [{ key: "is_deleted" as any, value: false }],
-        inValue: { key: "content_type" as any, value: [...READ_TYPES] },
-      });
-      if (response.flag === Flag.Success && Array.isArray(response.data)) {
-        const genres = (response.data as Project[]).flatMap((p) =>
-          smartParse(p.genres),
-        );
-        return Array.from(new Set(genres)).filter(Boolean).sort();
-      }
-      return [];
-    },
-  });
+  const displayFields =
+    items.length > 0
+      ? Object.keys(items[0]).filter(
+        (key) =>
+          ![
+            "id",
+            "poster_url",
+            "preview_url",
+            "platform_url",
+            "order_index",
+            "created_at",
+            "updated_at",
+            "user_id",
+          ].includes(key)
+      )
+      : ["title", "content_type", "status", "platform_name"];
 
   const handleAddNew = () => {
     setSelectedMedia(null);
@@ -436,7 +193,6 @@ export default function Read() {
 
   const handleEdit = (media: Project) => {
     setSelectedMedia(media);
-    setSelectedRowId(media.id);
     setIsMediaDialogOpen(true);
   };
 
@@ -461,10 +217,13 @@ export default function Read() {
 
   const totalItems = items.length;
   const totalComics = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Comic,
+    (m) => m.content_type === ContentTypeEnum.Comic
+  ).length;
+  const totalBooks = items.filter(
+    (m) => m.content_type === ContentTypeEnum.Book
   ).length;
   const totalAudiobooks = items.filter(
-    (m) => m.content_type === ContentTypeEnum.Audiobook,
+    (m) => m.content_type === ContentTypeEnum.Audiobook
   ).length;
 
   if (error) {
@@ -486,15 +245,15 @@ export default function Read() {
         items={[
           { label: "Total Items", value: totalItems },
           { label: "Comics", value: totalComics },
-          { label: "Audiobook", value: totalAudiobooks },
+          { label: "Books", value: totalBooks },
+          { label: "Audiobooks", value: totalAudiobooks },
         ]}
         title="Read Library"
         description="Browse comics, books, and audiobooks from your catalog"
         handleNew={handleAddNew}
       />
 
-      <PageSettingsCard pageName="read" />
-
+      {/* Search and Filter Section */}
       <MediaFilters
         searchPlaceholder="Search by title, platform or notes..."
         searchQuery={searchQuery}
@@ -505,55 +264,22 @@ export default function Read() {
         onContentTypeFilterChange={setContentTypeFilter}
         availableStatuses={availableStatuses}
         availableTypes={availableTypes}
-        shelves={shelves}
-        selectedShelfId={selectedShelfId}
-        onShelfChange={setSelectedShelfId}
-        genreFilter={genreFilter}
-        onGenreFilterChange={setGenreFilter}
-        availableGenres={availableGenres}
       />
 
       {/* Table */}
       <div className="rounded-md border">
         <Table>
-          <TableHeader className="sticky top-0 z-40 bg-slate-50 shadow-sm">
+          <TableHeader>
             <TableRow>
-              {orderedFields.map((key) => (
+              {displayFields.map((key) => (
                 <TableHead
                   key={key}
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap group"
-                  sticky={stickyColumns.includes(key) ? "left" : undefined}
-                  left={
-                    stickyColumns.includes(key)
-                      ? getStickyOffset(key)
-                      : undefined
-                  }
-                  width={
-                    stickyColumns.includes(key)
-                      ? PINNED_WIDTH
-                      : COLUMN_WIDTHS[key] || 150
-                  }
-                  showShadow={
-                    stickyColumns.indexOf(key) === stickyColumns.length - 1
-                  }
+                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 whitespace-nowrap"
                 >
-                  <div className="flex items-center gap-2">
-                    {key === "actions" ? "Actions" : key.replace(/_/g, " ")}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-4 w-4 transition-opacity ${stickyColumns.includes(key) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                      onClick={() => toggleSticky(key)}
-                    >
-                      {stickyColumns.includes(key) ? (
-                        <PinOff className="h-3 w-3" />
-                      ) : (
-                        <Pin className="h-3 w-3" />
-                      )}
-                    </Button>
-                  </div>
+                  {key.replace(/_/g, " ")}
                 </TableHead>
               ))}
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -567,200 +293,55 @@ export default function Read() {
                 </TableCell>
               </TableRow>
             ) : items.length ? (
-              [...items]
-                .sort((a, b) =>
-                  a.id === selectedRowId ? -1 : b.id === selectedRowId ? 1 : 0,
-                )
-                .map((item) => {
-                  const isSelected = selectedRowId === item.id;
-                  return (
-                    <TableRow
-                      key={item.id}
-                      className={`transition-colors cursor-pointer group ${isSelected ? "bg-indigo-50 hover:bg-indigo-50 sticky top-[48px] z-20 shadow-sm" : "hover:bg-slate-50"}`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedRowId(null);
-                        } else {
-                          setSelectedRowId(item.id);
-                        }
-                      }}
-                      data-state={isSelected ? "selected" : undefined}
-                    >
-                      {orderedFields.map((key) => {
-                        if (key === "actions") {
-                          return (
-                            <TableCell
-                              key="actions"
-                              className="whitespace-nowrap"
-                              sticky={
-                                stickyColumns.includes("actions")
-                                  ? "left"
-                                  : undefined
-                              }
-                              left={
-                                stickyColumns.includes("actions")
-                                  ? getStickyOffset("actions")
-                                  : undefined
-                              }
-                              width={PINNED_WIDTH}
-                              showShadow={
-                                stickyColumns.indexOf("actions") ===
-                                stickyColumns.length - 1
-                              }
-                            >
-                              <div className="flex gap-2">
-                                {(item.content_type ===
-                                  ContentTypeEnum.Audiobook ||
-                                  (item as any).content_type ===
-                                    "AudioBook") && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(
-                                        `/chapters?projectId=${item.id}`,
-                                      );
-                                    }}
-                                    title="Chapters"
-                                  >
-                                    <List className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit(item);
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(item);
-                                  }}
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          );
-                        }
-
-                        const value = (item as any)[key];
-                        return (
-                          <TableCell
-                            key={key}
-                            className={cn(
-                              "group-hover:bg-slate-50 group-data-[state=selected]:bg-indigo-50",
-                              key === "notes" || key === "description"
-                                ? "max-w-[300px]"
-                                : "max-w-[250px]",
-                            )}
-                            sticky={
-                              stickyColumns.includes(key) ? "left" : undefined
+              items.map((item) => (
+                <TableRow key={item.id}>
+                  {displayFields.map((key) => {
+                    const value = (item as any)[key];
+                    return (
+                      <TableCell key={key} className="max-w-[220px] truncate">
+                        {value === null || value === undefined ? (
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
+                        ) : (
+                          <span title={String(value)}>{String(value)}</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      {(item.content_type === ContentTypeEnum.Audiobook ||
+                        (item as any).content_type === "AudioBook") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              navigate(`/chapters?projectId=${item.id}`)
                             }
-                            left={
-                              stickyColumns.includes(key)
-                                ? getStickyOffset(key)
-                                : undefined
-                            }
-                            width={
-                              stickyColumns.includes(key)
-                                ? PINNED_WIDTH
-                                : COLUMN_WIDTHS[key] || 150
-                            }
-                            showShadow={
-                              stickyColumns.indexOf(key) ===
-                              stickyColumns.length - 1
-                            }
+                            title="Chapters"
                           >
-                            {value === null ||
-                            value === undefined ||
-                            value === "" ? (
-                              <span className="text-muted-foreground text-xs">
-                                —
-                              </span>
-                            ) : (
-                              (() => {
-                                let values = smartParse(value);
-
-                                // Capitalize and format for display
-                                values = values.map((v) => {
-                                  if (!v) return v;
-                                  const s = String(v).replace(/_/g, " ");
-                                  return s.charAt(0).toUpperCase() + s.slice(1);
-                                });
-
-                                if (
-                                  [
-                                    "content_type",
-                                    "status",
-                                    "genres",
-                                    "vibe_tags",
-                                  ].includes(key)
-                                ) {
-                                  const MAX_TAGS = 3;
-                                  const visible = values.slice(0, MAX_TAGS);
-                                  const overflow = values.length - MAX_TAGS;
-                                  return (
-                                    <div className="flex items-center gap-1 flex-nowrap overflow-hidden">
-                                      {visible.map((v, i) => (
-                                        <Badge
-                                          key={`${v}-${i}`}
-                                          variant={
-                                            key === "vibe_tags"
-                                              ? "outline"
-                                              : "secondary"
-                                          }
-                                          className={cn(
-                                            "text-[10px] h-5 px-2 font-normal whitespace-nowrap shrink-0",
-                                            key === "vibe_tags"
-                                              ? "border-slate-200 text-slate-500 bg-transparent"
-                                              : "bg-slate-100 text-slate-600 border-none",
-                                          )}
-                                          title={v}
-                                        >
-                                          {v}
-                                        </Badge>
-                                      ))}
-                                      {overflow > 0 && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] h-5 px-1.5 font-normal whitespace-nowrap shrink-0 text-muted-foreground"
-                                          title={values
-                                            .slice(MAX_TAGS)
-                                            .join(", ")}
-                                        >
-                                          +{overflow}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                                const displayValue = values.join(", ");
-                                return (
-                                  <span
-                                    className="truncate block"
-                                    title={displayValue}
-                                  >
-                                    {displayValue}
-                                  </span>
-                                );
-                              })()
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })
+                            <List className="h-4 w-4" />
+                          </Button>
+                        )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(item)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(item)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
             ) : (
               <TableRow>
                 <TableCell
@@ -782,9 +363,6 @@ export default function Read() {
         media={selectedMedia as any}
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        assignmentPage="read"
-        selectedShelfId={selectedShelfId}
-        defaultValues={{}}
       />
 
       {/* Delete Confirmation Dialog */}
