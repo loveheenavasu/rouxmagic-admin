@@ -31,3 +31,8 @@ export enum RequiredPlanEnum {
   AllAccess = "All_Access",
   AdFree = "Ad_Free",
 }
+
+export enum UserRole {
+  Admin = "admin",
+  User = "user",
+}

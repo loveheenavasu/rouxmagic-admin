@@ -1,6 +1,5 @@
 import { supabase } from "@/lib";
 import { StripePriceProduct } from "@/types";
-// import { StripeCheckoutOptions } from "@stripe/stripe-js";
 import { toast } from "sonner";
 
 const getUserAccessToken = async () => {
@@ -105,7 +104,7 @@ export const stripe = {
   },
   async manageSubscriptions(
     action: "cancel_immediately" | "cancel_on_end" | "resume",
-    targetUserId?: string
+    targetUserId?: string,
   ) {
     const token = await getUserAccessToken();
     return fetch(

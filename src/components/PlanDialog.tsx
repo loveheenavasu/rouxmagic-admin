@@ -100,9 +100,13 @@ export default function PlanDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || (!noProduct && !formData.stripe_price_id) || !formData.amount) {
+    console.log("CLICKED");
+
+    if (!formData.name) {
       return;
     }
+
+    console.log("PASSING THE CHECK");
 
     const submissionData = { ...formData };
     delete submissionData.featuresString;
@@ -154,7 +158,10 @@ export default function PlanDialog({
                 checked={noProduct}
                 onCheckedChange={handleNoProductChange}
               />
-              <Label htmlFor="noProduct" className="text-sm cursor-pointer text-muted-foreground">
+              <Label
+                htmlFor="noProduct"
+                className="text-sm cursor-pointer text-muted-foreground"
+              >
                 Doesn't have product yet
               </Label>
             </div>
@@ -245,7 +252,11 @@ export default function PlanDialog({
                   }
                 }}
               />
-              <Button type="button" variant="secondary" onClick={handleAddFeature}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAddFeature}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -263,23 +274,26 @@ export default function PlanDialog({
                 <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
                   {formData.features
                     .map((feature, index) => ({ feature, index }))
-                    .filter(({ feature }) => 
-                      feature.toLowerCase().includes(searchQuery.toLowerCase())
+                    .filter(({ feature }) =>
+                      feature.toLowerCase().includes(searchQuery.toLowerCase()),
                     )
                     .map(({ feature, index }) => (
-                      <li key={index} className="flex items-center justify-between p-2 text-sm bg-slate-50 border rounded-md">
+                      <li
+                        key={index}
+                        className="flex items-center justify-between p-2 text-sm bg-slate-50 border rounded-md"
+                      >
                         <span>{feature}</span>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 text-slate-500 hover:text-destructive" 
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-slate-500 hover:text-destructive"
                           onClick={() => handleRemoveFeature(index)}
                         >
                           <X className="h-4 w-4" />
                         </Button>
                       </li>
-                  ))}
+                    ))}
                 </ul>
               </div>
             )}

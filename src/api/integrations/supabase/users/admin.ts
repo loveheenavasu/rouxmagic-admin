@@ -1,5 +1,6 @@
 import { supabase } from "@/lib";
 import { UserProfile } from "@/types/integrations/supabase/profiles";
+import { stripe } from "../../stripe/stripe";
 
 export const admin = {
   async getAllUsers(): Promise<{ users: UserProfile[]; error: unknown }> {
@@ -31,19 +32,7 @@ export const admin = {
   users: {
     manageSubsctions: {
       async cancelImmediately(targetId: string) {
-        return await fetch(
-          "https://okusfcxayekqgpbmwyev.supabase.co/functions/v1/manage-subscriptions",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "cancel_immediately",
-              target_user_id: targetId,
-            }),
-          },
-        )
-          .then((data) => data.json())
-          .catch((err) => console.log("ERROR IN MANAGE SUBSCRIPTIONS: ", err));
+        return await stripe.manageSubscriptions("cancel_immediately", targetId);
       },
     },
   },

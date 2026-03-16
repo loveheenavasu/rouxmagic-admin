@@ -1,3 +1,5 @@
+import { UserRole } from "./common";
+
 export interface UserProfile {
   created_at: string;
   email: string;
@@ -16,6 +18,7 @@ export interface Profile {
   tier: Tier;
   updated_at: string;
   user_id: string;
+  role: UserRole;
 }
 
 export enum Tier {

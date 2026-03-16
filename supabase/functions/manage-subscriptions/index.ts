@@ -59,26 +59,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // const token = req.headers.get("authorization");
+    const token = req.headers.get("authorization");
 
-    // if (!token) {
-    //   return new Response(
-    //     JSON.stringify({ error: "Authorization header missing" }),
-    //     { status: 401, headers: corsHeaders },
-    //   );
-    // }
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: "Authorization header missing" }),
+        { status: 401, headers: corsHeaders },
+      );
+    }
 
-    // const {
-    //   data: { user },
-    //   error: authError,
-    // } = await supabase.auth.getUser(token.replace("Bearer ", ""));
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token.replace("Bearer ", ""));
 
-    // if (authError || !user) {
-    //   return new Response(JSON.stringify({ error: "Invalid user token" }), {
-    //     status: 401,
-    //     headers: corsHeaders,
-    //   });
-    // }
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid user token" }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
 
     const { action, target_user_id } = await req.json();
 
