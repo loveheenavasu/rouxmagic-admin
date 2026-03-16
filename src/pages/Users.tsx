@@ -53,7 +53,7 @@ export default function Users() {
     try {
       toast.info("Canceling subscription...");
       const res = await admin.users.manageSubsctions.cancelImmediately(userId);
-      if (res?.success) {
+      if (res?.data) {
         toast.success("Subscription cancelled successfully.");
         setUsers(
           users.map((user) => {

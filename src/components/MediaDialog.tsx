@@ -24,7 +24,14 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { Content, ContentTypeEnum, Flag, ProjectFormData, FilterTypeEnum } from "@/types";
+import {
+  Content,
+  ContentTypeEnum,
+  Flag,
+  ProjectFormData,
+  FilterTypeEnum,
+  RequiredPlanEnum,
+} from "@/types";
 import { createBucketPath } from "@/helpers";
 import { Projects, Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
@@ -184,7 +191,10 @@ export default function MediaDialog({
       };
 
       if (filter_type === FilterTypeEnum.ContentType) {
-        const vals = (filter_value || "").split(",").map((v: string) => v.trim()).filter(Boolean);
+        const vals = (filter_value || "")
+          .split(",")
+          .map((v: string) => v.trim())
+          .filter(Boolean);
         if (vals.length > 1) vals.forEach((v: string) => addType(v));
         else addType(filter_value);
       } else if (filter_type === FilterTypeEnum.Audiobook) {
@@ -192,10 +202,13 @@ export default function MediaDialog({
       } else if (filter_type === FilterTypeEnum.Song) {
         addType(ContentTypeEnum.Song);
       } else if (filter_type === FilterTypeEnum.Listen) {
-        const vals = (filter_value || "").split(",").map((v: string) => v.trim());
+        const vals = (filter_value || "")
+          .split(",")
+          .map((v: string) => v.trim());
         vals.forEach((v: string) => {
           if (v.toLowerCase().includes("song")) addType(ContentTypeEnum.Song);
-          if (v.toLowerCase().includes("audiobook")) addType(ContentTypeEnum.Audiobook);
+          if (v.toLowerCase().includes("audiobook"))
+            addType(ContentTypeEnum.Audiobook);
         });
         if (vals.length === 0) addType(ContentTypeEnum.Song);
       } else if (filter_type === FilterTypeEnum.Flag) {
@@ -360,7 +373,10 @@ export default function MediaDialog({
         removeType(ContentTypeEnum.Song);
         removeType(ContentTypeEnum.Audiobook);
       } else if (filter_type === FilterTypeEnum.ContentType) {
-        const vals = (filter_value || "").split(",").map((v: string) => v.trim()).filter(Boolean);
+        const vals = (filter_value || "")
+          .split(",")
+          .map((v: string) => v.trim())
+          .filter(Boolean);
         if (vals.length > 1) vals.forEach((v: string) => removeType(v));
         else removeType(filter_value);
       } else if (filter_type === FilterTypeEnum.Audiobook) {
@@ -524,7 +540,7 @@ export default function MediaDialog({
               ? [(formData as any).content_type]
               : [];
           return types.some(
-            (t: any) => norm(t) === "audiobook" || norm(t) === "song"
+            (t: any) => norm(t) === "audiobook" || norm(t) === "song",
           );
         }
 
@@ -954,7 +970,7 @@ export default function MediaDialog({
     const missingFields = requiredFields.filter((field) => {
       if (
         availableFields.includes(field) ||
-        ["content_type", "status", "audio_url", "preview_url"].includes(field)
+        ["content_type", "status", "preview_url"].includes(field)
       ) {
         const value = (formData as any)[field];
         if (Array.isArray(value)) return value.length === 0;
@@ -1278,6 +1294,62 @@ export default function MediaDialog({
                   {stat.label} {currentStatuses.includes(stat.value) ? "✓" : ""}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-slate-400 italic">
+            Click a badge above to remove it. Multiple statuses allow an item to
+            be in both 'Released' and 'Coming Soon'.
+          </p>
+        </div>
+      );
+    }
+
+    // Special: Required Plan Select
+    if (key === "required_plan") {
+      return (
+        <div key={key}>
+          <Label htmlFor={key} className="font-medium">
+            Required Plan
+          </Label>
+          <Select
+            value={value || ""}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
+            <SelectTrigger className="mt-1.5 capitalize">
+              <SelectValue placeholder="Select required plan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
+              <SelectItem value={RequiredPlanEnum.AllAccess}>
+                All Access
+              </SelectItem>
+              <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
+    // Special: Required Plan Select
+    if (key === "required_plan") {
+      return (
+        <div key={key}>
+          <Label htmlFor={key} className="font-medium">
+            Required Plan
+          </Label>
+          <Select
+            value={value || ""}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
+            <SelectTrigger className="mt-1.5 capitalize">
+              <SelectValue placeholder="Select required plan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
+              <SelectItem value={RequiredPlanEnum.AllAccess}>
+                All Access
+              </SelectItem>
+              <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-slate-400 italic">

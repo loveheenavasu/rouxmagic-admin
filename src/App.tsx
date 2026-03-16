@@ -22,6 +22,8 @@ import Footer from "./pages/Footer";
 import ContentRows from "./pages/ContentRows";
 import NavigationPage from "./pages/NavigationPage";
 import About from "./pages/About";
+import Users from "./pages/Users";
+import Plans from "./pages/Plans";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -52,6 +54,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Home />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Users />
               </Layout>
             </ProtectedRoute>
           }
@@ -132,6 +144,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Shop />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/plans"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Plans />
               </Layout>
             </ProtectedRoute>
           }

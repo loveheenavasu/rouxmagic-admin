@@ -459,6 +459,21 @@ export default function Read() {
     }
   };
 
+  const readAllowedFields = [
+    "title",
+    "content_type",
+    "category",
+    "platform_name",
+    "status",
+    "release_year",
+    "notes",
+    "poster_url",
+    "external_url",
+    "required_plan",
+    "is_downloadable",
+    "preview_url",
+  ];
+
   const totalItems = items.length;
   const totalComics = items.filter(
     (m) => m.content_type === ContentTypeEnum.Comic,
@@ -785,6 +800,7 @@ export default function Read() {
         assignmentPage="read"
         selectedShelfId={selectedShelfId}
         defaultValues={{}}
+        allowedFields={readAllowedFields}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -1,6 +1,5 @@
 import { supabase } from "@/lib";
 import { StripePriceProduct } from "@/types";
-// import { StripeCheckoutOptions } from "@stripe/stripe-js";
 import { toast } from "sonner";
 
 const getUserAccessToken = async () => {

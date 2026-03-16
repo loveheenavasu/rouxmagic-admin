@@ -13,7 +13,7 @@ import { Loader2 } from "lucide-react";
 interface DeleteConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm?: () => void;
   title?: string;
   description?: string;
   itemName?: string;
