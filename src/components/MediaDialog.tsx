@@ -21,9 +21,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { Content, ContentTypeEnum, Flag, ProjectFormData } from "@/types";
+import {
+  Content,
+  ContentTypeEnum,
+  Flag,
+  ProjectFormData,
+  RequiredPlanEnum,
+} from "@/types";
 import { createBucketPath } from "@/helpers";
-import { Projects,Contents } from "@/api";
+import { Projects, Contents } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
@@ -52,7 +58,7 @@ export default function MediaDialog({
 }: MediaDialogProps) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>(
-    {} as ProjectFormData
+    {} as ProjectFormData,
   );
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(true);
@@ -70,7 +76,11 @@ export default function MediaDialog({
     (formData as any)?.content_type === "AudioBook" ||
     (formData as any)?.content_type === ContentTypeEnum.TvShow ||
     (formData as any)?.content_type === "TvShow" ||
-    (formData as any)?.content_type === "tv_show";
+    (formData as any)?.content_type === "tv_show" ||
+    (formData as any)?.content_type === ContentTypeEnum.Book ||
+    (formData as any)?.content_type === "Book" ||
+    (formData as any)?.content_type === ContentTypeEnum.Comic ||
+    (formData as any)?.content_type === "Comic";
 
   const {
     data: chapters = [],
@@ -96,11 +106,10 @@ export default function MediaDialog({
 
         throw new Error(
           supabaseError?.message ||
-          response.error?.message ||
-          "Failed to fetch chapters"
+            response.error?.message ||
+            "Failed to fetch chapters",
         );
       }
-
 
       const rows = Array.isArray(response.data)
         ? (response.data as any[])
@@ -108,11 +117,10 @@ export default function MediaDialog({
 
       // Hide deleted chapters if the schema supports soft-delete
       return rows.filter(
-        (r) => !("is_deleted" in r) || r.is_deleted !== true
+        (r) => !("is_deleted" in r) || r.is_deleted !== true,
       ) as Content[];
     },
   });
-
 
   const createChapterMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -123,8 +131,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to create chapter"
+            res.error?.message ||
+            "Failed to create chapter",
         );
       }
       return res.data;
@@ -149,8 +157,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to update chapter"
+            res.error?.message ||
+            "Failed to update chapter",
         );
       }
       return res.data;
@@ -176,8 +184,8 @@ export default function MediaDialog({
           | undefined;
         throw new Error(
           supabaseError?.message ||
-          res.error?.message ||
-          "Failed to delete chapter"
+            res.error?.message ||
+            "Failed to delete chapter",
         );
       }
     },
@@ -211,10 +219,10 @@ export default function MediaDialog({
           if (projects.length > 0) {
             const fields = Object.keys(projects[0])
               .filter(
-                (key) => !["id", "created_at", "updated_at"].includes(key)
+                (key) => !["id", "created_at", "updated_at"].includes(key),
               )
               .filter((key) =>
-                allowedFields ? allowedFields.includes(key) : true
+                allowedFields ? allowedFields.includes(key) : true,
               );
             setAvailableFields(fields);
 
@@ -269,7 +277,7 @@ export default function MediaDialog({
     // Validate required fields
     if (!formData.title || !formData.content_type || !formData.status) {
       toast.error(
-        "Please fill in all required fields (Title, Content Type, Status)"
+        "Please fill in all required fields (Title, Content Type, Status)",
       );
       return;
     }
@@ -343,7 +351,6 @@ export default function MediaDialog({
     }
   };
 
-
   const renderField = (key: string, value: any) => {
     const label = key
       .replace(/_/g, " ")
@@ -393,6 +400,32 @@ export default function MediaDialog({
             <SelectContent>
               <SelectItem value="released">Released</SelectItem>
               <SelectItem value="coming_soon">Coming Soon</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
+    // Special: Required Plan Select
+    if (key === "required_plan") {
+      return (
+        <div key={key}>
+          <Label htmlFor={key} className="font-medium">
+            Required Plan
+          </Label>
+          <Select
+            value={value || ""}
+            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+          >
+            <SelectTrigger className="mt-1.5 capitalize">
+              <SelectValue placeholder="Select required plan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
+              <SelectItem value={RequiredPlanEnum.AllAccess}>
+                All Access
+              </SelectItem>
+              <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -504,9 +537,9 @@ export default function MediaDialog({
 
         {/* Special handling for image/video/audio URLs to allow uploads */}
         {key === "poster_url" ||
-          key === "preview_url" ||
-          key === "audio_url" ||
-          key === "audio_preview_url" ? (
+        key === "preview_url" ||
+        key === "audio_url" ||
+        key === "audio_preview_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
@@ -539,16 +572,17 @@ export default function MediaDialog({
                       const safeName = file.name.replace(/\s+/g, "_");
                       const path =
                         key === "audio_url" || key === "audio_preview_url"
-                          ? `Audio/${formData.content_type ?? "generic"
-                          }/${Date.now()}-${safeName}`
+                          ? `Audio/${
+                              formData.content_type ?? "generic"
+                            }/${Date.now()}-${safeName}`
                           : createBucketPath(
-                            `${Date.now()}-${safeName}`,
-                            formData.content_type!
-                          );
+                              `${Date.now()}-${safeName}`,
+                              formData.content_type!,
+                            );
                       const publicUrl = await mediaService.uploadFile(
                         file,
                         bucket,
-                        path
+                        path,
                       );
                       handleChange(key as keyof ProjectFormData, publicUrl);
                       toast.success(`${label} uploaded successfully!`);
@@ -623,7 +657,7 @@ export default function MediaDialog({
                     !k.startsWith("in_") &&
                     k !== "featured" &&
                     k !== "is_downloadable" &&
-                    k !== "genres"
+                    k !== "genres",
                 )
                 .map((key) => renderField(key, (formData as any)[key]))}
 
@@ -633,7 +667,7 @@ export default function MediaDialog({
                     (k) =>
                       k.startsWith("in_") ||
                       k === "featured" ||
-                      k === "is_downloadable"
+                      k === "is_downloadable",
                   )
                   .map((key) => renderField(key, (formData as any)[key]))}
               </div>
@@ -653,15 +687,15 @@ export default function MediaDialog({
               />
             )}
 
-
             {/* Pairings section */}
             {projectId && (
               <PairingsSection
                 sourceId={projectId}
-                sourceRef={formData.content_type as unknown as PairingSourceEnum}
+                sourceRef={
+                  formData.content_type as unknown as PairingSourceEnum
+                }
               />
             )}
-
 
             <div className="flex justify-end gap-3 pb-2 pt-10">
               <Button

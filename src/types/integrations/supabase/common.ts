@@ -1,15 +1,16 @@
 export interface CommonSchema {
-    id:string;
-    created_at:string;
-    updated_at?:string;
+  id: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export enum Tables {
-    Projects = "projects",
-    Recipes = "recipes",
-    Contents = "contents",
-    Footer = "footer",
-    Pairings = "pairings"
+  Projects = "projects",
+  Recipes = "recipes",
+  Contents = "contents",
+  Footer = "footer",
+  Pairings = "pairings",
+  Plans = "plans",
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
@@ -20,7 +21,13 @@ export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
   single?: boolean;
   maybeSingle?: boolean;
   or?: string;
-  inValue?:{key: keyof FormData, value: any[]}
+  inValue?: { key: keyof FormData; value: any[] };
   search?: string;
   searchFields?: SearchField[];
+}
+
+export enum RequiredPlanEnum {
+  FREE = "Free",
+  AllAccess = "All_Access",
+  AdFree = "Ad_Free",
 }

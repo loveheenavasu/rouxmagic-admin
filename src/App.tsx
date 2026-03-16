@@ -20,6 +20,7 @@ import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Archive from "./pages/Archive";
 import Footer from "./pages/Footer";
+import Plans from "./pages/Plans";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -140,6 +141,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Users />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/plans"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Plans />
               </Layout>
             </ProtectedRoute>
           }

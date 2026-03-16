@@ -12,3 +12,4 @@ export * from "./api/args";
 export * from "./common";
 export * from "./integrations/stripe/stripe";
 export * from "./integrations/supabase/profiles";
+export * from "./integrations/supabase/plans";

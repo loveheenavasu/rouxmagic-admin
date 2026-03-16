@@ -22,6 +22,7 @@ import {
   Utensils,
   Archive,
   PanelBottom,
+  CreditCard,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -55,6 +56,7 @@ const navigation = [
   },
   { name: "Listen Library", href: "/listen", icon: Music },
   { name: "Read Library", href: "/read", icon: BookOpen },
+  { name: "Plans", href: "/plans", icon: CreditCard },
   { name: "Archive", href: "/archive", icon: Archive },
   { name: "Footer", href: "/footer", icon: PanelBottom },
   { name: "Users", href: "/users", icon: Users },

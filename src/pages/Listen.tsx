@@ -228,6 +228,7 @@ export default function Watch() {
     "release_date",
     "order_index",
     "created_at",
+    "required_plan",
   ];
   const confirmDelete = async () => {
     if (mediaToDelete) {

@@ -10,10 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe } from "@/types";
+import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe, RequiredPlanEnum } from "@/types";
 import PairingsSection from "@/components/PairingsSection";
 
 interface RecipeDialogProps {
@@ -135,6 +142,25 @@ export default function RecipeDialog({
                 className="mt-1.5"
                 required
               />
+            </div>
+
+            <div>
+              <Label htmlFor="required_plan" className="font-medium">
+                Required Plan
+              </Label>
+              <Select
+                value={formData.required_plan || ""}
+                onValueChange={(v) => handleChange("required_plan", v)}
+              >
+                <SelectTrigger className="mt-1.5 capitalize">
+                  <SelectValue placeholder="Select required plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
+                  <SelectItem value={RequiredPlanEnum.AllAccess}>All Access</SelectItem>
+                  <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="md:col-span-2">
