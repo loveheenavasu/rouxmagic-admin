@@ -1,4 +1,4 @@
-import { CommonSchema, GetTableOpts } from "./common";
+import { CommonSchema, GetTableOpts, RequiredPlanEnum } from "./common";
 
 export enum ProjectStatusEnum {
   Released = "released",
@@ -33,6 +33,7 @@ export interface ProjectMetaData {
   platform_name?: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  required_plan?: RequiredPlanEnum;
 }
 
 export interface ProjectFormData extends Partial<Project> {

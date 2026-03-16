@@ -21,13 +21,13 @@ interface TableBehaviour {
 export class CRUDWrapper<
   Table,
   TableFormData,
-  GetOptions extends GetTableOpts<any, any, any, any> = any
+  GetOptions extends GetTableOpts<any, any, any, any> = any,
 > {
   constructor(
     private readonly table_name: Tables,
     private readonly behaviour: TableBehaviour = {
       supports_soft_deletion: true,
-    }
+    },
   ) {}
 
   thisTable() {
@@ -39,7 +39,7 @@ export class CRUDWrapper<
 
   async createOne(
     data: TableFormData,
-    cbs?: Callbacks
+    cbs?: Callbacks,
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
 
@@ -60,7 +60,10 @@ export class CRUDWrapper<
         };
       }
 
-      const newPayload = deleteUnwantedValues(payload, ["undefined","emptystrings"]);
+      const newPayload = deleteUnwantedValues(payload, [
+        "undefined",
+        "emptystrings",
+      ]);
 
       const { data: apiData, error } = await supabase
         .from(this.table_name)
@@ -85,7 +88,7 @@ export class CRUDWrapper<
   async updateOneByID(
     tableId: string,
     update: Partial<TableFormData>,
-    cbs?: Callbacks
+    cbs?: Callbacks,
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
     try {
@@ -162,7 +165,7 @@ export class CRUDWrapper<
 
   async get(
     opts: GetOptions,
-    cbs?: Callbacks
+    cbs?: Callbacks,
   ): Promise<Response<Table | Table[]>> {
     cbs?.onLoadingStateChange?.(true);
     try {
@@ -242,7 +245,7 @@ export class CRUDWrapper<
 
   async deleteOneByIDPermanent(
     tableId: string,
-    cbs?: Callbacks
+    cbs?: Callbacks,
   ): Promise<Response<null>> {
     cbs?.onLoadingStateChange?.(true);
     try {
@@ -268,11 +271,11 @@ export class CRUDWrapper<
   async toogleSoftDeleteOneByID(
     tableId: string,
     intent: boolean,
-    cbs?: Callbacks
+    cbs?: Callbacks,
   ) {
     if (!this.behaviour.supports_soft_deletion) {
       throw new Error(
-        `Table '${this.table_name}' doesn't support soft deletion.`
+        `Table '${this.table_name}' doesn't support soft deletion.`,
       );
     }
     cbs?.onLoadingStateChange?.(true);

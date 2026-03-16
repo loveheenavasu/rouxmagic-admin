@@ -1,4 +1,4 @@
-import { CommonSchema, GetTableOpts } from "./common";
+import { CommonSchema, GetTableOpts, RequiredPlanEnum } from "./common";
 
 export enum ChapterStatusEnum {
   Released = "released",
@@ -26,6 +26,7 @@ export interface ContentMetaData {
   youtube_id?: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  required_plan?: RequiredPlanEnum;
 }
 
 export interface ContentFormData extends Partial<Content> {}
