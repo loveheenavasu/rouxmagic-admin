@@ -4,6 +4,7 @@ export interface PageSettingsMetaData {
   page_name: string;
   title?: string;
   subtitle?: string;
+  cta_text?: string;
 }
 
 export interface PageSettings extends CommonSchema, PageSettingsMetaData {}

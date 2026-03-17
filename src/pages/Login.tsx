@@ -3,15 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Lock, Mail } from "lucide-react";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("camron.j81@gmail.com");
+  const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
 
@@ -21,16 +27,14 @@ export default function Login() {
     setIsLoading(true);
 
     // Simulate API call delay
-    setTimeout(() => {
-      const success = login(email, password);
-      
-      if (success) {
-        navigate("/watch");
-      } else {
-        setError("Invalid email or password");
-      }
-      setIsLoading(false);
-    }, 500);
+    const success = await login(email, password);
+
+    if (success) {
+      navigate("/watch");
+    } else {
+      setError("Invalid email or password");
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -40,9 +44,7 @@ export default function Login() {
           <h1 className="text-4xl font-bold text-white mb-2">
             RouxMagic Admin
           </h1>
-          <p className="text-slate-300">
-            Cinematic Library Management
-          </p>
+          <p className="text-slate-300">Cinematic Library Management</p>
         </div>
 
         <Card>
@@ -96,11 +98,7 @@ export default function Login() {
                 </div>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </form>

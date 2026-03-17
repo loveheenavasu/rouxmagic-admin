@@ -22,6 +22,14 @@ import Footer from "./pages/Footer";
 import ContentRows from "./pages/ContentRows";
 import NavigationPage from "./pages/NavigationPage";
 import About from "./pages/About";
+import Users from "./pages/Users";
+import Plans from "./pages/Plans";
+import Faqs from "./pages/Faqs";
+import Deals from "./pages/Deals";
+import DealSteps from "./pages/DealSteps";
+import DealTerms from "./pages/DealTerms";
+import FeatureComparisons from "./pages/FeatureComparisons";
+import AppCredits from "./pages/AppCredits";
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -52,6 +60,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Home />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Users />
               </Layout>
             </ProtectedRoute>
           }
@@ -132,6 +150,76 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Shop />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/plans"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Plans />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pricings/faqs"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Faqs />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pricings/plan-comparison"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <FeatureComparisons />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app-credits"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AppCredits />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deals"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Deals />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deals/manage-steps"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DealSteps />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deals/terms"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DealTerms />
               </Layout>
             </ProtectedRoute>
           }

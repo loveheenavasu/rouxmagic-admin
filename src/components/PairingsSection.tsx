@@ -6,16 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import {
-    Card,
-    CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Pairings } from "@/api/integrations/supabase/pairings/pairings";
 import { Projects } from "@/api/integrations/supabase/projects/projects";
@@ -55,8 +52,8 @@ function PairingTagsDisplay({ item, pairedItemRef }: { item: any; pairedItemRef:
 }
 
 interface PairingsSectionProps {
-    sourceId: string;
-    sourceRef: PairingSourceEnum;
+  sourceId: string;
+  sourceRef: PairingSourceEnum;
 }
 
 export default function PairingsSection({ sourceId, sourceRef }: PairingsSectionProps) {
@@ -84,13 +81,13 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
         enabled: !!sourceId,
     });
 
-    // 2. Fetch details for paired items
-    const { data: pairedItems = [], isLoading: itemsLoading } = useQuery<any[]>({
-        queryKey: ["paired-items-details", existingPairings],
-        queryFn: async () => {
-            if (!existingPairings || existingPairings.length === 0) return [];
+  // 2. Fetch details for paired items
+  const { data: pairedItems = [], isLoading: itemsLoading } = useQuery<any[]>({
+    queryKey: ["paired-items-details", existingPairings],
+    queryFn: async () => {
+      if (!existingPairings || existingPairings.length === 0) return [];
 
-            const results: any[] = [];
+      const results: any[] = [];
 
             const pairedItemData = existingPairings.map(p => {
                 const isCurrentSource = String(p.source_id) === String(sourceId);
@@ -132,10 +129,10 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                 }
             }
 
-            return results;
-        },
-        enabled: !!existingPairings && existingPairings.length > 0,
-    });
+      return results;
+    },
+    enabled: !!existingPairings && existingPairings.length > 0,
+  });
 
     // 3. Search for new items to pair
     const { data: searchResults = [] } = useQuery({
@@ -216,17 +213,20 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
         onError: (err: any) => toast.error(err.message),
     });
 
-    const deletePairingMutation = useMutation({
-        mutationFn: async (pairingId: string) => {
-            const res = await pairingsAPI.toogleSoftDeleteOneByID(pairingId, true);
-            if (res.flag !== Flag.Success) throw new Error("Failed to remove pairing");
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["pairings", sourceId, sourceRef] });
-            toast.success("Pairing removed");
-        },
-        onError: (err: any) => toast.error(err.message),
-    });
+  const deletePairingMutation = useMutation({
+    mutationFn: async (pairingId: string) => {
+      const res = await pairingsAPI.toogleSoftDeleteOneByID(pairingId, true);
+      if (res.flag !== Flag.Success)
+        throw new Error("Failed to remove pairing");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["pairings", sourceId, sourceRef],
+      });
+      toast.success("Pairing removed");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
 
     const getSourceIcon = (type: string) => {
         switch (type) {
@@ -250,14 +250,16 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
         }
     };
 
-    return (
-        <div className="mt-8 pt-8 border-t space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-lg font-bold text-slate-900">Pair Well With</h3>
-                    <p className="text-sm text-muted-foreground">Manage recommendations and pairings for this content.</p>
-                </div>
-            </div>
+  return (
+    <div className="mt-8 pt-8 border-t space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">Pair Well With</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage recommendations and pairings for this content.
+          </p>
+        </div>
+      </div>
 
             {/* Existing Pairings */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -326,29 +328,36 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                 )}
             </div>
 
-            {/* Add New Pairing */}
-            <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4">
-                <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2">
-                    <Plus className="h-4 w-4" /> Add New Pairing
-                </h4>
+      {/* Add New Pairing */}
+      <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4">
+        <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+          <Plus className="h-4 w-4" /> Add New Pairing
+        </h4>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="w-full sm:w-48">
-                        <Label className="text-xs font-semibold mb-1.5 block">Target Table</Label>
-                        <Select value={targetRef} onValueChange={(v) => {
-                            setTargetRef(v as PairingSourceEnum);
-                            setSearchQuery("");
-                        }}>
-                            <SelectTrigger className="bg-white h-10">
-                                <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.values(PairingSourceEnum).map((type) => (
-                                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="w-full sm:w-48">
+            <Label className="text-xs font-semibold mb-1.5 block">
+              Target Table
+            </Label>
+            <Select
+              value={targetRef}
+              onValueChange={(v) => {
+                setTargetRef(v as PairingSourceEnum);
+                setSearchQuery("");
+              }}
+            >
+              <SelectTrigger className="bg-white h-10">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(PairingSourceEnum).map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
                     <div className="flex-1 relative">
                         <Label className="text-xs font-semibold mb-1.5 block">Search by Title</Label>

@@ -1,4 +1,4 @@
-import { CommonSchema, GetTableOpts } from "./common";
+import { CommonSchema, GetTableOpts, RequiredPlanEnum } from "./common";
 
 export enum RecipeCategory {
   Snacks = "snacks",
@@ -20,6 +20,7 @@ export interface RecipeMetadata {
   order_index?: number;
   is_deleted: boolean;
   deleted_at: string | null;
+  required_plan?: RequiredPlanEnum;
   flavor_tags?: string[];
 }
 

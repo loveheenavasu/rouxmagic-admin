@@ -1,4 +1,4 @@
-import { CommonSchema, GetTableOpts } from "./common";
+import { CommonSchema, GetTableOpts, RequiredPlanEnum } from "./common";
 
 export enum ProjectStatusEnum {
   Released = "released",
@@ -39,6 +39,7 @@ export interface ProjectMetaData {
   vibe_tags?: string[];
   rating?: string;
   row_type?: string | null;
+  required_plan?: RequiredPlanEnum;
 }
 
 export interface ProjectFormData extends Partial<Project> {

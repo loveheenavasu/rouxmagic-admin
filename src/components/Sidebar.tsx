@@ -20,10 +20,14 @@ import {
   Utensils,
   Trash2,
   PanelBottom,
+  CreditCard,
   LayoutList,
   ShoppingBag,
   Info,
   Link2,
+  BriefcaseBusiness,
+  Handshake,
+  LucideBlocks,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -59,6 +63,44 @@ const navigation = [
   { name: "Read Library", href: "/read", icon: BookOpen },
   { name: "Shop", href: "/shop", icon: ShoppingBag },
   { name: "About Page", href: "/about", icon: Info },
+  {
+    name: "Pricing",
+    href: "/plans",
+    icon: CreditCard,
+    subItems: [
+      { name: "Plans", href: "/plans", icon: CreditCard },
+      { name: "FAQs", href: "/pricings/faqs", icon: ImagePlay },
+      {
+        name: "Plan comparison",
+        href: "/pricings/plan-comparison",
+        icon: ImagePlay,
+      },
+      {
+        name: "App Credits",
+        href: "/app-credits",
+        icon: CreditCard,
+      },
+    ],
+  },
+  {
+    name: "Collaborations",
+    href: "/deals",
+    icon: Handshake,
+    subItems: [
+      { name: "Deals", href: "/deals", icon: BriefcaseBusiness },
+      {
+        name: "Manage Steps",
+        href: "/deals/manage-steps",
+        icon: LucideBlocks,
+      },
+      {
+        name: "Deal Terms",
+        href: "/deals/terms",
+        icon: BriefcaseBusiness,
+      },
+    ],
+  },
+  { name: "Users", href: "/users", icon: CreditCard },
   { name: "Archive", href: "/archive", icon: Trash2 },
   { name: "Content Rows", href: "/content-rows", icon: LayoutList },
   { name: "Navigation Header", href: "/navigation", icon: Link2 },
@@ -76,7 +118,7 @@ export default function Sidebar() {
     setExpandedItems((prev) =>
       prev.includes(itemName)
         ? prev.filter((name) => name !== itemName)
-        : [...prev, itemName]
+        : [...prev, itemName],
     );
   };
 
@@ -104,7 +146,7 @@ export default function Sidebar() {
           isMobileOpen
             ? "translate-x-0 w-64"
             : "-translate-x-full lg:translate-x-0",
-          sidebarCollapsed ? "lg:w-20" : "lg:w-64"
+          sidebarCollapsed ? "lg:w-20" : "lg:w-64",
         )}
       >
         <div className="flex flex-col h-full relative">
@@ -112,7 +154,7 @@ export default function Sidebar() {
           <div
             className={cn(
               "p-6 border-b flex items-center justify-between min-h-[97px]",
-              sidebarCollapsed ? "px-4 justify-center" : ""
+              sidebarCollapsed ? "px-4 justify-center" : "",
             )}
           >
             {!sidebarCollapsed && (
@@ -131,7 +173,7 @@ export default function Sidebar() {
               size="icon"
               className={cn(
                 "hidden lg:flex transition-all hover:bg-slate-100 rounded-full",
-                sidebarCollapsed ? "h-10 w-10" : "h-8 w-8"
+                sidebarCollapsed ? "h-10 w-10" : "h-8 w-8",
               )}
               onClick={toggleSidebar}
             >
@@ -157,7 +199,7 @@ export default function Sidebar() {
             <div
               className={cn(
                 "flex items-center gap-3",
-                sidebarCollapsed ? "justify-center" : ""
+                sidebarCollapsed ? "justify-center" : "",
               )}
             >
               <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-md">
@@ -180,7 +222,7 @@ export default function Sidebar() {
           <nav
             className={cn(
               "flex-1 p-4 space-y-1",
-              sidebarCollapsed ? "px-2" : "overflow-y-auto"
+              sidebarCollapsed ? "px-2" : "overflow-y-auto",
             )}
           >
             {navigation.map((item) => {
@@ -198,7 +240,7 @@ export default function Sidebar() {
                         "w-full flex items-center rounded-xl text-sm font-medium transition-all group relative h-11 px-3 gap-3",
                         isParentActive
                           ? "bg-indigo-50 text-indigo-600"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600",
                       )}
                     >
                       <item.icon
@@ -206,7 +248,7 @@ export default function Sidebar() {
                           "h-5 w-5 shrink-0 transition-transform group-hover:scale-110",
                           isParentActive
                             ? "text-indigo-600"
-                            : "text-slate-500 group-hover:text-indigo-600"
+                            : "text-slate-500 group-hover:text-indigo-600",
                         )}
                       />
                       <span className="truncate flex-1 text-left">
@@ -227,7 +269,7 @@ export default function Sidebar() {
                         sidebarCollapsed ? "justify-center px-0" : "px-3 gap-3",
                         isParentActive && !hasSubItems
                           ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600",
                       )}
                     >
                       <item.icon
@@ -235,7 +277,7 @@ export default function Sidebar() {
                           "h-5 w-5 shrink-0 transition-transform group-hover:scale-110",
                           isParentActive && !hasSubItems
                             ? "text-white"
-                            : "text-slate-500 group-hover:text-indigo-600"
+                            : "text-slate-500 group-hover:text-indigo-600",
                         )}
                       />
 
@@ -268,7 +310,7 @@ export default function Sidebar() {
                               "flex items-center rounded-lg text-sm font-medium transition-all group relative h-10 px-3 gap-3",
                               isSubActive
                                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-100"
-                                : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-indigo-600",
                             )}
                           >
                             <subItem.icon
@@ -276,7 +318,7 @@ export default function Sidebar() {
                                 "h-4 w-4 shrink-0",
                                 isSubActive
                                   ? "text-white"
-                                  : "text-slate-400 group-hover:text-indigo-600"
+                                  : "text-slate-400 group-hover:text-indigo-600",
                               )}
                             />
                             <span className="truncate">{subItem.name}</span>
@@ -298,7 +340,7 @@ export default function Sidebar() {
                 "w-full transition-all group relative h-11 rounded-xl",
                 sidebarCollapsed
                   ? "justify-center px-0"
-                  : "justify-start px-3 text-slate-600 hover:text-red-600 hover:bg-red-50"
+                  : "justify-start px-3 text-slate-600 hover:text-red-600 hover:bg-red-50",
               )}
               onClick={logout}
             >
@@ -307,7 +349,7 @@ export default function Sidebar() {
                   "h-5 w-5",
                   !sidebarCollapsed
                     ? "mr-3 text-slate-500 group-hover:text-red-600"
-                    : "text-slate-500 group-hover:text-red-600"
+                    : "text-slate-500 group-hover:text-red-600",
                 )}
               />
               {!sidebarCollapsed && <span className="font-medium">Logout</span>}
@@ -321,17 +363,15 @@ export default function Sidebar() {
             </Button>
           </div>
         </div>
-      </aside >
+      </aside>
 
       {/* Mobile overlay */}
-      {
-        isMobileOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-[44] lg:hidden"
-            onClick={() => setIsMobileOpen(false)}
-          />
-        )
-      }
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[44] lg:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
     </>
   );
 }

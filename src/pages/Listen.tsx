@@ -406,6 +406,7 @@ export default function ListenPage() {
     "release_date",
     "order_index",
     "created_at",
+    "required_plan",
   ];
   const confirmDelete = async () => {
     if (mediaToDelete) {
