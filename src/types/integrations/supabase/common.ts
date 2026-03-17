@@ -18,7 +18,12 @@ export enum Tables {
     Shop = "shop",
     ContentRows = "content_rows",
     NavigationItems = "navigation_items",
-    Songs = "v_songs"
+    Songs = "v_songs",
+    CommonFaqs = "common_faqs",
+    Deals = "deals",
+    DealSteps = "deal_steps",
+    DealTerms = "deal_terms",
+    FeatureComparisons = "feature_comparisons"
 }
 
 export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {

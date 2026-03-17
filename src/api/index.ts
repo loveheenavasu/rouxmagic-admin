@@ -7,3 +7,8 @@ export * from "./integrations/supabase/shop/shop"
 export * from "./integrations/supabase/navigation/navigation"
 export * from "./integrations/supabase/emailCapture/emailCaptureSettings"
 export * from "./integrations/supabase/songs/songs"
+export * from "./integrations/supabase/common_faqs/common_faqs";
+export * from "./integrations/supabase/deals/deals";
+export * from "./integrations/supabase/deal_steps/deal_steps";
+export * from "./integrations/supabase/deal_terms/deal_terms";
+export * from "./integrations/supabase/feature_comparisons/feature_comparisons";

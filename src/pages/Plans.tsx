@@ -12,9 +12,10 @@ import {
 import { Edit, Power, Loader2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { Plans } from "@/api/integrations/supabase/plans/plans";
-import { Flag, Plan } from "@/types";
+import { Flag, Plan, PageName } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import PlanDialog from "@/components/PlanDialog";
+import { PageSettingsCard } from "@/components/PageSettingsCard";
 
 const plansAPI = Plans as Required<typeof Plans>;
 
@@ -108,20 +109,32 @@ export default function PlansPage() {
 
   // Toggle Active mutation
   const toggleActiveMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+    mutationFn: async ({
+      id,
+      is_active,
+    }: {
+      id: string;
+      is_active: boolean;
+    }) => {
       const response = await plansAPI.updateOneByID(id, { is_active });
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||
         !response.data
       ) {
-        throw new Error(response.error?.message || "Failed to update plan status");
+        throw new Error(
+          response.error?.message || "Failed to update plan status",
+        );
       }
       return response.data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["plans"] });
-      toast.success(variables.is_active ? "Plan activated successfully!" : "Plan deactivated successfully!");
+      toast.success(
+        variables.is_active
+          ? "Plan activated successfully!"
+          : "Plan deactivated successfully!",
+      );
     },
     onError: (error: Error) => {
       toast.error(`Failed to update plan status: ${error.message}`);
@@ -139,7 +152,10 @@ export default function PlansPage() {
   };
 
   const handleToggleActive = async (plan: Plan) => {
-    await toggleActiveMutation.mutateAsync({ id: plan.id!, is_active: !plan.is_active });
+    await toggleActiveMutation.mutateAsync({
+      id: plan.id!,
+      is_active: !plan.is_active,
+    });
   };
 
   const handleSubmit = async (data: any) => {
@@ -149,8 +165,6 @@ export default function PlansPage() {
       await createMutation.mutateAsync(data);
     }
   };
-
-
 
   const activePlansCount = plansList.filter((p) => p.is_active).length;
 
@@ -179,10 +193,15 @@ export default function PlansPage() {
         handleNew={handleAddNew}
       />
 
+      <PageSettingsCard pageName={PageName.PricingMain} />
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[100px] font-bold text-muted-foreground">
+                Actions
+              </TableHead>
               <TableHead className="font-bold text-muted-foreground">
                 Name
               </TableHead>
@@ -207,7 +226,6 @@ export default function PlansPage() {
               <TableHead className="font-bold text-muted-foreground">
                 Active
               </TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -220,6 +238,28 @@ export default function PlansPage() {
             ) : !!plansList?.length ? (
               plansList.map((plan) => (
                 <TableRow key={plan.id}>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(plan)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleToggleActive(plan)}
+                        disabled={toggleActiveMutation.isPending}
+                        title={plan.is_active ? "Deactivate" : "Activate"}
+                      >
+                        <Power
+                          className={`h-4 w-4 ${plan.is_active ? "text-destructive" : "text-green-600"}`}
+                        />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium">{plan.name}</TableCell>
                   <TableCell className="text-muted-foreground font-mono text-sm">
                     {plan.stripe_price_id}
@@ -237,19 +277,33 @@ export default function PlansPage() {
                         {plan.badge}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground italic text-sm">-</span>
+                      <span className="text-muted-foreground italic text-sm">
+                        -
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="max-w-[200px] truncate text-sm text-slate-600" title={plan.description}>
-                      {plan.description || <span className="text-muted-foreground italic">-</span>}
+                    <div
+                      className="max-w-[200px] truncate text-sm text-slate-600"
+                      title={plan.description}
+                    >
+                      {plan.description || (
+                        <span className="text-muted-foreground italic">-</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="max-w-[150px] truncate text-sm text-slate-600" title={plan.features?.join(", ")}>
-                      {plan.features && plan.features.length > 0
-                        ? plan.features.join(", ")
-                        : <span className="text-muted-foreground italic">None</span>}
+                    <div
+                      className="max-w-[150px] truncate text-sm text-slate-600"
+                      title={plan.features?.join(", ")}
+                    >
+                      {plan.features && plan.features.length > 0 ? (
+                        plan.features.join(", ")
+                      ) : (
+                        <span className="text-muted-foreground italic">
+                          None
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -264,26 +318,6 @@ export default function PlansPage() {
                         <span className="hidden sm:inline">Inactive</span>
                       </div>
                     )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(plan)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleToggleActive(plan)}
-                        disabled={toggleActiveMutation.isPending}
-                        title={plan.is_active ? "Deactivate" : "Activate"}
-                      >
-                        <Power className={`h-4 w-4 ${plan.is_active ? 'text-destructive' : 'text-green-600'}`} />
-                      </Button>
-                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -308,7 +342,6 @@ export default function PlansPage() {
         onSubmit={handleSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
-
     </div>
   );
 }

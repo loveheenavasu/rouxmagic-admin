@@ -20,3 +20,8 @@ export * from "./integrations/supabase/navigation"
 export * from "./integrations/supabase/songs"
 export * from "./integrations/supabase/plans";
 export * from "./integrations/stripe/stripe"
+export * from "./integrations/supabase/common_faqs";
+export * from "./integrations/supabase/deals";
+export * from "./integrations/supabase/deal_steps";
+export * from "./integrations/supabase/deal_terms";
+export * from "./integrations/supabase/feature_comparisons";
