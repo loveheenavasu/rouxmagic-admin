@@ -86,7 +86,9 @@ export default function PlansPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await plansAPI.updateOneByID(id, data);
+      const response = await plansAPI.updateOneByID(id, data, undefined, {
+        allowFalsy: true,
+      });
       if (
         (response.flag !== Flag.Success &&
           response.flag !== Flag.UnknownOrSuccess) ||

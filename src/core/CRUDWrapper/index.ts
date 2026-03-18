@@ -2,6 +2,7 @@ import {
   Callbacks,
   Flag,
   GetTableOpts,
+  JSDataType,
   ProjectFormData,
   Response,
   Tables,
@@ -58,7 +59,9 @@ export class CRUDWrapper<
                 .split(",")
                 .map((g) => {
                   const trimmed = g.trim();
-                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                  return trimmed
+                    ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+                    : "";
                 })
                 .filter(Boolean)
             : [];
@@ -95,6 +98,7 @@ export class CRUDWrapper<
     tableId: string,
     update: Partial<TableFormData>,
     cbs?: Callbacks,
+    opts: { allowFalsy: boolean } = { allowFalsy: false },
   ): Promise<Response<Table>> {
     cbs?.onLoadingStateChange?.(true);
     try {
@@ -114,17 +118,20 @@ export class CRUDWrapper<
                 .split(",")
                 .map((g) => {
                   const trimmed = g.trim();
-                  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                  return trimmed
+                    ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+                    : "";
                 })
                 .filter(Boolean)
             : [];
           payload.genres = Array.from(new Set(items));
         }
       }
-      const newPayload = deleteUnwantedValues(payload, [
-        "undefined",
-        "emptystrings",
-      ]);
+      const unwantedValues = ["undefined", "emptystrings"];
+
+      const newPayload = !opts.allowFalsy
+        ? deleteUnwantedValues(payload, unwantedValues as JSDataType[])
+        : payload;
       // Check if update object is empty or has no valid fields
       if (!newPayload || Object.keys(newPayload).length === 0) {
         return new APIResponse(null, Flag.ValidationError, {

@@ -243,7 +243,7 @@ export default function PlanDialog({
                 </Label>
                 <Input
                   id="badge"
-                  value={formData.badge}
+                  value={formData.badge ?? ""}
                   onChange={(e) => handleChange("badge", e.target.value)}
                   placeholder="e.g. Most Popular"
                   className="mt-1.5"

@@ -1,7 +1,7 @@
 export function getDataType(value: unknown): JSDataType {
   if (value === null) return "null";
   if (typeof value === "string" && value.trim().length === 0)
-    return "emptystring" as JSDataType;
+    return "emptystrings";
   return typeof value as JSDataType;
 }
 
@@ -24,9 +24,6 @@ export function deleteUnwantedValues<T extends Record<string, any>>(
   const result: Partial<T> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    if (typeof value === "string" && value.trim() === "") {
-      continue;
-    }
     const datatype = getDataType(value);
     if (datatypes.includes(datatype)) {
       continue;
