@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from "./stores/authStore";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./contexts/AuthContext";
 import Login from "./pages/Login";
 import Home from "./pages/home";
 import HomeCarousel from "./pages/home/HomeCarousel";
@@ -36,7 +37,8 @@ function App() {
 
   return (
     <Router>
-      <Routes>
+      <AuthProvider>
+        <Routes>
         {/* Public Routes */}
         <Route
           path="/login"
@@ -278,6 +280,7 @@ function App() {
         {/* 404 Redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </AuthProvider>
     </Router>
   );
 }

@@ -103,6 +103,23 @@ export function PageSettingsCard({
     },
   });
 
+  const handleUpdate = () => {
+    if (!title.trim()) {
+      toast.error("Page Title is required and cannot be empty.");
+      return;
+    }
+    if (shouldAcceptSubtitle && !subtitle.trim()) {
+      toast.error("Page Subtitle is required and cannot be empty.");
+      return;
+    }
+    if (shouldAcceptCtaText && !ctaText.trim()) {
+      toast.error("CTA Text is required and cannot be empty.");
+      return;
+    }
+
+    updateMutation.mutate();
+  };
+
   const content = (
     <div className="p-6 space-y-6">
       {isLoading ? (
@@ -120,7 +137,7 @@ export function PageSettingsCard({
               className="flex items-center gap-2 font-semibold text-slate-700 text-sm"
             >
               <Type className="h-3.5 w-3.5 text-slate-400" />
-              Page Title
+              Page Title *
             </Label>
             <Input
               id="page_title"
@@ -137,7 +154,7 @@ export function PageSettingsCard({
                 className="flex items-center gap-2 font-semibold text-slate-700 text-sm"
               >
                 <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
-                Page Subtitle
+                Page Subtitle *
               </Label>
               <Input
                 id="page_subtitle"
@@ -155,7 +172,7 @@ export function PageSettingsCard({
                 className="flex items-center gap-2 font-semibold text-slate-700 text-sm"
               >
                 <Type className="h-3.5 w-3.5 text-slate-400" />
-                CTA Text
+                CTA Text *
               </Label>
               <Input
                 id="page_cta_text"
@@ -171,7 +188,7 @@ export function PageSettingsCard({
 
       <div className="flex justify-end pt-4">
         <Button
-          onClick={() => updateMutation.mutate()}
+          onClick={handleUpdate}
           disabled={updateMutation.isPending || isLoading}
           className="rounded-md bg-indigo-600 hover:bg-indigo-700 h-10 px-6 shadow-sm"
         >

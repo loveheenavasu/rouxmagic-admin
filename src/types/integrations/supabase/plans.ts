@@ -10,6 +10,7 @@ export interface PlanMetaData {
   features?: string[];
   description?: string;
   badge?: string;
+  default_cta_text?: string;
 }
 
 export interface PlanFormData extends PlanMetaData {

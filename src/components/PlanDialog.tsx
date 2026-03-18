@@ -43,6 +43,7 @@ const emptyForm: PlanFormData = {
   featuresString: "",
   description: "",
   badge: "",
+  default_cta_text: "Subscribe",
 };
 
 export default function PlanDialog({
@@ -57,6 +58,7 @@ export default function PlanDialog({
   const [searchQuery, setSearchQuery] = useState("");
   const [noProduct, setNoProduct] = useState(false);
   const [featureToRemove, setFeatureToRemove] = useState<number | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleNoProductChange = (checked: boolean) => {
     setNoProduct(checked);
@@ -101,12 +103,14 @@ export default function PlanDialog({
           featuresString: plan.features?.join("\n") || "",
           description: plan.description || "",
           badge: plan.badge || "",
+          default_cta_text: plan.default_cta_text || "Subscribe",
         });
         setNoProduct(!plan.stripe_price_id);
       } else {
         setFormData(emptyForm);
         setNoProduct(false);
       }
+      setValidationError(null);
     }
   }, [open, plan]);
 
@@ -118,6 +122,11 @@ export default function PlanDialog({
     e.preventDefault();
 
     if (!formData.name) {
+      return;
+    }
+
+    if (formData.amount < 0) {
+      setValidationError("Amount cannot be less than zero.");
       return;
     }
 
@@ -227,17 +236,33 @@ export default function PlanDialog({
               />
             </div>
 
-            <div>
-              <Label htmlFor="badge" className="font-medium">
-                Badge Text
-              </Label>
-              <Input
-                id="badge"
-                value={formData.badge}
-                onChange={(e) => handleChange("badge", e.target.value)}
-                placeholder="e.g. Most Popular"
-                className="mt-1.5"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="badge" className="font-medium">
+                  Badge Text
+                </Label>
+                <Input
+                  id="badge"
+                  value={formData.badge}
+                  onChange={(e) => handleChange("badge", e.target.value)}
+                  placeholder="e.g. Most Popular"
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="default_cta_text" className="font-medium">
+                  Default CTA Text
+                </Label>
+                <Input
+                  id="default_cta_text"
+                  value={formData.default_cta_text || ""}
+                  onChange={(e) =>
+                    handleChange("default_cta_text", e.target.value)
+                  }
+                  placeholder="e.g. Subscribe"
+                  className="mt-1.5"
+                />
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -344,7 +369,7 @@ export default function PlanDialog({
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {plan ? "Update Plan" : "Add Plan"}
+                {plan ? "Save changes" : "Add Plan"}
               </Button>
             </div>
           </form>
@@ -369,6 +394,23 @@ export default function PlanDialog({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!validationError}
+        onOpenChange={(open) => !open && setValidationError(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Invalid Plan Data</AlertDialogTitle>
+            <AlertDialogDescription>{validationError}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setValidationError(null)}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

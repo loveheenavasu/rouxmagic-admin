@@ -61,6 +61,7 @@ export default function FeatureComparisons() {
   const [featureKey, setFeatureKey] = useState("");
   const [featureName, setFeatureName] = useState("");
   const [order, setOrder] = useState(0);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   // Plans Selection & Values Tracking
   const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
@@ -234,11 +235,50 @@ export default function FeatureComparisons() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!featureKey || !featureName) {
       toast.error("Feature Key and Feature Name are required");
       return;
+    }
+
+    try {
+      setIsSwapping(true);
+      // Check for order collision
+      const conflictFeature = featuresList.find(
+        (f) => f.order === order && f.id !== selectedFeature?.id
+      );
+
+      if (conflictFeature && conflictFeature.id) {
+        // We have a collision. We need to swap/shift it.
+        let newOrderForConflict = 0;
+        if (selectedFeature && selectedFeature.order !== undefined) {
+          // Swap: conflicting item takes the old order of the item we are updating
+          newOrderForConflict = selectedFeature.order;
+        } else {
+          // Shift to end: conflicting item is pushed to a new highest index
+          newOrderForConflict =
+            featuresList.length > 0
+              ? Math.max(...featuresList.map((f) => f.order || 0)) + 1
+              : 0;
+        }
+
+        const response = await FeatureComparisonsAPI.updateOneByID(conflictFeature.id, {
+          order: newOrderForConflict,
+        });
+
+        if (response.flag !== Flag.Success) {
+          toast.error("Failed to reorder the conflicting feature.");
+          setIsSwapping(false);
+          return;
+        }
+      }
+    } catch (err: any) {
+      toast.error("Failed to process order swap.");
+      setIsSwapping(false);
+      return;
+    } finally {
+      setIsSwapping(false);
     }
 
     // Build the JSON structure perfectly matching the schema requirement
@@ -271,7 +311,7 @@ export default function FeatureComparisons() {
     }
   };
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isSaving = isSwapping || createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
