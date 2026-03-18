@@ -62,6 +62,8 @@ export default function Deals() {
     price: 0,
   });
   const [isUploading, setIsUploading] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -169,6 +171,7 @@ export default function Deals() {
   });
 
   const handleOpenDialog = (deal?: Deal) => {
+    setValidationError(null);
     if (deal) {
       setSelectedDeal(deal);
       setFormData({
@@ -218,11 +221,51 @@ export default function Deals() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || formData.price === undefined) {
       toast.error("Title and Price are required");
       return;
+    }
+
+    if ((formData.price || 0) < 0 || (formData.credit_amount || 0) < 0) {
+      setValidationError("Price and Credit Amount cannot be less than zero.");
+      return;
+    }
+
+    try {
+      setIsSwapping(true);
+      const conflictDeal = dealsList.find(
+        (d) => d.order === formData.order && d.id !== selectedDeal?.id
+      );
+
+      if (conflictDeal && conflictDeal.id) {
+        let newOrderForConflict = 0;
+        if (selectedDeal && selectedDeal.order !== undefined) {
+          newOrderForConflict = selectedDeal.order;
+        } else {
+          newOrderForConflict =
+            dealsList.length > 0
+              ? Math.max(...dealsList.map((d) => d.order || 0)) + 1
+              : 0;
+        }
+
+        const response = await DealsAPI.updateOneByID(conflictDeal.id, {
+          order: newOrderForConflict,
+        });
+
+        if (response.flag !== Flag.Success) {
+          toast.error("Failed to reorder the conflicting deal.");
+          setIsSwapping(false);
+          return;
+        }
+      }
+    } catch (err: any) {
+      toast.error("Failed to process order swap.");
+      setIsSwapping(false);
+      return;
+    } finally {
+      setIsSwapping(false);
     }
 
     if (selectedDeal) {
@@ -232,7 +275,7 @@ export default function Deals() {
     }
   };
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isSaving = isSwapping || createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -642,6 +685,23 @@ export default function Deals() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete Deal"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!validationError}
+        onOpenChange={(open) => !open && setValidationError(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Invalid Deal Data</AlertDialogTitle>
+            <AlertDialogDescription>{validationError}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setValidationError(null)}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

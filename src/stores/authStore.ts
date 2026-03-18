@@ -56,6 +56,7 @@ export const useAuthStore = create<AuthStore>()(
         return false;
       },
       logout: () => {
+        supabase.auth.signOut();
         set({
           user: null,
           isAuthenticated: false,

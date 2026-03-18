@@ -104,7 +104,7 @@ export const stripe = {
   },
   async manageSubscriptions(
     action: "cancel_immediately" | "cancel_on_end" | "resume",
-    targetUserId?: string
+    targetUserId?: string,
   ) {
     const token = await getUserAccessToken();
     return fetch(
@@ -120,11 +120,11 @@ export const stripe = {
     )
       .then((res) => res.json())
       .then((data) => {
-        return { data, error: null };
+        return { data: data?.success || data, error: null };
       })
       .catch((error) => {
         console.error(error);
-        return { error, data: null };
+        return { error, data: false };
       });
   },
   async getSubscription() {

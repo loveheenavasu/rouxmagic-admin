@@ -28,11 +28,12 @@ import {
 import { toast } from "sonner";
 import { admin } from "@/api/integrations/supabase/users/admin";
 import { Tier, UserProfile } from "@/types/integrations/supabase/profiles";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 
 export default function Users() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingUserId, setCancellingUserId] = useState<string | null>(null);
   const [error] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,9 +52,10 @@ export default function Users() {
 
   const handleCancelSubscription = async (userId: string) => {
     try {
+      setCancellingUserId(userId);
       toast.info("Canceling subscription...");
       const res = await admin.users.manageSubsctions.cancelImmediately(userId);
-      if (res?.data) {
+      if (res?.data && !res?.error) {
         toast.success("Subscription cancelled successfully.");
         setUsers(
           users.map((user) => {
@@ -69,9 +71,14 @@ export default function Users() {
             return user;
           }),
         );
+      } else {
+        const errorMsg = (res?.error as any)?.message || "Failed to cancel subscription.";
+        toast.error(errorMsg);
       }
     } catch (err: any) {
       toast.error(err.message || "An unexpected error occurred");
+    } finally {
+      setCancellingUserId(null);
     }
   };
 
@@ -152,47 +159,53 @@ export default function Users() {
                       </TableCell>
                       <TableCell>
                         <div className="relative inline-block mt-1">
-                          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                            {user.profile?.tier || "free"}
-                          </span>
-                          {user.profile?.tier &&
-                            user.profile.tier !== Tier.Free && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <button
-                                    className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full border border-red-500 bg-red-100/90 text-red-600 hover:bg-red-200 dark:border-red-800 dark:bg-red-900/90 dark:text-red-400 transition-colors backdrop-blur-sm shadow-sm"
-                                    title="Cancel Subscription"
-                                  >
-                                    <X className="h-2.5 w-2.5 flex-shrink-0 stroke-[3]" />
-                                  </button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Are you absolutely sure?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will
-                                      immediately cancel the active subscription
-                                      for {user.profile?.name || user.email}.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      onClick={() =>
-                                        handleCancelSubscription(user.id)
-                                      }
-                                    >
-                                      Confirm Cancel
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
+                          {cancellingUserId === user.id ? (
+                            <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                          ) : (
+                            <>
+                              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                {user.profile?.tier || "free"}
+                              </span>
+                              {user.profile?.tier &&
+                                user.profile.tier !== Tier.Free && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <button
+                                        className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full border border-red-500 bg-red-100/90 text-red-600 hover:bg-red-200 dark:border-red-800 dark:bg-red-900/90 dark:text-red-400 transition-colors backdrop-blur-sm shadow-sm"
+                                        title="Cancel Subscription"
+                                      >
+                                        <X className="h-2.5 w-2.5 flex-shrink-0 stroke-[3]" />
+                                      </button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Are you absolutely sure?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This action cannot be undone. This will
+                                          immediately cancel the active subscription
+                                          for {user.profile?.name || user.email}.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>
+                                          Cancel
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          onClick={() =>
+                                            handleCancelSubscription(user.id)
+                                          }
+                                        >
+                                          Confirm Cancel
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                            </>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
