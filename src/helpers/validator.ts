@@ -84,9 +84,6 @@ const validator = {
       const result: Partial<T> = {};
     
       for (const [key, value] of Object.entries(obj)) {
-        if (typeof value === "string" && value.trim() === "") {
-          continue;
-        }
         const datatype = getDataType(value);
         if (datatypes.includes(datatype)) {
           continue;
