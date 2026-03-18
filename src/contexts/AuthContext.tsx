@@ -19,9 +19,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check if there is an existing Supabase session on first load.
     // This is the source of truth — not what's in localStorage.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        // If there's no session but Zustand says we're authenticated,
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      let activeSession = session;
+
+      if (activeSession) {
+        const expiresAt = activeSession.expires_at ? activeSession.expires_at * 1000 : 0;
+        const isExpired = Date.now() >= expiresAt;
+
+        // "letting the supabase refresh the token first"
+        if (isExpired) {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData.session) {
+            activeSession = null;
+          } else {
+            activeSession = refreshData.session;
+          }
+        }
+      }
+
+      if (!activeSession) {
+        // If there's no active session but Zustand says we're authenticated,
         // force a logout to sync the state.
         const isAuthenticated = useAuthStore.getState().isAuthenticated;
         if (isAuthenticated) {
