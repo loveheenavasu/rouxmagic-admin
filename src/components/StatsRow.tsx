@@ -17,6 +17,7 @@ interface StatsRowProps {
   title: string;
   description: string;
   handleNew: () => void;
+  buttonInnerText?: string;
 }
 
 export function StatsRow({
@@ -24,6 +25,7 @@ export function StatsRow({
   title,
   description,
   handleNew,
+  buttonInnerText = "Add New Content",
 }: StatsRowProps) {
   return (
     <div>
@@ -39,7 +41,7 @@ export function StatsRow({
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
         >
           <Plus className="mr-2 h-5 w-5" />
-          Add New Content
+          {buttonInnerText}
         </Button>
       </div>
       <div className="grid gap-4 md:grid-cols-4">

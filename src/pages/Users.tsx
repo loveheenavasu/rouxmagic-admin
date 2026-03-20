@@ -29,12 +29,41 @@ import { toast } from "sonner";
 import { admin } from "@/api/integrations/supabase/users/admin";
 import { Tier, UserProfile } from "@/types/integrations/supabase/profiles";
 import { X, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/lib/supabase";
+import { StatsRow } from "@/components/StatsRow";
 
 export default function Users() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingUserId, setCancellingUserId] = useState<string | null>(null);
   const [error] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    role: "user",
+    is_verified: true,
+  });
 
   useEffect(() => {
     async function fetchUsers() {
@@ -72,7 +101,8 @@ export default function Users() {
           }),
         );
       } else {
-        const errorMsg = (res?.error as any)?.message || "Failed to cancel subscription.";
+        const errorMsg =
+          (res?.error as any)?.message || "Failed to cancel subscription.";
         toast.error(errorMsg);
       }
     } catch (err: any) {
@@ -82,14 +112,166 @@ export default function Users() {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.email || !createForm.password) {
+      toast.error("Please fill in email and password.");
+      return;
+    }
+    if (createForm.password !== createForm.confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: createForm,
+      });
+      if (error) throw error;
+      if (data && data.error) throw new Error(data.error);
+
+      toast.success("User created successfully.");
+      setIsCreateOpen(false);
+      setCreateForm({
+        email: "",
+        password: "",
+        confirmPassword: "",
+        role: "user",
+        is_verified: true,
+      });
+
+      // Refresh users
+      setLoading(true);
+      const fetchRes = await admin.getAllUsers();
+      if (!fetchRes.error) {
+        setUsers(fetchRes.users || []);
+      }
+      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create user.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Users</h1>
-        <p className="text-muted-foreground">
-          Manage user accounts and permissions
-        </p>
-      </div>
+      <StatsRow
+        title="Users"
+        description="Manage user accounts and permissions"
+        handleNew={() => setIsCreateOpen(true)}
+        buttonInnerText="Create New User"
+      />
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleCreateUser}>
+            <DialogHeader>
+              <DialogTitle>Create New User</DialogTitle>
+              <DialogDescription>
+                Create a new user using the Supabase Admin API.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  className="col-span-3"
+                  value={createForm.email}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, email: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="password" className="text-right">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  className="col-span-3"
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, password: e.target.value })
+                  }
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="confirmPassword" className="text-right">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  className="col-span-3"
+                  value={createForm.confirmPassword}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, confirmPassword: e.target.value })
+                  }
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Role</Label>
+                <Select
+                  value={createForm.role}
+                  onValueChange={(val) =>
+                    setCreateForm({ ...createForm, role: val })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Verified toggle — hidden for now, hardcoded to true
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Verified</Label>
+                <div className="col-span-3 flex items-center space-x-2">
+                  <Switch
+                    checked={createForm.is_verified}
+                    onCheckedChange={(val) =>
+                      setCreateForm({ ...createForm, is_verified: val })
+                    }
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {createForm.is_verified ? "Yes" : "No"}
+                  </span>
+                </div>
+              </div>
+              */}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -183,9 +365,10 @@ export default function Users() {
                                           Are you absolutely sure?
                                         </AlertDialogTitle>
                                         <AlertDialogDescription>
-                                          This action cannot be undone. This will
-                                          immediately cancel the active subscription
-                                          for {user.profile?.name || user.email}.
+                                          This action cannot be undone. This
+                                          will immediately cancel the active
+                                          subscription for{" "}
+                                          {user.profile?.name || user.email}.
                                         </AlertDialogDescription>
                                       </AlertDialogHeader>
                                       <AlertDialogFooter>

@@ -1,5 +1,5 @@
-import { JSDataType } from '@/types';
-import { getDataType } from './fn';
+import { JSDataType } from "@/types";
+import { getDataType } from "./fn";
 
 const validator = {
   response: {
@@ -12,9 +12,9 @@ const validator = {
       }
     },
     hasProperty: (obj: object | string, key: string): boolean => {
-      if (typeof obj === 'string' && validator.response.isValidJson(obj)) {
+      if (typeof obj === "string" && validator.response.isValidJson(obj)) {
         return Object.prototype.hasOwnProperty.call(JSON.parse(obj), key);
-      } else if (typeof obj === 'object') {
+      } else if (typeof obj === "object") {
         return Object.prototype.hasOwnProperty.call(obj, key);
       } else {
         return false;
@@ -24,16 +24,16 @@ const validator = {
       return Array.isArray(arr);
     },
     isValidObject(obj: any): boolean {
-      return obj && typeof obj === 'object' && !Array.isArray(obj);
+      return obj && typeof obj === "object" && !Array.isArray(obj);
     },
     isString(arg: any): boolean {
-      return typeof arg === 'string' || arg instanceof String;
+      return typeof arg === "string" || arg instanceof String;
     },
     isBoolean(arg: any): boolean {
-      return typeof arg === 'boolean';
+      return typeof arg === "boolean";
     },
     isNumber(arg: any): boolean {
-      return typeof arg === 'number' && isFinite(arg);
+      return typeof arg === "number" && isFinite(arg);
     },
   },
   form: {
@@ -45,14 +45,14 @@ const validator = {
   amend: {
     deleteKey<T extends Record<string, any>, K extends keyof T>(
       obj: T,
-      key: K
+      key: K,
     ): Omit<T, K> {
       const { [key]: _, ...rest } = obj;
       return rest;
     },
     deleteKeyIteratable<
       T extends ReadonlyArray<Record<string, any>>,
-      K extends Extract<keyof T[number], string>
+      K extends Extract<keyof T[number], string>,
     >(
       arr: T,
       key: K,
@@ -60,7 +60,7 @@ const validator = {
         where?: {
           datatypes: Array<JSDataType>;
         };
-      }
+      },
     ): Array<Omit<T[number], K> | T[number]> {
       return arr.map((item) => {
         const value = item[key];
@@ -79,10 +79,10 @@ const validator = {
     },
     deleteUnwantedValues<T extends Record<string, any>>(
       obj: T,
-      datatypes: JSDataType[]
+      datatypes: JSDataType[],
     ): Partial<T> {
       const result: Partial<T> = {};
-    
+
       for (const [key, value] of Object.entries(obj)) {
         const datatype = getDataType(value);
         if (datatypes.includes(datatype)) {
@@ -90,13 +90,13 @@ const validator = {
         }
         (result as Record<string, unknown>)[key] = value;
       }
-    
+
       return result;
     },
     overrideProperty<T extends Record<string, any>, K extends keyof T>(
       obj: T,
       key: K,
-      value: T[K]
+      value: T[K],
     ): T {
       return {
         ...obj,
