@@ -371,21 +371,23 @@ export default function PlanDialog({
               )}
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
-              <Checkbox
-                id="is_active"
-                checked={formData.is_active}
-                onCheckedChange={(checked: boolean) =>
-                  handleChange("is_active", checked)
-                }
-              />
-              <Label
-                htmlFor="is_active"
-                className="font-bold cursor-pointer text-sm"
-              >
-                Is Active
-              </Label>
-            </div>
+            {formData.stripe_product_id !== "prod_U7ZOZiVysCdEQ9" && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
+                <Checkbox
+                  id="is_active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked: boolean) =>
+                    handleChange("is_active", checked)
+                  }
+                />
+                <Label
+                  htmlFor="is_active"
+                  className="font-bold cursor-pointer text-sm"
+                >
+                  Is Active
+                </Label>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button

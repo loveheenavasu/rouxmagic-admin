@@ -141,11 +141,6 @@ export default function PlansPage() {
     },
   });
 
-  const handleAddNew = () => {
-    setSelectedPlan(null);
-    setIsPlanDialogOpen(true);
-  };
-
   const handleEdit = (plan: Plan) => {
     setSelectedPlan(plan);
     setIsPlanDialogOpen(true);
@@ -190,7 +185,6 @@ export default function PlansPage() {
         ]}
         title="Subscription Plans"
         description="Manage the pricing plans synced with Stripe."
-        handleNew={handleAddNew}
       />
 
       <PageSettingsCard pageName={PageName.PricingMain} />
@@ -247,17 +241,19 @@ export default function PlansPage() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleToggleActive(plan)}
-                        disabled={toggleActiveMutation.isPending}
-                        title={plan.is_active ? "Deactivate" : "Activate"}
-                      >
-                        <Power
-                          className={`h-4 w-4 ${plan.is_active ? "text-destructive" : "text-green-600"}`}
-                        />
-                      </Button>
+                      {plan.stripe_product_id !== "prod_U7ZOZiVysCdEQ9" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleToggleActive(plan)}
+                          disabled={toggleActiveMutation.isPending}
+                          title={plan.is_active ? "Deactivate" : "Activate"}
+                        >
+                          <Power
+                            className={`h-4 w-4 ${plan.is_active ? "text-destructive" : "text-green-600"}`}
+                          />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">{plan.name}</TableCell>
