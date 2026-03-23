@@ -15,8 +15,6 @@ export const admin = {
           error,
         };
       }
-
-      console.log("DATA HERE: ", data);
       return {
         users: data.users,
         error: null,

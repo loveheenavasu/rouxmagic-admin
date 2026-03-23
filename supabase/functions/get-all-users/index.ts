@@ -38,17 +38,28 @@ serve(async (req) => {
       throw profilesError
     }
 
+    // Fetch all plans
+    const { data: plans, error: plansError } = await supabaseClient
+      .from('plans')
+      .select('*')
+
+    if (plansError) {
+      throw plansError
+    }
+
     // Merge users and profiles, picking only necessary fields
     //@ts-ignore
     const mergedUsers = users.users.map((user) => {
       //@ts-ignore
       const profile = profiles.find((p) => p.user_id === user.id)
+      //@ts-ignore
+      const plan = plans.find((pl) => pl.stripe_product_id === profile?.tier) || null
       return {
         id: user.id,
         email: user.email,
         created_at: user.created_at,
         last_active_at: user.last_sign_in_at,
-        profile: profile || null,
+        profile: profile ? { ...profile, plan } : null,
       }
     })
 

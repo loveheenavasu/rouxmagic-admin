@@ -3,6 +3,7 @@ import { CommonSchema, GetTableOpts } from "./common";
 export interface PlanMetaData {
   name: string;
   stripe_price_id: string;
+  stripe_product_id?: string;
   amount: number;
   currency: string;
   interval: string;

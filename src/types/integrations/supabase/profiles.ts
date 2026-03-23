@@ -1,12 +1,12 @@
 import { UserRole } from "./common";
+import { Plan } from "./plans";
 
 export interface UserProfile {
   created_at: string;
   email: string;
   id: string;
-  last_sign_in_at: string;
-  role: string;
-  profile: Profile;
+  last_active_at: string;
+  profile: Profile | null;
 }
 
 export interface Profile {
@@ -15,14 +15,11 @@ export interface Profile {
   id: string;
   stripe_customer_id: string;
   subscription_id: string;
-  tier: Tier;
+  /** Raw stripe_product_id stored in DB */
+  tier: string | null;
   updated_at: string;
   user_id: string;
   role: UserRole;
-}
-
-export enum Tier {
-  AllAccess = "All-Access",
-  Free = "Free",
-  AdFree = "Ad-Free",
+  /** Resolved plan from plans table via stripe_product_id */
+  plan: Plan | null;
 }

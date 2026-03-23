@@ -167,4 +167,39 @@ export const stripe = {
         return { error, data: null };
       });
   },
+  async updatePlan(payload: {
+    plan_id: string;
+    name?: string;
+    amount?: number;
+    interval?: string;
+    currency?: string;
+    features?: string[];
+    description?: string;
+    badge?: string;
+    is_active?: boolean;
+    default_cta_text?: string;
+    stripe_product_id?: string;
+    stripe_price_id?: string;
+  }) {
+    const token = await getUserAccessToken();
+    return fetch(
+      "https://okusfcxayekqgpbmwyev.supabase.co/functions/v1/update-stripe-plans",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "update_plan", ...payload }),
+      },
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        return { data, error: null };
+      })
+      .catch((error) => {
+        console.error(error);
+        return { error, data: null };
+      });
+  },
 };

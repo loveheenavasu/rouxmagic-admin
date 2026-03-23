@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { admin } from "@/api/integrations/supabase/users/admin";
-import { Tier, UserProfile } from "@/types/integrations/supabase/profiles";
+import { UserProfile } from "@/types/integrations/supabase/profiles";
 import { X, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -91,10 +91,9 @@ export default function Users() {
             if (user.id === userId) {
               return {
                 ...user,
-                profile: {
-                  ...user.profile,
-                  tier: Tier.Free,
-                },
+                profile: user.profile
+                  ? { ...user.profile, tier: null, plan: null }
+                  : null,
               };
             }
             return user;
@@ -214,7 +213,10 @@ export default function Users() {
                   className="col-span-3"
                   value={createForm.confirmPassword}
                   onChange={(e) =>
-                    setCreateForm({ ...createForm, confirmPassword: e.target.value })
+                    setCreateForm({
+                      ...createForm,
+                      confirmPassword: e.target.value,
+                    })
                   }
                   required
                   minLength={6}
@@ -346,47 +348,46 @@ export default function Users() {
                           ) : (
                             <>
                               <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                {user.profile?.tier || "free"}
+                                {user.profile?.plan?.name ?? "Free"}
                               </span>
-                              {user.profile?.tier &&
-                                user.profile.tier !== Tier.Free && (
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <button
-                                        className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full border border-red-500 bg-red-100/90 text-red-600 hover:bg-red-200 dark:border-red-800 dark:bg-red-900/90 dark:text-red-400 transition-colors backdrop-blur-sm shadow-sm"
-                                        title="Cancel Subscription"
+                              {user.profile?.plan && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <button
+                                      className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full border border-red-500 bg-red-100/90 text-red-600 hover:bg-red-200 dark:border-red-800 dark:bg-red-900/90 dark:text-red-400 transition-colors backdrop-blur-sm shadow-sm"
+                                      title="Cancel Subscription"
+                                    >
+                                      <X className="h-2.5 w-2.5 flex-shrink-0 stroke-[3]" />
+                                    </button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>
+                                        Are you absolutely sure?
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This action cannot be undone. This will
+                                        immediately cancel the active
+                                        subscription for{" "}
+                                        {user.profile?.name || user.email}.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>
+                                        Cancel
+                                      </AlertDialogCancel>
+                                      <AlertDialogAction
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        onClick={() =>
+                                          handleCancelSubscription(user.id)
+                                        }
                                       >
-                                        <X className="h-2.5 w-2.5 flex-shrink-0 stroke-[3]" />
-                                      </button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>
-                                          Are you absolutely sure?
-                                        </AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          This action cannot be undone. This
-                                          will immediately cancel the active
-                                          subscription for{" "}
-                                          {user.profile?.name || user.email}.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>
-                                          Cancel
-                                        </AlertDialogCancel>
-                                        <AlertDialogAction
-                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          onClick={() =>
-                                            handleCancelSubscription(user.id)
-                                          }
-                                        >
-                                          Confirm Cancel
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                )}
+                                        Confirm Cancel
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
                             </>
                           )}
                         </div>

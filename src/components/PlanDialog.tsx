@@ -35,6 +35,7 @@ interface PlanDialogProps {
 const emptyForm: PlanFormData = {
   name: "",
   stripe_price_id: "",
+  stripe_product_id: "",
   amount: 0,
   currency: "usd",
   interval: "month",
@@ -56,16 +57,9 @@ export default function PlanDialog({
   const [formData, setFormData] = useState<PlanFormData>(emptyForm);
   const [newFeature, setNewFeature] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [noProduct, setNoProduct] = useState(false);
+  const [dontLinkProduct, setDontLinkProduct] = useState(false);
   const [featureToRemove, setFeatureToRemove] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  const handleNoProductChange = (checked: boolean) => {
-    setNoProduct(checked);
-    if (checked) {
-      handleChange("stripe_price_id", "");
-    }
-  };
 
   const handleAddFeature = () => {
     if (!newFeature.trim()) return;
@@ -89,12 +83,21 @@ export default function PlanDialog({
     setFeatureToRemove(null);
   };
 
+  const handleDontLinkProductChange = (checked: boolean) => {
+    setDontLinkProduct(checked);
+    if (checked) {
+      handleChange("stripe_product_id", "");
+      handleChange("stripe_price_id", "");
+    }
+  };
+
   useEffect(() => {
     if (open) {
       if (plan) {
         setFormData({
           name: plan.name,
           stripe_price_id: plan.stripe_price_id,
+          stripe_product_id: plan.stripe_product_id || "",
           amount: plan.amount,
           currency: plan.currency,
           interval: plan.interval,
@@ -105,10 +108,10 @@ export default function PlanDialog({
           badge: plan.badge || "",
           default_cta_text: plan.default_cta_text || "Subscribe",
         });
-        setNoProduct(!plan.stripe_price_id);
+        setDontLinkProduct(!plan.stripe_product_id && !plan.stripe_price_id);
       } else {
         setFormData(emptyForm);
-        setNoProduct(false);
+        setDontLinkProduct(false);
       }
       setValidationError(null);
     }
@@ -127,6 +130,11 @@ export default function PlanDialog({
 
     if (formData.amount < 0) {
       setValidationError("Amount cannot be less than zero.");
+      return;
+    }
+
+    if (!dontLinkProduct && formData.stripe_product_id?.trim() && !formData.stripe_price_id?.trim()) {
+      setValidationError("Stripe Price ID is required when Stripe Product ID is provided.");
       return;
     }
 
@@ -163,8 +171,28 @@ export default function PlanDialog({
             </div>
 
             <div>
+              <Label htmlFor="stripe_product_id" className="font-medium">
+                Stripe Product ID
+              </Label>
+              <Input
+                id="stripe_product_id"
+                value={formData.stripe_product_id ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleChange("stripe_product_id", val);
+                  if (!val.trim()) {
+                    handleChange("stripe_price_id", "");
+                  }
+                }}
+                placeholder="prod_..."
+                className="mt-1.5"
+                disabled={dontLinkProduct}
+              />
+            </div>
+
+            <div>
               <Label htmlFor="stripe_price_id" className="font-medium">
-                Stripe Price ID *
+                Stripe Price ID {!dontLinkProduct && !!formData.stripe_product_id?.trim() && "*"}
               </Label>
               <Input
                 id="stripe_price_id"
@@ -174,22 +202,23 @@ export default function PlanDialog({
                 }
                 placeholder="price_1..."
                 className="mt-1.5"
-                required={!noProduct}
-                disabled={noProduct}
+                required={!dontLinkProduct && !!formData.stripe_product_id?.trim()}
+                disabled={dontLinkProduct || !formData.stripe_product_id?.trim()}
               />
-              <div className="flex items-center gap-2 mt-2">
-                <Checkbox
-                  id="noProduct"
-                  checked={noProduct}
-                  onCheckedChange={handleNoProductChange}
-                />
-                <Label
-                  htmlFor="noProduct"
-                  className="text-sm cursor-pointer text-muted-foreground"
-                >
-                  Doesn't have product yet
-                </Label>
-              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-1 mb-4">
+              <Checkbox
+                id="dontLinkProduct"
+                checked={dontLinkProduct}
+                onCheckedChange={handleDontLinkProductChange}
+              />
+              <Label
+                htmlFor="dontLinkProduct"
+                className="text-sm cursor-pointer text-muted-foreground font-medium"
+              >
+                Don't link any product with this plan
+              </Label>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
