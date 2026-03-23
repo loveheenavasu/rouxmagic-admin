@@ -12,6 +12,7 @@ import {
 import { Edit, Power, Loader2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { Plans } from "@/api/integrations/supabase/plans/plans";
+import { stripe as stripeAPI } from "@/api/integrations/stripe/stripe";
 import { Flag, Plan, PageName } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import PlanDialog from "@/components/PlanDialog";
@@ -86,15 +87,12 @@ export default function PlansPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await plansAPI.updateOneByID(id, data, undefined, {
-        allowFalsy: true,
-      });
-      if (
-        (response.flag !== Flag.Success &&
-          response.flag !== Flag.UnknownOrSuccess) ||
-        !response.data
-      ) {
-        throw new Error(response.error?.message || "Failed to update plan");
+      const response = await stripeAPI.updatePlan({ plan_id: id, ...data });
+      if (response.error) {
+        throw new Error(response.error.message || "Failed to update plan");
+      }
+      if (response.data && response.data.error) {
+        throw new Error(response.data.error);
       }
       return response.data;
     },
