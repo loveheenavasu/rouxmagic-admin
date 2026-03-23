@@ -35,6 +35,8 @@ async function updatePlan(payload: any) {
     badge,
     is_active,
     default_cta_text,
+    stripe_product_id,
+    stripe_price_id,
   } = payload;
 
   if (!plan_id) throw new Error("plan_id required");
@@ -48,7 +50,10 @@ async function updatePlan(payload: any) {
 
   if (!plan) throw new Error("Plan not found");
 
-  let newPriceId = plan.stripe_price_id;
+  let targetProductId = stripe_product_id !== undefined ? (stripe_product_id || null) : plan.stripe_product_id;
+  let targetPriceId = stripe_price_id !== undefined ? (stripe_price_id || null) : plan.stripe_price_id;
+
+  let newPriceId = targetPriceId;
 
   const isAmountChanged = amount !== undefined && amount !== plan.amount;
   const isIntervalChanged =
@@ -56,18 +61,24 @@ async function updatePlan(payload: any) {
   const isCurrencyChanged =
     currency !== undefined && currency !== plan.currency;
 
+  const isPriceIdOverridden = stripe_price_id !== undefined;
+
   const shouldCreateNewPrice =
-    isAmountChanged || isIntervalChanged || isCurrencyChanged;
+    (isAmountChanged || isIntervalChanged || isCurrencyChanged) && !isPriceIdOverridden;
 
   // 🔥 STEP 1: Update product name (safe)
-  if (name && plan.stripe_product_id) {
-    await stripe.products.update(plan.stripe_product_id, {
-      name,
-    });
+  if (name && targetProductId) {
+    try {
+      await stripe.products.update(targetProductId, {
+        name,
+      });
+    } catch (e) {
+      console.log("Could not update product name in Stripe", e);
+    }
   }
 
   // 🔥 STEP 2: Create NEW price (DO NOT DELETE OLD)
-  if (shouldCreateNewPrice && plan.stripe_product_id) {
+  if (shouldCreateNewPrice && targetProductId) {
     console.log("🚀 Creating new price...");
 
     const newPrice = await stripe.prices.create(
@@ -78,18 +89,22 @@ async function updatePlan(payload: any) {
           interval || plan.interval
             ? { interval: interval || plan.interval }
             : undefined,
-        product: plan.stripe_product_id,
+        product: targetProductId,
       },
       {
-        idempotencyKey: `plan-${plan_id}-${amount}-${interval}-${currency}`,
+        idempotencyKey: `plan-${plan_id}-${amount ?? plan.amount}-${interval ?? plan.interval}-${currency ?? plan.currency}-${Date.now()}`,
       },
     );
 
     newPriceId = newPrice.id;
 
-    await stripe.products.update(plan.stripe_product_id, {
-      default_price: newPriceId,
-    });
+    try {
+      await stripe.products.update(targetProductId, {
+        default_price: newPriceId,
+      });
+    } catch (e) {
+      console.log("Could not update default_price on product in Stripe", e);
+    }
 
     // ❌ DO NOT deactivate old price here (causes error)
   }
@@ -107,6 +122,7 @@ async function updatePlan(payload: any) {
       badge: badge ?? plan.badge,
       is_active: is_active ?? plan.is_active,
       default_cta_text: default_cta_text ?? plan.default_cta_text,
+      stripe_product_id: targetProductId,
       stripe_price_id: newPriceId,
     })
     .eq("id", plan_id);

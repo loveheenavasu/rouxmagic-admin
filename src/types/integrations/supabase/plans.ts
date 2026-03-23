@@ -2,7 +2,7 @@ import { CommonSchema, GetTableOpts } from "./common";
 
 export interface PlanMetaData {
   name: string;
-  stripe_price_id: string;
+  stripe_price_id?: string;
   stripe_product_id?: string;
   amount: number;
   currency: string;
@@ -22,12 +22,11 @@ export type GetPlansBy = "is_active" | "interval" | "currency";
 export type SortPlansBy = "created_at" | "amount";
 export type SearchablePlanField = "name" | "stripe_price_id";
 
-export interface GetPlansOpts
-  extends GetTableOpts<
-    GetPlansBy,
-    SortPlansBy,
-    PlanFormData,
-    SearchablePlanField
-  > {}
+export interface GetPlansOpts extends GetTableOpts<
+  GetPlansBy,
+  SortPlansBy,
+  PlanFormData,
+  SearchablePlanField
+> {}
 
 export interface Plan extends CommonSchema, PlanMetaData {}

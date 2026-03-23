@@ -16,7 +16,7 @@ interface StatsRowProps {
   items?: StatItem[];
   title: string;
   description: string;
-  handleNew: () => void;
+  handleNew?: () => void;
   buttonInnerText?: string;
 }
 
@@ -36,13 +36,15 @@ export function StatsRow({
           </h1>
           <p className="text-muted-foreground mt-1">{description}</p>
         </div>
-        <Button
-          onClick={handleNew}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          {buttonInnerText}
-        </Button>
+        {handleNew && (
+          <Button
+            onClick={handleNew}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-11 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02]"
+          >
+            <Plus className="mr-2 h-5 w-5" />
+            {buttonInnerText}
+          </Button>
+        )}
       </div>
       <div className="grid gap-4 md:grid-cols-4">
         {items?.map((item) => (
