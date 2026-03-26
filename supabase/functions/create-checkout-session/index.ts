@@ -5,7 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
   //@ts-ignore
-  Deno.env.get("STRIPE_SECRET_KEY")!,
+  Deno.env.get("STRIPE_API_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
   },
@@ -140,7 +140,6 @@ Deno.serve(async (req) => {
       ui_mode: "custom",
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { user_id: user.id },
-      return_url: "http://localhost:8080/watch",
       payment_method_collection: "if_required",
       saved_payment_method_options: { payment_method_save: "enabled" },
     });

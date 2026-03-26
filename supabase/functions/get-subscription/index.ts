@@ -5,7 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
   //@ts-ignore
-  Deno.env.get("STRIPE_SECRET_KEY")!,
+  Deno.env.get("STRIPE_API_KEY")!,
   {
     apiVersion: "2025-03-31.basil",
   },
