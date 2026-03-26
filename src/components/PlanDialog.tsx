@@ -133,8 +133,14 @@ export default function PlanDialog({
       return;
     }
 
-    if (!dontLinkProduct && formData.stripe_product_id?.trim() && !formData.stripe_price_id?.trim()) {
-      setValidationError("Stripe Price ID is required when Stripe Product ID is provided.");
+    if (
+      !dontLinkProduct &&
+      formData.stripe_product_id?.trim() &&
+      !formData.stripe_price_id?.trim()
+    ) {
+      setValidationError(
+        "Stripe Price ID is required when Stripe Product ID is provided.",
+      );
       return;
     }
 
@@ -192,7 +198,10 @@ export default function PlanDialog({
 
             <div>
               <Label htmlFor="stripe_price_id" className="font-medium">
-                Stripe Price ID {!dontLinkProduct && !!formData.stripe_product_id?.trim() && "*"}
+                Stripe Price ID{" "}
+                {!dontLinkProduct &&
+                  !!formData.stripe_product_id?.trim() &&
+                  "*"}
               </Label>
               <Input
                 id="stripe_price_id"
@@ -202,8 +211,12 @@ export default function PlanDialog({
                 }
                 placeholder="price_1..."
                 className="mt-1.5"
-                required={!dontLinkProduct && !!formData.stripe_product_id?.trim()}
-                disabled={dontLinkProduct || !formData.stripe_product_id?.trim()}
+                required={
+                  !dontLinkProduct && !!formData.stripe_product_id?.trim()
+                }
+                disabled={
+                  dontLinkProduct || !formData.stripe_product_id?.trim()
+                }
               />
             </div>
 
@@ -371,23 +384,21 @@ export default function PlanDialog({
               )}
             </div>
 
-            {formData.stripe_product_id !== "prod_U7ZOZiVysCdEQ9" && (
-              <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
-                <Checkbox
-                  id="is_active"
-                  checked={formData.is_active}
-                  onCheckedChange={(checked: boolean) =>
-                    handleChange("is_active", checked)
-                  }
-                />
-                <Label
-                  htmlFor="is_active"
-                  className="font-bold cursor-pointer text-sm"
-                >
-                  Is Active
-                </Label>
-              </div>
-            )}
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
+              <Checkbox
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked: boolean) =>
+                  handleChange("is_active", checked)
+                }
+              />
+              <Label
+                htmlFor="is_active"
+                className="font-bold cursor-pointer text-sm"
+              >
+                Is Active
+              </Label>
+            </div>
 
             <div className="flex justify-end gap-2 pt-4">
               <Button
