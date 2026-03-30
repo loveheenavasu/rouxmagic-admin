@@ -12,3 +12,5 @@ export * from "./integrations/supabase/deals/deals";
 export * from "./integrations/supabase/deal_steps/deal_steps";
 export * from "./integrations/supabase/deal_terms/deal_terms";
 export * from "./integrations/supabase/feature_comparisons/feature_comparisons";
+export * from "./integrations/supabase/plans/plans";
+

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,8 @@ import {
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe, RequiredPlanEnum } from "@/types";
+import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe, Flag } from "@/types";
+import { Plans } from "@/api";
 import PairingsSection from "@/components/PairingsSection";
 import { smartParse } from "@/lib/utils";
 
@@ -61,6 +63,31 @@ export default function RecipeDialog({
 }: RecipeDialogProps) {
   const [formData, setFormData] = useState<RecipeFormData>(emptyForm);
   const [isUploading, setIsUploading] = useState<string | null>(null);
+
+  // Fetch available plans
+  const { data: plans = [] } = useQuery({
+    queryKey: ["available-plans"],
+    queryFn: async () => {
+      const resp = await (Plans as any).get({
+        eq: [],
+        sort: "name",
+        sortBy: "asc",
+      });
+
+      if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
+        console.error("Failed to fetch plans:", resp.error);
+        return [];
+      }
+
+      return Array.isArray(resp.data)
+        ? resp.data
+        : resp.data
+          ? [resp.data].filter(Boolean)
+          : [];
+    },
+    enabled: open,
+    staleTime: 300_000,
+  });
 
   useEffect(() => {
     if (open) {
@@ -186,9 +213,11 @@ export default function RecipeDialog({
                   <SelectValue placeholder="Select required plan" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
-                  <SelectItem value={RequiredPlanEnum.AllAccess}>All Access</SelectItem>
-                  <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
+                  {plans.map((plan: any) => (
+                    <SelectItem key={plan.id} value={plan.stripe_product_id || "Free"}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

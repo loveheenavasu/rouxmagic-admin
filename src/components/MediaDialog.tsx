@@ -30,10 +30,9 @@ import {
   Flag,
   ProjectFormData,
   FilterTypeEnum,
-  RequiredPlanEnum,
 } from "@/types";
 import { createBucketPath } from "@/helpers";
-import { Projects, Contents } from "@/api";
+import { Projects, Contents, Plans } from "@/api";
 import ChapterDialog from "@/components/ChapterDialog";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import ChaptersSection from "@/components/ChaptersSection";
@@ -498,6 +497,31 @@ export default function MediaDialog({
       enabled: open,
       staleTime: 30_000,
     });
+
+  // Fetch available plans for selection
+  const { data: plans = [] } = useQuery({
+    queryKey: ["available-plans"],
+    queryFn: async () => {
+      const resp = await (Plans as any).get({
+        eq: [],
+        sort: "name",
+        sortBy: "asc",
+      });
+
+      if (resp.flag !== Flag.Success && resp.flag !== Flag.UnknownOrSuccess) {
+        console.error("Failed to fetch plans:", resp.error);
+        return [];
+      }
+
+      return Array.isArray(resp.data)
+        ? resp.data
+        : resp.data
+          ? [resp.data].filter(Boolean)
+          : [];
+    },
+    enabled: open,
+    staleTime: 300_000, // Plans don't change often
+  });
 
   // Calculate matched rows based on current formData. Memoized to prevent flicker from recalculation.
   const matchedRows = useMemo(
@@ -1319,43 +1343,13 @@ export default function MediaDialog({
               <SelectValue placeholder="Select required plan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
-              <SelectItem value={RequiredPlanEnum.AllAccess}>
-                All Access
-              </SelectItem>
-              <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
+              {plans.map((plan: any) => (
+                <SelectItem key={plan.id} value={plan.stripe_product_id || "Free"}>
+                  {plan.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </div>
-      );
-    }
-
-    // Special: Required Plan Select
-    if (key === "required_plan") {
-      return (
-        <div key={key}>
-          <Label htmlFor={key} className="font-medium">
-            Required Plan
-          </Label>
-          <Select
-            value={value || ""}
-            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
-          >
-            <SelectTrigger className="mt-1.5 capitalize">
-              <SelectValue placeholder="Select required plan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={RequiredPlanEnum.FREE}>Free</SelectItem>
-              <SelectItem value={RequiredPlanEnum.AllAccess}>
-                All Access
-              </SelectItem>
-              <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-slate-400 italic">
-            Click a badge above to remove it. Multiple statuses allow an item to
-            be in both 'Released' and 'Coming Soon'.
-          </p>
         </div>
       );
     }
