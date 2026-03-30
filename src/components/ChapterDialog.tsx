@@ -11,18 +11,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ContentContentTypeEnum, ContentFormData, ContentTypeEnum, RequiredPlanEnum } from "@/types";
+  ContentContentTypeEnum,
+  ContentFormData,
+  ContentTypeEnum,
+  // RequiredPlanEnum,
+} from "@/types";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
 import { smartParse } from "@/lib/utils";
-
 
 interface ChapterDialogProps {
   open: boolean;
@@ -48,7 +52,6 @@ const emptyForm: ContentFormData = {
   runtime_minutes: undefined,
   release_year: undefined,
   youtube_id: "",
-
 };
 
 export default function ChapterDialog({
@@ -64,14 +67,17 @@ export default function ChapterDialog({
   const [isUploading, setIsUploading] = useState(false);
   const [isThumbnailUploading, setIsThumbnailUploading] = useState(false);
 
-
   useEffect(() => {
     if (!open) return;
     if (chapter) {
       const cleanedChapter = { ...chapter };
       // Deeply unwrap and clean potentially corrupted strings
       Object.entries(cleanedChapter).forEach(([key, value]) => {
-        if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+        if (
+          typeof value === "string" &&
+          value.trim().startsWith("[") &&
+          value.trim().endsWith("]")
+        ) {
           const parsed = smartParse(value);
           (cleanedChapter as any)[key] = parsed.join(", ");
         }
@@ -115,7 +121,11 @@ export default function ChapterDialog({
         <DialogHeader>
           <DialogTitle>{chapter ? "Edit Chapter" : "Add Chapter"}</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {isAudiobook ? "Manage audiobook chapters." : isTvShow ? "Manage TV show episodes." : "Manage chapters."}
+            {isAudiobook
+              ? "Manage audiobook chapters."
+              : isTvShow
+                ? "Manage TV show episodes."
+                : "Manage chapters."}
           </DialogDescription>
         </DialogHeader>
 
@@ -137,8 +147,6 @@ export default function ChapterDialog({
               />
             </div>
 
-
-
             {isTvShow && (
               <>
                 <div>
@@ -150,7 +158,10 @@ export default function ChapterDialog({
                     type="number"
                     value={formData.season_number ?? ""}
                     onChange={(e) =>
-                      setFormData((p) => ({ ...p, season_number: parseInt(e.target.value) || undefined }))
+                      setFormData((p) => ({
+                        ...p,
+                        season_number: parseInt(e.target.value) || undefined,
+                      }))
                     }
                     placeholder="1"
                     className="mt-1.5"
@@ -165,7 +176,10 @@ export default function ChapterDialog({
                     type="number"
                     value={formData.episode_number ?? ""}
                     onChange={(e) =>
-                      setFormData((p) => ({ ...p, episode_number: parseInt(e.target.value) || undefined }))
+                      setFormData((p) => ({
+                        ...p,
+                        episode_number: parseInt(e.target.value) || undefined,
+                      }))
                     }
                     placeholder="1"
                     className="mt-1.5"
@@ -184,7 +198,10 @@ export default function ChapterDialog({
                   type="number"
                   value={formData.release_year ?? ""}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, release_year: parseInt(e.target.value) || undefined }))
+                    setFormData((p) => ({
+                      ...p,
+                      release_year: parseInt(e.target.value) || undefined,
+                    }))
                   }
                   placeholder="2024"
                   className="mt-1.5"
@@ -203,7 +220,10 @@ export default function ChapterDialog({
                     type="number"
                     value={formData.runtime_minutes ?? ""}
                     onChange={(e) =>
-                      setFormData((p) => ({ ...p, runtime_minutes: parseInt(e.target.value) || undefined }))
+                      setFormData((p) => ({
+                        ...p,
+                        runtime_minutes: parseInt(e.target.value) || undefined,
+                      }))
                     }
                     placeholder="45"
                     className="mt-1.5"
@@ -236,7 +256,10 @@ export default function ChapterDialog({
                     id="description"
                     value={formData.description ?? ""}
                     onChange={(e) =>
-                      setFormData((p) => ({ ...p, description: e.target.value }))
+                      setFormData((p) => ({
+                        ...p,
+                        description: e.target.value,
+                      }))
                     }
                     placeholder="Describe the episode..."
                     className="mt-1.5"
@@ -260,7 +283,7 @@ export default function ChapterDialog({
               </>
             )}
 
-            <div className="md:col-span-2">
+            {/* <div className="md:col-span-2">
               <Label htmlFor="required_plan" className="font-medium">
                 Required Plan
               </Label>
@@ -279,7 +302,7 @@ export default function ChapterDialog({
                   <SelectItem value={RequiredPlanEnum.AdFree}>Ad Free</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div> */}
 
             {/* Content URL / Audio URL */}
             <div className="md:col-span-2">
@@ -315,9 +338,12 @@ export default function ChapterDialog({
                           const publicUrl = await mediaService.uploadFile(
                             file,
                             bucket,
-                            path
+                            path,
                           );
-                          setFormData((p) => ({ ...p, content_url: publicUrl }));
+                          setFormData((p) => ({
+                            ...p,
+                            content_url: publicUrl,
+                          }));
                           toast.success("File uploaded successfully!");
                         } catch (error: any) {
                           toast.error(`Upload failed: ${error.message}`);
@@ -331,7 +357,9 @@ export default function ChapterDialog({
                     type="button"
                     variant="outline"
                     disabled={isUploading}
-                    onClick={() => document.getElementById("chapter-file-upload")?.click()}
+                    onClick={() =>
+                      document.getElementById("chapter-file-upload")?.click()
+                    }
                     className="h-10 px-3 bg-slate-50 border-dashed"
                   >
                     {isUploading ? (
@@ -354,11 +382,12 @@ export default function ChapterDialog({
                 <div className="mt-1.5 flex gap-2">
                   <Input
                     id="thumbnail_url"
-                    value={
-                      formData.thumbnail_url
-                      ?? ""}
+                    value={formData.thumbnail_url ?? ""}
                     onChange={(e) =>
-                      setFormData((p) => ({ ...p, thumbnail_url: e.target.value }))
+                      setFormData((p) => ({
+                        ...p,
+                        thumbnail_url: e.target.value,
+                      }))
                     }
                     placeholder="https://..."
                     className="flex-1"
@@ -381,9 +410,12 @@ export default function ChapterDialog({
                             const publicUrl = await mediaService.uploadFile(
                               file,
                               bucket,
-                              path
+                              path,
                             );
-                            setFormData((p) => ({ ...p, thumbnail_url: publicUrl }));
+                            setFormData((p) => ({
+                              ...p,
+                              thumbnail_url: publicUrl,
+                            }));
                             toast.success("Image uploaded successfully!");
                           } catch (error: any) {
                             toast.error(`Upload failed: ${error.message}`);
@@ -397,7 +429,11 @@ export default function ChapterDialog({
                       type="button"
                       variant="outline"
                       disabled={isThumbnailUploading}
-                      onClick={() => document.getElementById("thumbnail-file-upload")?.click()}
+                      onClick={() =>
+                        document
+                          .getElementById("thumbnail-file-upload")
+                          ?.click()
+                      }
                       className="h-10 px-3 bg-slate-50 border-dashed"
                     >
                       {isThumbnailUploading ? (
@@ -411,7 +447,6 @@ export default function ChapterDialog({
                 </div>
               </div>
             )}
-
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -430,6 +465,6 @@ export default function ChapterDialog({
           </div>
         </form>
       </DialogContent>
-    </Dialog >
+    </Dialog>
   );
 }
