@@ -28,7 +28,7 @@ import {
 import { toast } from "sonner";
 import { admin } from "@/api/integrations/supabase/users/admin";
 import { UserProfile } from "@/types/integrations/supabase/profiles";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,7 @@ export default function Users() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingUserId, setCancellingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [error] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -109,6 +110,25 @@ export default function Users() {
       toast.error(err.message || "An unexpected error occurred");
     } finally {
       setCancellingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      setDeletingUserId(userId);
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId },
+      });
+
+      if (error) throw error;
+      if (data && data.error) throw new Error(data.error);
+
+      toast.success("User deleted successfully.");
+      setUsers(users.filter((user) => user.id !== userId));
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete user.");
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -297,6 +317,7 @@ export default function Users() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">Actions</TableHead>
                   <TableHead>User ID</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Name</TableHead>
@@ -326,6 +347,43 @@ export default function Users() {
                 ) : (
                   users.map((user) => (
                     <TableRow key={user.id}>
+                      <TableCell className="w-[50px]">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={deletingUserId === user.id}
+                            >
+                              {deletingUserId === user.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this user? This
+                                action is permanent and will remove all
+                                associated data.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
                       <TableCell
                         className="font-mono text-xs max-w-[120px] truncate"
                         title={user.id}
