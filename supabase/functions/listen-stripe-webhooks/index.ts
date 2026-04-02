@@ -6,10 +6,9 @@ import { createClient } from "npm:@supabase/supabase-js";
 const stripe = new Stripe(
   //@ts-ignore
   Deno.env.get("STRIPE_SECRET_KEY")!,
-  {
-    apiVersion: "2025-03-31.basil",
-  },
+  { apiVersion: "2025-03-31.basil" },
 );
+
 //@ts-ignore
 const endpointSecret = "whsec_MlQ2VSYWuIpnYi7zHXu0DjPU5mWVvEfC"!;
 
@@ -20,36 +19,103 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-const PRODUCT_TIER_MAP: Record<string, string> = {
-  prod_U7ZOSbCHh4AxQ9: "All_Access",
-  prod_U7ZOZiVysCdEQ9: "Ad_Free",
-};
+/* ---------------- HELPERS ---------------- */
+
+async function getFreePlanId() {
+  const { data, error } = await supabase
+    .from("plans")
+    .select("id")
+    .eq("name", "Free")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching free plan:", error);
+    return null;
+  }
+
+  return data?.id ?? null;
+}
+
+async function getPlanIdFromProduct(productId: string | null) {
+  if (!productId) {
+    return await getFreePlanId();
+  }
+
+  const { data, error } = await supabase
+    .from("plans")
+    .select("id")
+    .eq("stripe_product_id", productId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching plan by product:", error);
+    return await getFreePlanId();
+  }
+
+  return data?.id ?? (await getFreePlanId());
+}
+
+async function dedupePaymentMethods(customerId: string) {
+  try {
+    const methods = await stripe.paymentMethods.list({
+      customer: customerId,
+      type: "card",
+    });
+
+    const seen = new Map();
+
+    for (const pm of methods.data) {
+      const fingerprint = pm.card?.fingerprint;
+
+      if (!fingerprint) continue;
+
+      if (seen.has(fingerprint)) {
+        await stripe.paymentMethods.detach(pm.id);
+      } else {
+        seen.set(fingerprint, pm.id);
+      }
+    }
+  } catch (error) {
+    console.error("dedupePaymentMethods error:", error);
+  }
+}
+
+/* ---------------- HANDLERS ---------------- */
 
 async function handleCheckoutCompleted(session: any) {
   console.log("checkout.session.completed");
 
-  const userId = session.metadata?.user_id;
-  const customerId = session.customer;
+  const userId = session?.metadata?.user_id;
+  const customerId = session?.customer;
 
   if (!userId || !customerId) {
-    console.log("USER ID OR CUSTOMER ID NOT FOUND");
+    console.log("Missing user/customer id");
     return;
   }
 
-  const response = await supabase
+  await supabase
     .from("profiles")
-    .update({ stripe_customer_id: customerId })
-    .eq("user_id", userId)
-    .select("*")
-    .maybeSingle();
+    .update({
+      stripe_customer_id: customerId,
+    })
+    .eq("user_id", userId);
+
+  await dedupePaymentMethods(customerId);
 }
 
 async function handleInvoicePaid(invoice: any) {
-  const subscriptionId = invoice.parent?.subscription_details?.subscription;
+  console.log("invoice.payment_succeeded");
 
-  const customerId = invoice.customer;
+  const subscriptionId =
+    invoice?.parent?.subscription_details?.subscription ??
+    invoice?.subscription;
 
-  if (!subscriptionId || !customerId) return;
+  const customerId = invoice?.customer;
+
+  if (!subscriptionId || !customerId) {
+    console.log("Missing subscription/customer in invoice");
+    return;
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -57,22 +123,26 @@ async function handleInvoicePaid(invoice: any) {
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
-  console.log("PROFILE HERE:", profile);
-
   if (!profile) {
-    console.log("Customer not linked yet, skipping invoice event");
+    console.log("Profile not found for invoice");
     return;
   }
 
-  const line = invoice.lines?.data?.find((l: any) => l.pricing?.price_details);
+  const line =
+    invoice?.lines?.data?.find((l: any) => l?.pricing?.price_details) ??
+    invoice?.lines?.data?.[0];
 
-  const priceId = line?.pricing?.price_details?.price;
+  const priceId =
+    line?.pricing?.price_details?.price ?? line?.price?.id ?? null;
 
-  const productId = line?.pricing?.price_details?.product;
+  const productId =
+    line?.pricing?.price_details?.product ?? line?.price?.product ?? null;
 
-  const tier = PRODUCT_TIER_MAP[productId] || "Free";
+  const tier = await getPlanIdFromProduct(productId);
 
-  console.log("INVOICE: ", invoice);
+  const currentPeriodEnd = invoice?.period_end
+    ? new Date(invoice.period_end * 1000).toISOString()
+    : null;
 
   const res = await supabase
     .from("subscriptions")
@@ -83,55 +153,136 @@ async function handleInvoicePaid(invoice: any) {
         stripe_price_id: priceId,
         stripe_product_id: productId,
         status: "active",
-        current_period_end: new Date(invoice.period_end * 1000).toISOString(),
-        description: line.description,
-        amount: line.amount,
+        current_period_end: currentPeriodEnd,
+        description: line?.description ?? null,
+        amount: line?.amount ?? null,
       },
-      { onConflict: "stripe_subscription_id" },
+      {
+        onConflict: "stripe_subscription_id",
+      },
     )
     .select("id")
     .maybeSingle();
 
   if (res.error) {
-    console.log("Error occured while adding entry in 'subscriptions' table.");
+    console.error("subscriptions upsert failed:", res.error);
     return;
   }
 
   await supabase
     .from("profiles")
-    .update({ tier, subscription_id: res?.data?.id })
+    .update({
+      tier,
+      subscription_id: res?.data?.id ?? null,
+    })
     .eq("id", profile.id);
 
   console.log("Subscription activated");
 }
 
+async function handleSubscriptionUpdated(subscription: any) {
+  console.log("customer.subscription.updated");
+
+  const subscriptionId = subscription?.id;
+  const customerId = subscription?.customer;
+
+  if (!subscriptionId || !customerId) return;
+
+  let userId = subscription?.metadata?.user_id;
+
+  if (!userId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("stripe_customer_id", customerId)
+      .maybeSingle();
+
+    userId = profile?.user_id;
+  }
+
+  if (!userId) return;
+
+  const item = subscription?.items?.data?.[0];
+
+  const priceId = item?.plan?.id ?? null;
+
+  const productId = item?.plan?.product ?? null;
+
+  const tier = await getPlanIdFromProduct(productId);
+
+  const periodEnd = item?.current_period_end
+    ? new Date(item.current_period_end * 1000).toISOString()
+    : null;
+
+  const res = await supabase
+    .from("subscriptions")
+    .upsert(
+      {
+        user_id: userId,
+        stripe_subscription_id: subscriptionId,
+        stripe_price_id: priceId,
+        stripe_product_id: productId,
+        status: subscription.status,
+        current_period_end: periodEnd,
+        description: item?.plan?.nickname ?? null,
+        amount: item?.plan?.amount ?? null,
+      },
+      {
+        onConflict: "stripe_subscription_id",
+      },
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (res.error) {
+    console.error(res.error);
+    return;
+  }
+
+  await supabase
+    .from("profiles")
+    .update({
+      tier,
+      subscription_id: res?.data?.id ?? null,
+    })
+    .eq("user_id", userId);
+
+  console.log("Subscription updated");
+}
+
 async function handleSubscriptionDeleted(subscription: any) {
   console.log("customer.subscription.deleted");
 
-  const customerId = subscription.customer;
+  const customerId = subscription?.customer;
+
+  if (!customerId) return;
+
+  const freeTier = await getFreePlanId();
 
   await supabase
     .from("subscriptions")
-    .update({ status: "canceled" })
+    .update({
+      status: "canceled",
+    })
     .eq("stripe_subscription_id", subscription.id);
 
   await supabase
     .from("profiles")
-    .update({ tier: "Free" })
+    .update({
+      tier: freeTier,
+      subscription_id: null,
+    })
     .eq("stripe_customer_id", customerId);
 
-  console.log("User downgraded");
+  console.log("Downgraded to free");
 }
 
 async function handlePaymentRefund(charge: any) {
-  console.log("charge.refunded event received");
+  console.log("charge.refunded");
 
-  const customerId = charge.customer;
+  const customerId = charge?.customer;
 
-  if (!customerId) {
-    console.log("Customer ID missing in refund event");
-    return;
-  }
+  if (!customerId) return;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -139,78 +290,89 @@ async function handlePaymentRefund(charge: any) {
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
-  if (!profile) {
-    console.log("Profile not found for refunded customer");
-    return;
-  }
+  if (!profile) return;
 
-  console.log("Refund profile:", profile);
+  const freeTier = await getFreePlanId();
 
-  // Mark subscription refunded
-  const { error: subError } = await supabase
+  await supabase
     .from("subscriptions")
-    .update({ status: "refunded" })
+    .update({
+      status: "refunded",
+    })
     .eq("user_id", profile.user_id);
 
-  if (subError) {
-    console.log("Error updating subscription status:", subError);
-    return;
-  }
-
-  // Downgrade user tier
-  const { error: profileError } = await supabase
+  await supabase
     .from("profiles")
     .update({
-      tier: "Free",
+      tier: freeTier,
       subscription_id: null,
     })
     .eq("id", profile.id);
 
-  if (profileError) {
-    console.log("Error downgrading user:", profileError);
-    return;
-  }
-
-  console.log("Refund processed successfully for user:", profile.user_id);
+  console.log("Refund processed");
 }
 
-const handlers: Record<string, (data: any) => Promise<void>> = {
+/* ---------------- HANDLER MAP ---------------- */
+
+const handlers: Record<string, (data: any) => Promise<any>> = {
   "checkout.session.completed": handleCheckoutCompleted,
   "invoice.payment_succeeded": handleInvoicePaid,
+  "customer.subscription.updated": handleSubscriptionUpdated,
   "customer.subscription.deleted": handleSubscriptionDeleted,
   // "charge.refunded": handlePaymentRefund,
 };
+
+/* ---------------- SERVER ---------------- */
+
 //@ts-ignore
 Deno.serve(async (req) => {
-  const signature = req.headers.get("stripe-signature");
-
-  if (!signature) {
-    return new Response("Missing signature", { status: 400 });
-  }
-
-  const body = await req.text();
-
-  let event;
-
   try {
-    event = await stripe.webhooks.constructEventAsync(
-      body,
-      signature,
-      endpointSecret,
+    const signature = req.headers.get("stripe-signature");
+
+    if (!signature) {
+      return new Response("Missing signature", { status: 400 });
+    }
+
+    const body = await req.text();
+
+    let event;
+
+    try {
+      event = await stripe.webhooks.constructEventAsync(
+        body,
+        signature,
+        endpointSecret,
+      );
+    } catch (err: any) {
+      console.error("Webhook verification failed:", err.message);
+
+      return new Response("Webhook Error", { status: 400 });
+    }
+
+    const handler = handlers[event.type];
+
+    if (handler) {
+      await handler(event?.data?.object);
+    } else {
+      console.log("UNHANDLED EVENT:", event.type);
+    }
+
+    return new Response(
+      JSON.stringify({
+        received: true,
+      }),
+      {
+        status: 200,
+      },
     );
-  } catch (err: any) {
-    console.error("Webhook verification failed:", err.message);
-    return new Response("Webhook Error", { status: 400 });
-  }
-  const handler = handlers[event.type];
+  } catch (error) {
+    console.error("Webhook server crash:", error);
 
-  if (handler) {
-    await handler(event?.data?.object || event?.object);
-  } else {
-    console.log("UNHANDLED EVENT: ", event.type);
+    return new Response(
+      JSON.stringify({
+        error: "Internal webhook error",
+      }),
+      { status: 500 },
+    );
   }
-
-  return new Response(JSON.stringify({ received: true }), {
-    status: 200,
-  });
 });

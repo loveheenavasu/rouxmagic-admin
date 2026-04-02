@@ -5,10 +5,8 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const stripe = new Stripe(
   //@ts-ignore
-  Deno.env.get("STRIPE_API_KEY")!,
-  {
-    apiVersion: "2025-03-31.basil",
-  },
+  Deno.env.get("STRIPE_SECRET_KEY")!,
+  { apiVersion: "2025-03-31.basil" },
 );
 
 const supabase = createClient(
@@ -72,10 +70,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---------------- Get or create Stripe customer ----------------
+    /* ---------------- CUSTOMER ---------------- */
     const { data: profile } = await supabase
       .from("profiles")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, subscription_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -95,23 +93,92 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id);
     }
 
-    // ---------------- Saved card subscription ----------------
+    /* ---------------- EXISTING SUB ---------------- */
+    let existingSubscriptionId: string | null = null;
+    let stripeSub: any = null;
+
+    if (profile?.subscription_id) {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("id", profile.subscription_id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      existingSubscriptionId = sub?.stripe_subscription_id || null;
+
+      if (existingSubscriptionId) {
+        try {
+          stripeSub = await stripe.subscriptions.retrieve(
+            existingSubscriptionId,
+          );
+
+          // ❌ If invalid → treat as no subscription
+          if (
+            !stripeSub ||
+            ["canceled", "incomplete_expired"].includes(stripeSub.status)
+          ) {
+            existingSubscriptionId = null;
+            stripeSub = null;
+          }
+        } catch {
+          existingSubscriptionId = null;
+          stripeSub = null;
+        }
+      }
+    }
+
+    /* ---------------- PAYMENT METHOD FLOW ---------------- */
     if (paymentMethodId) {
-      // Attach the payment method to the customer
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId,
-      });
+      // 🔒 Attach safely (avoid duplicate attach crash)
+      try {
+        await stripe.paymentMethods.attach(paymentMethodId, {
+          customer: customerId,
+        });
+      } catch (err: any) {
+        if (!err.message.includes("already attached")) {
+          throw err;
+        }
+      }
 
       await stripe.customers.update(customerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
 
-      // Create subscription
+      // ================= SWITCH PLAN =================
+      if (existingSubscriptionId && stripeSub) {
+        const currentItem = stripeSub.items.data[0];
+
+        const updatedSub = await stripe.subscriptions.update(
+          existingSubscriptionId,
+          {
+            items: [{ id: currentItem.id, price: priceId }],
+            proration_behavior: "create_prorations",
+            expand: ["latest_invoice.payment_intent"],
+          },
+        );
+
+        const paymentIntent = updatedSub.latest_invoice?.payment_intent as any;
+
+        return new Response(
+          JSON.stringify({
+            type: "subscription_update",
+            subscriptionId: updatedSub.id,
+            clientSecret: paymentIntent?.client_secret ?? null,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // ================= NEW SUB =================
       const subscription = await stripe.subscriptions.create({
         customer: customerId,
         items: [{ price: priceId }],
         default_payment_method: paymentMethodId,
-        payment_behavior: "allow_incomplete", // lets client confirm payment
+        payment_behavior: "allow_incomplete",
         expand: ["latest_invoice.payment_intent"],
         metadata: { user_id: user.id },
       });
@@ -123,8 +190,6 @@ Deno.serve(async (req) => {
           type: "subscription",
           subscriptionId: subscription.id,
           clientSecret: paymentIntent?.client_secret ?? null,
-          invoiceStatus: subscription.latest_invoice?.status,
-          paymentIntentStatus: paymentIntent?.status ?? null,
         }),
         {
           status: 200,
@@ -133,7 +198,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ---------------- Checkout session ----------------
+    /* ---------------- CHECKOUT BLOCK ---------------- */
+    if (existingSubscriptionId) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "You already have an active subscription. Please add/select a payment method to switch plans.",
+          code: "ACTIVE_SUBSCRIPTION_EXISTS",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    /* ---------------- CHECKOUT ---------------- */
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
@@ -141,7 +221,6 @@ Deno.serve(async (req) => {
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { user_id: user.id },
       payment_method_collection: "if_required",
-      saved_payment_method_options: { payment_method_save: "enabled" },
     });
 
     return new Response(
