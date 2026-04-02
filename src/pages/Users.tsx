@@ -409,7 +409,7 @@ export default function Users() {
                               <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
                                 {user.profile?.plan?.name ?? "Free"}
                               </span>
-                              {user.profile?.plan && (
+                              {user.profile?.plan?.stripe_product_id && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <button
