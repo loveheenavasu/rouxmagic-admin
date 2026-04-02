@@ -39,7 +39,7 @@ export interface ProjectMetaData {
   vibe_tags?: string[];
   rating?: string;
   row_type?: string | null;
-  required_plan?: RequiredPlanEnum;
+  required_plan_id?: string;
 }
 
 export interface ProjectFormData extends Partial<Project> {
@@ -63,12 +63,11 @@ export type SearchableProjectField =
   | "notes"
   | "content_type";
 
-export interface GetProjectsOpts
-  extends GetTableOpts<
-    GetProjectsBy,
-    SortProjectsBy,
-    SearchableProjectField,
-    SearchableProjectField
-  > {}
+export interface GetProjectsOpts extends GetTableOpts<
+  GetProjectsBy,
+  SortProjectsBy,
+  SearchableProjectField,
+  SearchableProjectField
+> {}
 
 export interface Project extends CommonSchema, ProjectMetaData {}

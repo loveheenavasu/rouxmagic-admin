@@ -469,7 +469,7 @@ export default function Read() {
     "notes",
     "poster_url",
     "external_url",
-    "required_plan",
+    "required_plan_id",
     "is_downloadable",
     "preview_url",
   ];

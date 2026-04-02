@@ -20,7 +20,7 @@ export interface RecipeMetadata {
   order_index?: number;
   is_deleted: boolean;
   deleted_at: string | null;
-  required_plan?: RequiredPlanEnum;
+  required_plan_id?: string;
   flavor_tags?: string[];
 }
 
@@ -31,12 +31,11 @@ export type GetRecipesBy = "category" | "is_deleted";
 
 export interface RecipeFormData extends RecipeMetadata {}
 
-export interface GetRecipesOpts
-  extends GetTableOpts<
-    GetRecipesBy,
-    SortRecipesBy,
-    RecipeMetadata,
-    SearchableRecipeField
-  > {}
+export interface GetRecipesOpts extends GetTableOpts<
+  GetRecipesBy,
+  SortRecipesBy,
+  RecipeMetadata,
+  SearchableRecipeField
+> {}
 
 export interface Recipe extends CommonSchema, RecipeMetadata {}

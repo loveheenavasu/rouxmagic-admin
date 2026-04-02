@@ -26,7 +26,7 @@ export interface ContentMetaData {
 
   is_deleted?: boolean;
   deleted_at?: string | null;
-  required_plan?: RequiredPlanEnum;
+  required_plan_id?: string;
 }
 
 export interface ContentFormData extends Partial<Content> {}
@@ -35,12 +35,11 @@ export type GetContentsBy = keyof ContentMetaData | "id";
 
 export type SortContentsBy = "created_at";
 
-export interface GetContentsOpts
-  extends GetTableOpts<
-    GetContentsBy,
-    SortContentsBy,
-    ContentMetaData,
-    unknown
-  > {}
+export interface GetContentsOpts extends GetTableOpts<
+  GetContentsBy,
+  SortContentsBy,
+  ContentMetaData,
+  unknown
+> {}
 
 export interface Content extends CommonSchema, ContentMetaData {}

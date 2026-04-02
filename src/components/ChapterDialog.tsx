@@ -284,13 +284,13 @@ export default function ChapterDialog({
             )}
 
             {/* <div className="md:col-span-2">
-              <Label htmlFor="required_plan" className="font-medium">
+              <Label htmlFor="required_plan_id" className="font-medium">
                 Required Plan
               </Label>
               <Select
-                value={formData.required_plan || ""}
+                value={formData.required_plan_id || ""}
                 onValueChange={(v) =>
-                  setFormData((p) => ({ ...p, required_plan: v as RequiredPlanEnum }))
+                  setFormData((p) => ({ ...p, required_plan_id: v as RequiredPlanEnum }))
                 }
               >
                 <SelectTrigger className="mt-1.5 capitalize">
