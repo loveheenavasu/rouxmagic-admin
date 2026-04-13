@@ -1,4 +1,4 @@
-import { CommonSchema, GetTableOpts, RequiredPlanEnum } from "./common";
+import { CommonSchema, GetTableOpts } from "./common";
 
 export enum ProjectStatusEnum {
   Released = "released",

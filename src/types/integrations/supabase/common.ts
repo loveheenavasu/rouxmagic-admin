@@ -42,12 +42,6 @@ export interface GetTableOpts<GetBy, SortBy, FormData, SearchField> {
   searchFields?: SearchField[];
 }
 
-export enum RequiredPlanEnum {
-  FREE = "Free",
-  AllAccess = "All_Access",
-  AdFree = "Ad_Free",
-}
-
 export enum UserRole {
   Admin = "admin",
   User = "user",
