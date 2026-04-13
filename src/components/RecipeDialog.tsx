@@ -21,7 +21,13 @@ import {
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
-import { RecipeCategory, RecipeFormData, PairingSourceEnum, Recipe, Flag } from "@/types";
+import {
+  RecipeCategory,
+  RecipeFormData,
+  PairingSourceEnum,
+  Recipe,
+  Flag,
+} from "@/types";
 import { Plans } from "@/api";
 import PairingsSection from "@/components/PairingsSection";
 import { smartParse } from "@/lib/utils";
@@ -91,15 +97,15 @@ export default function RecipeDialog({
 
   useEffect(() => {
     if (open) {
-        setFormData({
-          ...emptyForm,
-          ...recipe,
-          ...(recipe && {
-            flavor_tags: smartParse(recipe.flavor_tags as any),
-          }),
-        });
-      } else {
-        setFormData(emptyForm);
+      setFormData({
+        ...emptyForm,
+        ...recipe,
+        ...(recipe && {
+          flavor_tags: smartParse(recipe.flavor_tags as any),
+        }),
+      });
+    } else {
+      setFormData(emptyForm);
     }
   }, [open, recipe]);
 
@@ -119,7 +125,9 @@ export default function RecipeDialog({
     submitData.flavor_tags = smartParse(formData.flavor_tags as any)
       .map((t) => {
         const trimmed = String(t).trim();
-        return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+        return trimmed
+          ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+          : "";
       })
       .filter(Boolean);
     submitData.flavor_tags = Array.from(new Set(submitData.flavor_tags));
@@ -194,7 +202,10 @@ export default function RecipeDialog({
                 type="number"
                 value={formData.order_index ?? ""}
                 onChange={(e) =>
-                  handleChange("order_index", parseInt(e.target.value) || undefined)
+                  handleChange(
+                    "order_index",
+                    parseInt(e.target.value) || undefined,
+                  )
                 }
                 placeholder="e.g. 1"
                 className="mt-1.5"
@@ -202,19 +213,19 @@ export default function RecipeDialog({
             </div>
 
             <div>
-              <Label htmlFor="required_plan" className="font-medium">
+              <Label htmlFor="required_plan_id" className="font-medium">
                 Required Plan
               </Label>
               <Select
-                value={formData.required_plan || ""}
-                onValueChange={(v) => handleChange("required_plan", v)}
+                value={formData.required_plan_id || ""}
+                onValueChange={(v) => handleChange("required_plan_id", v)}
               >
                 <SelectTrigger className="mt-1.5 capitalize">
                   <SelectValue placeholder="Select required plan" />
                 </SelectTrigger>
                 <SelectContent>
                   {plans.map((plan: any) => (
-                    <SelectItem key={plan.id} value={plan.stripe_product_id || "Free"}>
+                    <SelectItem key={plan.id} value={plan.id || "Free"}>
                       {plan.name}
                     </SelectItem>
                   ))}
@@ -257,7 +268,8 @@ export default function RecipeDialog({
                         toast.success("Image uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Image upload failed: ${error?.message || "Unknown error"
+                          `Image upload failed: ${
+                            error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -320,7 +332,8 @@ export default function RecipeDialog({
                         toast.success("Preview uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Preview upload failed: ${error?.message || "Unknown error"
+                          `Preview upload failed: ${
+                            error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -383,7 +396,8 @@ export default function RecipeDialog({
                         toast.success("Video uploaded successfully!");
                       } catch (error: any) {
                         toast.error(
-                          `Video upload failed: ${error?.message || "Unknown error"
+                          `Video upload failed: ${
+                            error?.message || "Unknown error"
                           }`,
                         );
                       } finally {
@@ -410,7 +424,6 @@ export default function RecipeDialog({
                 </div>
               </div>
             </div>
-
 
             <div>
               <Label htmlFor="cook_time_estimate" className="font-medium">

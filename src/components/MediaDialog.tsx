@@ -836,6 +836,7 @@ export default function MediaDialog({
                     "deleted_at",
                     "is_deleted",
                     "play_behavior",
+                    "required_plan",
                   ].includes(key),
               )
               .filter((key) =>
@@ -1329,7 +1330,7 @@ export default function MediaDialog({
     }
 
     // Special: Required Plan Select
-    if (key === "required_plan") {
+    if (key === "required_plan_id") {
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
@@ -1344,7 +1345,7 @@ export default function MediaDialog({
             </SelectTrigger>
             <SelectContent>
               {plans.map((plan: any) => (
-                <SelectItem key={plan.id} value={plan.stripe_product_id || "Free"}>
+                <SelectItem key={plan.id} value={plan.id || "Free"}>
                   {plan.name}
                 </SelectItem>
               ))}
