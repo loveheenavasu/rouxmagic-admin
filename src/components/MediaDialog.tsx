@@ -837,6 +837,7 @@ export default function MediaDialog({
                     "is_deleted",
                     "play_behavior",
                     "required_plan",
+                    "is_public",
                   ].includes(key),
               )
               .filter((key) =>
@@ -915,7 +916,15 @@ export default function MediaDialog({
                 !userHasModifiedFormRef.current &&
                 requestedMediaIdRef.current === mediaIdForFetch
               ) {
-                // ✅ Prefer cached saved data over stale media prop
+                // Auto-set required_plan_id to default plan if is_public is true
+                if (result.is_public && plans.length > 0) {
+                  const defaultPlan = plans.find((plan: any) => plan.is_default);
+                  if (defaultPlan) {
+                    result.required_plan_id = defaultPlan.id;
+                  }
+                }
+                
+                // Prefer cached saved data over stale media prop
                 const cached =
                   savedFormDataCacheRef.current[mediaIdForFetch ?? ""];
                 setFormData(cached ?? (result as ProjectFormData));
@@ -937,6 +946,8 @@ export default function MediaDialog({
                   base[key] = [];
                 } else if (key === "row_type") {
                   base[key] = ""; // always a plain string
+                } else if (key === "is_public") {
+                  base[key] = true; // Default to true for new content
                 } else {
                   base[key] = "";
                 }
@@ -945,6 +956,15 @@ export default function MediaDialog({
               // Apply default values if provided
               if (defaultValues) {
                 Object.assign(base, defaultValues);
+              }
+
+              // Auto-set required_plan_id to default plan if is_public is true (for new content)
+              if (base.is_public && plans.length > 0) {
+                const defaultPlan = plans.find((plan: any) => plan.is_default);
+                if (defaultPlan) {
+                  console.log("DEFAULT PLAN: ", defaultPlan)
+                  base.required_plan_id = defaultPlan.id;
+                }
               }
 
               if (
@@ -1331,6 +1351,9 @@ export default function MediaDialog({
 
     // Special: Required Plan Select
     if (key === "required_plan_id") {
+      const isPublic = !!(formData as any).is_public;
+      const defaultPlan = plans.find((plan: any) => plan.is_default);
+      
       return (
         <div key={key}>
           <Label htmlFor={key} className="font-medium">
@@ -1338,10 +1361,17 @@ export default function MediaDialog({
           </Label>
           <Select
             value={value || ""}
-            onValueChange={(v) => handleChange(key as keyof ProjectFormData, v)}
+            onValueChange={(v) => {
+              if (isPublic) {
+                toast.error("Content that is publicly available cannot be restricted to a specific plan");
+                return;
+              }
+              handleChange(key as keyof ProjectFormData, v);
+            }}
+            disabled={isPublic}
           >
-            <SelectTrigger className="mt-1.5 capitalize">
-              <SelectValue placeholder="Select required plan" />
+            <SelectTrigger className={`mt-1.5 capitalize ${isPublic ? "bg-slate-100 cursor-not-allowed" : ""}`}>
+              <SelectValue placeholder={isPublic ? "Publicly available" : "Select required plan"} />
             </SelectTrigger>
             <SelectContent>
               {plans.map((plan: any) => (
@@ -1351,6 +1381,26 @@ export default function MediaDialog({
               ))}
             </SelectContent>
           </Select>
+          
+          {/* Public checkbox */}
+          <div className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
+            <Checkbox
+              id="is_public"
+              checked={isPublic}
+              onCheckedChange={(checked: boolean) => {
+                // Update is_public field
+                handleChange("is_public" as keyof ProjectFormData, checked);
+                
+                // If checked, set required_plan_id to default plan
+                if (checked && defaultPlan) {
+                  handleChange(key as keyof ProjectFormData, defaultPlan.id);
+                }
+              }}
+            />
+            <Label htmlFor="is_public" className="font-medium cursor-pointer text-sm">
+              Publicly available
+            </Label>
+          </div>
         </div>
       );
     }

@@ -40,6 +40,7 @@ export interface ProjectMetaData {
   rating?: string;
   row_type?: string | null;
   required_plan_id?: string;
+  is_public?: boolean;
 }
 
 export interface ProjectFormData extends Partial<Project> {
