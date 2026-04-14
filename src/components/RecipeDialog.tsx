@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload } from "lucide-react";
 import { mediaService } from "@/services/mediaService";
 import { toast } from "sonner";
@@ -97,17 +98,27 @@ export default function RecipeDialog({
 
   useEffect(() => {
     if (open) {
-      setFormData({
+      const formData = {
         ...emptyForm,
         ...recipe,
         ...(recipe && {
           flavor_tags: smartParse(recipe.flavor_tags as any),
         }),
-      });
+      };
+      
+      // Auto-set required_plan_id to default plan if is_public is true
+      if (formData.is_public && plans.length > 0) {
+        const defaultPlan = plans.find((plan: any) => plan.is_default);
+        if (defaultPlan) {
+          formData.required_plan_id = defaultPlan.id;
+        }
+      }
+      
+      setFormData(formData);
     } else {
       setFormData(emptyForm);
     }
-  }, [open, recipe]);
+  }, [open, recipe, plans]);
 
   const handleChange = (field: keyof RecipeFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -218,10 +229,17 @@ export default function RecipeDialog({
               </Label>
               <Select
                 value={formData.required_plan_id || ""}
-                onValueChange={(v) => handleChange("required_plan_id", v)}
+                onValueChange={(v) => {
+                  if (formData.is_public) {
+                    toast.error("Content that is publicly available cannot be restricted to a specific plan");
+                    return;
+                  }
+                  handleChange("required_plan_id", v);
+                }}
+                disabled={!!formData.is_public}
               >
-                <SelectTrigger className="mt-1.5 capitalize">
-                  <SelectValue placeholder="Select required plan" />
+                <SelectTrigger className={`mt-1.5 capitalize ${formData.is_public ? "bg-slate-100 cursor-not-allowed" : ""}`}>
+                  <SelectValue placeholder={formData.is_public ? "Publicly available" : "Select required plan"} />
                 </SelectTrigger>
                 <SelectContent>
                   {plans.map((plan: any) => (
@@ -231,6 +249,29 @@ export default function RecipeDialog({
                   ))}
                 </SelectContent>
               </Select>
+              
+              {/* Public checkbox */}
+              <div className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/30">
+                <Checkbox
+                  id="is_public"
+                  checked={!!formData.is_public}
+                  onCheckedChange={(checked: boolean) => {
+                    // Update is_public field
+                    handleChange("is_public", checked);
+                    
+                    // If checked, set required_plan_id to default plan
+                    if (checked) {
+                      const defaultPlan = plans.find((plan: any) => plan.is_default);
+                      if (defaultPlan) {
+                        handleChange("required_plan_id", defaultPlan.id);
+                      }
+                    }
+                  }}
+                />
+                <Label htmlFor="is_public" className="font-medium cursor-pointer text-sm">
+                  Publicly available
+                </Label>
+              </div>
             </div>
 
             <div className="md:col-span-2">

@@ -22,6 +22,7 @@ export interface RecipeMetadata {
   deleted_at: string | null;
   required_plan_id?: string;
   flavor_tags?: string[];
+  is_public?: boolean;
 }
 
 export type SortRecipesBy = "created_at" | "order_index";
