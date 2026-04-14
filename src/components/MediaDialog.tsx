@@ -94,6 +94,7 @@ export default function MediaDialog({
     }
   }, [open]);
 
+  
   // Sync formData from media immediately when opening (edit mode) — shows correct Row Visibility without waiting for fetch
   useEffect(() => {
     if (!open || !media || userHasModifiedFormRef.current) return;
@@ -523,6 +524,22 @@ export default function MediaDialog({
     staleTime: 300_000, // Plans don't change often
   });
 
+  // Handle plans loading after form data for edit mode
+  useEffect(() => {
+    if (!open || !media || plans.length === 0) return;
+    
+    const currentFormData = formData as any;
+    if (currentFormData.is_public && !currentFormData.required_plan_id) {
+      const defaultPlan = plans.find((plan: any) => plan.is_default);
+      if (defaultPlan) {
+        setFormData((prev) => ({
+          ...prev,
+          required_plan_id: defaultPlan.id,
+        }));
+      }
+    }
+  }, [open, media, plans, formData]);
+
   // Calculate matched rows based on current formData. Memoized to prevent flicker from recalculation.
   const matchedRows = useMemo(
     () =>
@@ -916,18 +933,20 @@ export default function MediaDialog({
                 !userHasModifiedFormRef.current &&
                 requestedMediaIdRef.current === mediaIdForFetch
               ) {
-                // Auto-set required_plan_id to default plan if is_public is true
-                if (result.is_public && plans.length > 0) {
-                  const defaultPlan = plans.find((plan: any) => plan.is_default);
-                  if (defaultPlan) {
-                    result.required_plan_id = defaultPlan.id;
-                  }
-                }
-                
                 // Prefer cached saved data over stale media prop
                 const cached =
                   savedFormDataCacheRef.current[mediaIdForFetch ?? ""];
-                setFormData(cached ?? (result as ProjectFormData));
+                const formData = cached ?? (result as ProjectFormData);
+                
+                // Auto-set required_plan_id to default plan if is_public is true
+                if (formData.is_public && plans.length > 0) {
+                  const defaultPlan = plans.find((plan: any) => plan.is_default);
+                  if (defaultPlan) {
+                    formData.required_plan_id = defaultPlan.id;
+                  }
+                }
+                
+                setFormData(formData);
               }
             } else {
               // Add mode - initialize empty fields
@@ -957,6 +976,9 @@ export default function MediaDialog({
               if (defaultValues) {
                 Object.assign(base, defaultValues);
               }
+
+              // Explicitly set is_public to true for new content since it's excluded from fields
+              base.is_public = true;
 
               // Auto-set required_plan_id to default plan if is_public is true (for new content)
               if (base.is_public && plans.length > 0) {
@@ -1388,6 +1410,7 @@ export default function MediaDialog({
               id="is_public"
               checked={isPublic}
               onCheckedChange={(checked: boolean) => {
+                console.log("Checkbox changed:", checked, "Current is_public:", (formData as any).is_public);
                 // Update is_public field
                 handleChange("is_public" as keyof ProjectFormData, checked);
                 

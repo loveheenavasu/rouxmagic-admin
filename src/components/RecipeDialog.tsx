@@ -59,6 +59,7 @@ const emptyForm: RecipeFormData = {
   is_deleted: false,
   deleted_at: null,
   flavor_tags: [],
+  is_public: true,
 };
 
 export default function RecipeDialog({
@@ -106,19 +107,27 @@ export default function RecipeDialog({
         }),
       };
       
-      // Auto-set required_plan_id to default plan if is_public is true
-      if (formData.is_public && plans.length > 0) {
-        const defaultPlan = plans.find((plan: any) => plan.is_default);
-        if (defaultPlan) {
-          formData.required_plan_id = defaultPlan.id;
-        }
-      }
-      
       setFormData(formData);
     } else {
       setFormData(emptyForm);
     }
-  }, [open, recipe, plans]);
+  }, [open, recipe]);
+
+  // Handle plans loading after form data for edit mode
+  useEffect(() => {
+    if (!open || !recipe || plans.length === 0) return;
+    
+    const currentFormData = formData as any;
+    if (currentFormData.is_public && !currentFormData.required_plan_id) {
+      const defaultPlan = plans.find((plan: any) => plan.is_default);
+      if (defaultPlan) {
+        setFormData((prev) => ({
+          ...prev,
+          required_plan_id: defaultPlan.id,
+        }));
+      }
+    }
+  }, [open, recipe, plans, formData]);
 
   const handleChange = (field: keyof RecipeFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
