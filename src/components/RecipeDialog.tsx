@@ -107,27 +107,19 @@ export default function RecipeDialog({
         }),
       };
       
+      // If recipe has is_public true, ensure required_plan_id is set to default plan
+      if (formData.is_public && plans.length > 0) {
+        const defaultPlan = plans.find((plan: any) => plan.is_default);
+        if (defaultPlan) {
+          formData.required_plan_id = defaultPlan.id;
+        }
+      }
+      
       setFormData(formData);
     } else {
       setFormData(emptyForm);
     }
-  }, [open, recipe]);
-
-  // Handle plans loading after form data for edit mode
-  useEffect(() => {
-    if (!open || !recipe || plans.length === 0) return;
-    
-    const currentFormData = formData as any;
-    if (currentFormData.is_public && !currentFormData.required_plan_id) {
-      const defaultPlan = plans.find((plan: any) => plan.is_default);
-      if (defaultPlan) {
-        setFormData((prev) => ({
-          ...prev,
-          required_plan_id: defaultPlan.id,
-        }));
-      }
-    }
-  }, [open, recipe, plans, formData]);
+  }, [open, recipe, plans]);
 
   const handleChange = (field: keyof RecipeFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

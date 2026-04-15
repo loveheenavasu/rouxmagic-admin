@@ -102,7 +102,7 @@ export default function MediaDialog({
     if (!mediaId) return;
 
     if (savedFormDataCacheRef.current[mediaId]) {
-      setFormData(savedFormDataCacheRef.current[mediaId]);
+      setFormData({...savedFormDataCacheRef.current[mediaId], is_public:media?.is_public});
       return;
     }
 
@@ -155,7 +155,7 @@ export default function MediaDialog({
       currentStatuses.push("coming_soon");
     if (currentStatuses.includes("coming_soon")) result.in_coming_soon = true;
     result.status = currentStatuses;
-    setFormData(result as ProjectFormData);
+    setFormData({...(result as ProjectFormData), is_public:media?.is_public});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-init when open or media id changes
   }, [open, (media as any)?.id]);
 
@@ -524,22 +524,7 @@ export default function MediaDialog({
     staleTime: 300_000, // Plans don't change often
   });
 
-  // Handle plans loading after form data for edit mode
-  useEffect(() => {
-    if (!open || !media || plans.length === 0) return;
-    
-    const currentFormData = formData as any;
-    if (currentFormData.is_public && !currentFormData.required_plan_id) {
-      const defaultPlan = plans.find((plan: any) => plan.is_default);
-      if (defaultPlan) {
-        setFormData((prev) => ({
-          ...prev,
-          required_plan_id: defaultPlan.id,
-        }));
-      }
-    }
-  }, [open, media, plans, formData]);
-
+  
   // Calculate matched rows based on current formData. Memoized to prevent flicker from recalculation.
   const matchedRows = useMemo(
     () =>
@@ -939,14 +924,14 @@ export default function MediaDialog({
                 const formData = cached ?? (result as ProjectFormData);
                 
                 // Auto-set required_plan_id to default plan if is_public is true
-                if (formData.is_public && plans.length > 0) {
+                if (result.is_public === true && plans.length > 0) {
                   const defaultPlan = plans.find((plan: any) => plan.is_default);
                   if (defaultPlan) {
                     formData.required_plan_id = defaultPlan.id;
                   }
                 }
                 
-                setFormData(formData);
+                setFormData({...formData, is_public:media?.is_public});
               }
             } else {
               // Add mode - initialize empty fields
@@ -981,13 +966,13 @@ export default function MediaDialog({
               base.is_public = true;
 
               // Auto-set required_plan_id to default plan if is_public is true (for new content)
-              if (base.is_public && plans.length > 0) {
-                const defaultPlan = plans.find((plan: any) => plan.is_default);
-                if (defaultPlan) {
-                  console.log("DEFAULT PLAN: ", defaultPlan)
-                  base.required_plan_id = defaultPlan.id;
+                if (base.is_public && plans.length > 0) {
+                  const defaultPlan = plans.find((plan: any) => plan.is_default);
+                  if (defaultPlan) {
+                    base.required_plan_id = defaultPlan.id;
+                  }
                 }
-              }
+                
 
               if (
                 !userHasModifiedFormRef.current &&
@@ -1135,7 +1120,7 @@ export default function MediaDialog({
       }
     });
 
-    console.log("Submitting data to database:", submitData);
+    // console.log("Submitting data to database:", submitData);
     await onSubmit(submitData);
     // ✅ Cache the current formData so reopening reflects saved state
     const mediaId = (media as any)?.id;
@@ -1410,7 +1395,6 @@ export default function MediaDialog({
               id="is_public"
               checked={isPublic}
               onCheckedChange={(checked: boolean) => {
-                console.log("Checkbox changed:", checked, "Current is_public:", (formData as any).is_public);
                 // Update is_public field
                 handleChange("is_public" as keyof ProjectFormData, checked);
                 
