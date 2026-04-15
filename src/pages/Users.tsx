@@ -85,7 +85,6 @@ export default function Users() {
       setCancellingUserId(userId);
       toast.info("Canceling subscription...");
       const res = await admin.users.manageSubsctions.cancelImmediately(userId);
-      console.log("CANCELATION DATA GHERE: ", res);
       if (res?.data && !res?.error && !res.data.error) {
         toast.success("Subscription cancelled successfully.");
         setUsers(

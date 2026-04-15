@@ -448,7 +448,7 @@ export default function RecipesPage() {
                                   const values = smartParse(value).map((v) => {
                                     if (!v) return v;
                                     const s = String(v).replace(/_/g, " ");
-                                    // return s.charAt(0).toUpperCase() + s.slice(1);
+                                    return s.charAt(0).toUpperCase() + s.slice(1);
                                     return s
                                   });
 
