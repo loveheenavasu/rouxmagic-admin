@@ -262,7 +262,7 @@ export class CRUDWrapper<
         const fields =
           searchFields && searchFields.length > 0
             ? searchFields
-            : (["title", "platform", "notes"] as const);
+            : (["title"] as const);
 
         const pattern = `%${trimmed}%`;
         const orFilters = fields

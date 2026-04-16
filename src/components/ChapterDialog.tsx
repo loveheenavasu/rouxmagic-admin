@@ -11,13 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload } from "lucide-react";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
 import {
   ContentContentTypeEnum,
   ContentFormData,
@@ -68,6 +61,7 @@ export default function ChapterDialog({
 
   useEffect(() => {
     if (!open) return;
+    console.log("CHAPTER: ", chapter)
     if (chapter) {
       const cleanedChapter = { ...chapter };
       // Deeply unwrap and clean potentially corrupted strings
@@ -85,12 +79,14 @@ export default function ChapterDialog({
       setFormData({
         ...emptyForm,
         ...cleanedChapter,
+        episode_number: cleanedChapter?.episode_number ?? undefined,
       });
       return;
     }
     setFormData({
       ...emptyForm,
       project_id: defaultProjectId ?? "",
+      episode_number: (chapter as any)?.episode_number ?? undefined,
     });
   }, [open, chapter, defaultProjectId]);
 
@@ -100,6 +96,7 @@ export default function ChapterDialog({
 
     // Clean up empty strings to undefined for technical fields
     const submissionData = { ...formData };
+    console.log("SUBMISSION DATA: ", submissionData)
     if (!submissionData.content_url) delete submissionData.content_url;
     if (!submissionData.project_id) delete submissionData.project_id;
     if (!submissionData.platform) delete submissionData.platform;
@@ -280,6 +277,32 @@ export default function ChapterDialog({
                   />
                 </div>
               </>
+            )}
+
+            {isAudiobook && (
+                <div className="md:col-span-2">
+                  <Label htmlFor="description" className="font-medium">
+                    Sequence Number
+                  </Label>
+                  <Input
+                    id="sequence_number"
+                    type="number"
+                    value={formData.episode_number ?? "0"}
+                    onChange={(e) =>{
+                      setFormData((p) => {
+                        const newFormData = {
+                        ...p,
+                        episode_number: parseInt((e.target.value || "0")),
+                      };
+                      console.log("NEW FORM DATA: ",newFormData );
+                      return newFormData
+                      })
+                    
+                    }}
+                    placeholder="1"
+                    className="mt-1.5"
+                  />
+                </div>
             )}
 
             {/* Content URL / Audio URL */}

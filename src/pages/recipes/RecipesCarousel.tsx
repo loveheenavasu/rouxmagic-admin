@@ -126,6 +126,7 @@ export default function RecipesCarousel() {
         eq: [],
         sort: "order_index",
         sortBy: "asc",
+        searchFields:["title"]
       });
 
       if (response.flag !== Flag.Success || !response.data) {

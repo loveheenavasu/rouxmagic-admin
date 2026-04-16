@@ -117,6 +117,7 @@ export default function RecipesPage() {
         search: searchQuery || undefined,
         overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
         or: "is_deleted.eq.false,is_deleted.is.null",
+        searchFields:["title"]
       });
 
       if (response.flag !== Flag.Success || !response.data) {
