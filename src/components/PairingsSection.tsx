@@ -279,6 +279,9 @@ export default function PairingsSection({ sourceId, sourceRef }: PairingsSection
                         const pairedItemId = isCurrentSource ? pairing.target_id : pairing.source_id;
                         const pairedItemRef = isCurrentSource ? pairing.target_ref : pairing.source_ref;
                         const item = pairedItems.find((i: any) => String(i?.id) === String(pairedItemId));
+
+                        if(!item) return null;
+
                         return (
                             <Card key={pairing.id} className="overflow-hidden border-slate-200 hover:shadow-sm transition-shadow">
                                 <CardContent className="p-4">
