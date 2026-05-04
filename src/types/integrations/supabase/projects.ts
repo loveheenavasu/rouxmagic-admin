@@ -41,6 +41,8 @@ export interface ProjectMetaData {
   row_type?: string | null;
   required_plan_id?: string;
   is_public?: boolean;
+
+  trailer_url?:string;
 }
 
 export interface ProjectFormData extends Partial<Project> {

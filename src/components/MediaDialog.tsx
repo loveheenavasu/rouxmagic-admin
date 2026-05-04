@@ -789,6 +789,7 @@ export default function MediaDialog({
               "platform_name",
               "poster_preview_url",
               "preview_url",
+              "trailer_url",
               "order",
               "slug",
               "synopsis",
@@ -818,14 +819,12 @@ export default function MediaDialog({
               "row_type",
             ];
 
-            const fields = Array.from(
-              new Set([
+            const fields = [
+                ...ALL_POSSIBLE_FIELDS,
                 ...Object.keys(projects[0]),
                 ...KNOWN_FLAGS,
                 ...MANDATORY_EXTRA_FIELDS,
-                ...ALL_POSSIBLE_FIELDS,
-              ]),
-            )
+              ].filter((value, index, self) => self.indexOf(value) === index)
               .filter(
                 (key) =>
                   ![
@@ -1478,6 +1477,7 @@ export default function MediaDialog({
       },
       poster_url: { description: "Primary display image URL." },
       preview_url: { description: "Teaser video or thumbnail URL." },
+      trailer_url: { description: "Official trailer video URL." },
       notes: { description: "Internal notes or brief summary." },
       platform: {
         description: "Where is this available? (YouTube, Netflix, etc.)",
@@ -1637,6 +1637,7 @@ export default function MediaDialog({
       "audio_url",
       "audio_preview_url",
       "ticket_url",
+      "trailer_url",
       "poster_preview_url",
     ].includes(key);
 
@@ -1649,7 +1650,8 @@ export default function MediaDialog({
         {key === "poster_url" ||
         key === "preview_url" ||
         key === "audio_url" ||
-        key === "audio_preview_url" ? (
+        key === "audio_preview_url" ||
+        key === "trailer_url" ? (
           <div className="mt-1.5 flex gap-2">
             <Input
               id={key}
@@ -1671,7 +1673,9 @@ export default function MediaDialog({
                     ? "image/*"
                     : key === "preview_url"
                       ? "video/*,image/*"
-                      : "audio/*"
+                      : key === "trailer_url"
+                        ? "video/*"
+                        : "audio/*"
                 }
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
@@ -2029,6 +2033,32 @@ export default function MediaDialog({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-5">
+                {/* Render key fields first */}
+                {availableFields
+                  .filter((key) => {
+                    // Internal/Legacy field filtering
+                    if (
+                      key.startsWith("in_") ||
+                      key === "featured" ||
+                      key === "is_downloadable" ||
+                      key === "trailer_url"
+                    )
+                      return false;
+
+                    // Only render key fields in this section
+                    const keyFields = ["title", "status", "platform", "platform_url", "poster_url", "preview_url", "content_type"];
+                    return keyFields.includes(key);
+                  })
+                  .map((key) => renderField(key, (formData as any)[key]))}
+
+                {/* Important Media Fields Section - after key metadata */}
+                {availableFields.includes("trailer_url") && (
+                  <div className="col-span-2">
+                    {renderField("trailer_url", (formData as any).trailer_url)}
+                  </div>
+                )}
+
+                {/* Render remaining fields */}
                 {availableFields
                   .filter((key) => {
                     // Internal/Legacy field filtering
@@ -2044,7 +2074,9 @@ export default function MediaDialog({
                     if (["flavor_tags", "vibe_tags", "genres"].includes(key))
                       return true;
 
-                    return true;
+                    // Exclude key fields and trailer_url (already rendered)
+                    const keyFields = ["title", "status", "platform", "platform_url", "poster_url", "preview_url", "content_type", "trailer_url"];
+                    return !keyFields.includes(key);
                   })
                   .map((key) => renderField(key, (formData as any)[key]))}
 
