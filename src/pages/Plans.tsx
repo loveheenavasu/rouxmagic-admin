@@ -17,6 +17,7 @@ import { Flag, Plan, PageName } from "@/types";
 import { StatsRow } from "@/components/StatsRow";
 import PlanDialog from "@/components/PlanDialog";
 import { PageSettingsCard } from "@/components/PageSettingsCard";
+import { AlertMessageSettings } from "@/components/AlertMessageSettings";
 
 const plansAPI = Plans as Required<typeof Plans>;
 
@@ -25,8 +26,6 @@ export default function PlansPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
   const queryClient = useQueryClient();
-
-  // Fetch plans
   const {
     data: plansList = [],
     isLoading,
@@ -186,6 +185,8 @@ export default function PlansPage() {
         title="Subscription Plans"
         description="Manage the pricing plans synced with Stripe."
       />
+
+      <AlertMessageSettings />
 
       <PageSettingsCard pageName={PageName.PricingMain} />
 
