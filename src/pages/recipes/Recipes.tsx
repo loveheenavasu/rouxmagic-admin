@@ -117,7 +117,7 @@ export default function RecipesPage() {
         search: searchQuery || undefined,
         overlaps: overlapsFilters.length > 0 ? overlapsFilters : undefined,
         or: "is_deleted.eq.false,is_deleted.is.null",
-        searchFields:["title"]
+        searchFields: ["title"]
       });
 
       if (response.flag !== Flag.Success || !response.data) {
@@ -182,7 +182,7 @@ export default function RecipesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await recipesAPI.updateOneByID(id, data);
+      const response = await recipesAPI.updateOneByID(id, data, {}, { allowFalsy: true });
       if (response.flag !== Flag.Success || !response.data) {
         const supabaseError = response.error?.output as
           | { message?: string }
