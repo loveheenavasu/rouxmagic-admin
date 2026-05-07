@@ -121,7 +121,7 @@ export function AlertMessageSettings() {
           <div>
             <h3 className="text-lg font-semibold text-slate-800">Alert Message</h3>
             <p className="text-sm text-slate-500">
-              Configure the alert message displayed on the pricing page
+              Configure the alert message displayed on the alerts.
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export function AlertMessageSettings() {
               id="alert_message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="e.g. Get 50% off on all plans"
+              placeholder="e.g. Upgrade to $PLAN_NAME$..."
               className="h-10 border-slate-200 focus:ring-1 focus:ring-indigo-500 rounded-md"
             />
           </div>
